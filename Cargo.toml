@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-backend", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-core-client", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-luau", "crates/herdr-mods", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-terminal", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
+members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-backend", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-core-client", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-luau", "crates/herdr-mods", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-terminal", "crates/herdr-uikit", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
 resolver = "2"
 
 [workspace.package]
@@ -133,6 +133,21 @@ objc2-core-foundation = { default-features = false, features = ["CFCGTypes", "st
 objc2-web-kit        = { default-features = false, features = ["WKSnapshotConfiguration", "WKUIDelegate", "WKWebView", "block2", "objc2-app-kit", "objc2-core-foundation", "std"], version = "0.3.2" }
 # Asks for Dock badge permission; the version GPUI's macOS platform already links.
 objc2-user-notifications ={ default-features = false, features = ["UNUserNotificationCenter", "block2", "std"], version = "0.3.2" }
+# The iPadOS GPUI platform (crates/herdr-uikit). UIKit through objc2; the Metal
+# renderer and CoreText text system ported from GPUI's macOS crates keep the
+# `metal`, `objc`, and Core Text versions those crates and zed-font-kit link,
+# so Core Graphics is the 0.24 line Core Text 21 expects, not the 0.25 above.
+cbindgen             = { default-features = false, version = "0.28.0" }
+core-foundation      = "0.10"
+core-graphics-text   = { package = "core-graphics", version = "0.24" }
+core-text            = "21"
+etagere              = "0.2.15"
+metal                = "0.33"
+objc2-quartz-core    = { default-features = false, features = ["CALayer", "CAMetalLayer", "CADisplayLink", "CATransaction", "objc2-core-foundation", "objc2-metal", "std"], version = "0.3.2" }
+objc2-ui-kit         = { default-features = false, features = ["UIApplication", "UIColor", "UICommand", "UIDevice", "UIEvent", "UIGeometry", "UIGestureRecognizer", "UIHoverGestureRecognizer", "UIInterface", "UIKey", "UIKeyCommand", "UIKeyConstants", "UIKeyboardLayoutGuide", "UILayoutGuide", "UIOpenURLContext", "UIPanGestureRecognizer", "UIPasteboard", "UIPointerInteraction", "UIPress", "UIPressesEvent", "UIResponder", "UIScene", "UISceneDefinitions", "UISceneOptions", "UISceneSession", "UISceneSessionActivationRequest", "UIScreen", "UIScreenMode", "UITextInput", "UITextInputContext", "UITextInputTraits", "UITouch", "UITraitCollection", "UIView", "UIViewController", "UIWindow", "UIWindowScene", "UIWindowSceneGeometry", "UIWindowSceneGeometryPreferences", "UIWindowSceneGeometryPreferencesIOS", "block2", "objc2-core-foundation", "objc2-quartz-core", "std"], version = "0.3.2" }
+parking_lot          = "0.12"
+pathfinder_geometry  = "0.5"
+smallvec             = { features = ["const_new", "union"], version = "1.6" }
 raw-window-handle    = "0.6"
 # herdr-acp's in-pane chat view.
 ratatui              = { default-features = false, features = ["crossterm"], version = "0.30" }
