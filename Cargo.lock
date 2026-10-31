@@ -5242,6 +5242,7 @@ dependencies = [
  "dispatch2",
  "etagere",
  "foreign-types",
+ "futures",
  "gpui-pre",
  "image",
  "metal",
