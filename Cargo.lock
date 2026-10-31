@@ -5257,6 +5257,7 @@ dependencies = [
  "smallvec",
  "thiserror 2.0.21",
  "tracing",
+ "uuid",
  "zed-font-kit",
 ]
 
