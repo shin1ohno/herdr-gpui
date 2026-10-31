@@ -151,6 +151,9 @@ objc2-ui-kit         = { default-features = false, features = ["UIApplication", 
 parking_lot          = "0.12"
 pathfinder_geometry  = "0.5"
 smallvec             = { features = ["const_new", "union"], version = "1.6" }
+# `gpui::PlatformWindow::prompt` and `gpui::Platform` name futures' oneshot
+# channel, which GPUI does not re-export; the version GPUI already links.
+futures              = { default-features = false, features = ["std"], version = "0.3.34" }
 raw-window-handle    = "0.6"
 # herdr-acp's in-pane chat view.
 ratatui              = { default-features = false, features = ["crossterm"], version = "0.30" }
