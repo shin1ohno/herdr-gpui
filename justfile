@@ -355,3 +355,40 @@ release-check:
     actionlint .github/workflows/*.yml
     zizmor .github/
     git diff --check
+
+# Lint iPadOS: syntax-check the scripts in scripts/ios, then clippy the
+# herdr-uikit platform and its examples, for a device and for the simulator,
+# at the bundle's minimum OS. Needs Xcode and
+# `rustup target add aarch64-apple-ios aarch64-apple-ios-sim` (docs/ios.md).
+[macos]
+lint-ios:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for script in scripts/ios/*.sh; do bash -n "$script"; done
+    python3 -I -c 'import ast, sys; [ast.parse(open(p, encoding="utf-8").read(), p) for p in sys.argv[1:]]' scripts/ios/*.py
+    source scripts/ios/lib.sh
+    ios_export_deployment_target
+    cargo clippy --locked -p herdr-uikit --all-targets --target aarch64-apple-ios -- -D warnings
+    cargo clippy --locked -p herdr-uikit --all-targets --target aarch64-apple-ios-sim -- -D warnings
+
+# Bundle a herdr-uikit example for the iPad simulator, run it, and keep its
+# stdout, stderr, and a screenshot in target/ios-sim/EXAMPLE. Boots the
+# simulator when needed and leaves the app running (scripts/ios/sim.sh).
+[macos]
+ios-sim example wait="5":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    app=$(bash scripts/ios/bundle.sh --example "{{example}}")
+    bash scripts/ios/sim.sh --wait "{{wait}}" "$app"
+
+# herdr-uikit's tests inside the iPad simulator, each test binary started by
+# scripts/ios/sim-runner.sh with `xcrun simctl spawn`. Boots the simulator
+# when needed. Built at the bundle's minimum OS, like `just ios-sim`.
+[macos]
+test-ios:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/ios/lib.sh
+    ios_export_deployment_target
+    CARGO_TARGET_AARCH64_APPLE_IOS_SIM_RUNNER="{{justfile_directory()}}/scripts/ios/sim-runner.sh" cargo test --locked -p herdr-uikit --target aarch64-apple-ios-sim
+    python3 -I -B scripts/ios/test_screenshot_color.py
