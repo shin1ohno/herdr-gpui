@@ -7,6 +7,8 @@
 
 #[cfg(windows)]
 mod credential_manager;
+#[cfg(target_os = "ios")]
+pub mod device_key;
 mod error;
 pub mod file;
 #[cfg(target_os = "macos")]

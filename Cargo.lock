@@ -5220,6 +5220,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "herdr-ssh"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
 name = "herdr-terminal"
 version = "0.1.0"
 dependencies = [

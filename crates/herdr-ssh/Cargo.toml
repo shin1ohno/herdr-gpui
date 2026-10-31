@@ -1,0 +1,15 @@
+[package]
+description            = "In-process SSH client for platforms that cannot run ssh: exec channels as socket pairs, pinned host keys, and an externally held client key"
+edition.workspace      = true
+license.workspace      = true
+name                   = "herdr-ssh"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+tracing.workspace   = true
