@@ -24,9 +24,11 @@ against.
   opens a remote tunnel and returns one end of `UnixStream::pair()`, with a
   thread pumping bytes between the pair and the tunnel. Framing, sessions, and
   herdr-core's JSON-RPC are unchanged.
-  - Stage 1: a tunnel through `herdr-remote-control` on the computer, over the
-    HTTPS endpoint and pairing it already has.
-  - Stage 2: in-process SSH to the computer's daemon socket.
+  The tunnel is SSH to the computer, run inside the app ("SSH transport"
+  below). An SSH key reaches the user's whole account, so the grant is the
+  standard, explicit one: the user adds the iPad's key to `authorized_keys`.
+  `herdr-remote-control` is not used: a socket tunnel there would silently
+  widen every existing phone pairing from chats to full daemon control.
 
 ## Capabilities on iPad
 
@@ -41,7 +43,7 @@ against.
 | Updater | No | The App Store or Xcode installs the app |
 | Browser tabs (`wry`) | No | Links open in Safari |
 | Control socket CLI (`herdr-gpui COMMAND`) | No | No agents run on the iPad |
-| Saved sign-ins (`herdr-credentials`) | Keychain | Security.framework exists on iOS |
+| Saved sign-ins (`herdr-credentials`) | Keychain | A device-only Keychain backend; no plaintext file on iOS |
 
 A feature that is unavailable shows that it is unavailable on iPad. It never
 appears to work while doing nothing.
@@ -102,6 +104,88 @@ module reconciles them:
 
 `Info.plist` declares `UIApplicationSceneManifest` with
 `UIApplicationSupportsMultipleScenes = true` and no storyboard.
+
+## SSH transport
+
+The desktop reaches a remote Herdr by starting `ssh TARGET "/bin/sh -c
+BRIDGE"`, where the bridge script runs the remote `herdr --session S
+remote-client-bridge`, and by giving `ssh` one end of `UnixStream::pair()` as
+its standard input and output (`herdr-client/src/ssh.rs`, `spawn_bridge`).
+The client then reads the bridge's ready line and speaks the ordinary binary
+protocol over the other end, with health pings because the connection is
+remote. The iPad keeps all of that and replaces only the `ssh` process:
+
+- `crates/herdr-ssh` is an SSH client on russh `=0.65.0`
+  (`default-features = false`, `ring`) with one process-wide current-thread
+  tokio runtime on its own thread, so no other crate sees async code. It runs
+  a command on an exec channel (no PTY, no environment) whose standard streams
+  are pumped to one end of a `UnixStream::pair()`. The other end is returned
+  at once and the connection proceeds on the runtime, so the bridge's
+  existing 15 s ready deadline bounds the whole start, as it does on the
+  desktop. The crate builds on every Unix target, so its tests run on macOS
+  against a private `sshd`.
+- On iOS, `herdr-client`'s `spawn_bridge` uses `herdr-ssh` in place of the
+  `ssh` child, and the child guard holds the SSH guard, whose drop only
+  signals cancellation (it never blocks or joins). The bridge script, the
+  ready handshake, and the health pings are shared with the desktop.
+  Failures are not: the desktop reads `ssh`'s exit code and stderr text, so
+  `herdr-ssh` reports a typed exit (`TunnelExit::Ssh(SshFailure)` for the
+  SSH layer, `TunnelExit::Remote { exit_status, stderr_tail }` for the remote
+  command) and the remote's stderr never decides an SSH failure class.
+- **The desktop `ssh` policy, kept in process:** public-key authentication
+  only, never a fallback, and `partial_success` counts as failure
+  (`BatchMode`); 10 s for TCP connect and key exchange (`ConnectTimeout`);
+  keepalive every 15 s, 4 misses (`ServerAlive*`); every channel the server
+  tries to open (agent, X11, forwarded or direct TCP/streamlocal, session)
+  is rejected (`ForwardAgent`, `ForwardX11`, `ClearAllForwardings`); host key
+  announcements are ignored (`UpdateHostKeys=no`); no compression.
+- **Algorithms** are an explicit allow-list. Key exchange
+  `mlkem768x25519-sha256`, `curve25519-sha256`, `curve25519-sha256@libssh.org`
+  plus `ext-info-c` and `kex-strict-c-v00@openssh.com` (Terrapin); host keys
+  `ssh-ed25519`, `ecdsa-sha2-nistp256/384/521`, `rsa-sha2-512/256` (never
+  SHA-1 `ssh-rsa`); ciphers `chacha20-poly1305@openssh.com`,
+  `aes256-gcm@openssh.com`; MACs `hmac-sha2-512-etm`, `hmac-sha2-256-etm`.
+  Host certificates are refused.
+- **Targets** are parsed once at the boundary into the existing
+  `Destination { user, host, port }`, which scan, trust, connect, and the
+  device list all share. The user is required; IPv6 only as `[addr]:port`,
+  without zone ids; host names are ASCII letters, digits, `-`, and `.`,
+  lower-cased with any trailing `.` removed (non-ASCII names in punycode).
+  The known-hosts name is `host` on port 22 and `[host]:port` otherwise.
+  There is no `~/.ssh/config` on iPad.
+- **Client key.** One P-256 key per installation, created in the Secure
+  Enclave on first use, so the private key never leaves it and is never in
+  the app's memory; the app signs through Security.framework, as the
+  HerdrRemote app's `DeviceKey.swift` does, and authenticates as
+  `ecdsa-sha2-nistp256`, which macOS's `sshd` accepts. Its Keychain item is
+  `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, not synchronizable, and in
+  no shared access group. It is created only when a lookup finds none, with
+  an add that fails on a duplicate, so two scenes cannot each create one; a
+  locked device is a transient error, never a reason to make a new key. The
+  simulator and the macOS tests use a software key behind the same signer.
+  The Add Device dialog shows the line to add to `~/.ssh/authorized_keys`:
+  `restrict ecdsa-sha2-nistp256 AAAA… herdr-ipad-<device>`, since the bridge
+  needs no PTY and no forwarding. Settings can replace the key.
+- **Host keys** are pinned per known-hosts name in an OpenSSH `known_hosts`
+  file under `Library/Application Support`. A host with no pin is unknown;
+  a host with any pin that the offered key does not match exactly is a
+  changed key and is refused, whatever its type, and connections to a
+  pinned host negotiate only the pinned key types. `scan_host_key` stops
+  before authentication, so an unverified host never learns the user name.
+  `trust_host_key` saves the exact key that was scanned and shown, inside a
+  process-wide lock, after re-checking that the host gained no pin meanwhile,
+  by writing a temporary file and renaming it. russh's `known_hosts` helpers
+  are not used, since they treat a key of another type as unknown.
+- **When the user is asked.** Only Add Device and an explicit Connect show a
+  host key for approval; a reconnect that meets an unknown or changed key
+  stops with the host-key failure (which needs the user) and never prompts.
+  A changed key can be resolved from the device's menu, which shows the
+  pinned and offered fingerprints side by side and removes the pin only on
+  confirmation.
+- The skip-verification list has no iPad equivalent.
+- The computer needs Remote Login (sshd) enabled and Herdr installed.
+- Later: pin the host key out of band, from a QR code the desktop shows,
+  instead of trusting the first key the network offers.
 
 ## Code rules for the port
 
