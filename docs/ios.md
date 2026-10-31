@@ -201,3 +201,56 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
 `aarch64-apple-ios` is a device, `aarch64-apple-ios-sim` the simulator on an
 Apple silicon Mac. `cargo check -p herdr-uikit --target aarch64-apple-ios-sim`
 checks the platform; on other targets the crate is empty.
+
+## Running in the simulator
+
+The recipes need macOS with Xcode and its iOS simulator runtime, and the two
+Rust targets: `rustup target add aarch64-apple-ios aarch64-apple-ios-sim`.
+
+| Recipe | What it does |
+| --- | --- |
+| `just lint-ios` | Clippy over `herdr-uikit` and its examples, for a device and for the simulator |
+| `just ios-sim EXAMPLE [WAIT]` | Builds the example, bundles it, runs it in the simulator for `WAIT` seconds (default 5), and saves a screenshot |
+| `just test-ios` | Runs `herdr-uikit`'s tests inside the simulator, then the screenshot checker's own tests |
+
+Two examples live in `crates/herdr-uikit/examples`:
+
+- `uikit_smoke` is UIKit alone, without GPUI or this crate's modules: a
+  magenta window with a white label. When it runs and its screenshot is
+  magenta, bundling, installing, launching, logging, and screenshots all work,
+  so a failure in `hello` is the platform's.
+- `hello` is a GPUI app on `herdr_uikit::application()`: a text line on a
+  solid background and a counter that a tap increments.
+
+`just ios-sim uikit_smoke` writes to `target/ios-sim/uikit_smoke/`:
+`stdout.log`, `stderr.log` (panics and the examples' messages land here), and
+`screenshot.png`. It reports whether the app was still running at the
+screenshot and exits with status 4, printing the end of `stderr.log`, when it
+was not. The app keeps running afterwards, so it can be used in the
+simulator's window (`open -a Simulator`). A cold boot takes about a minute,
+and the first launch after it up to two more while the simulator settles;
+later runs take seconds.
+
+The scripts behind the recipes are in `scripts/ios/`:
+
+- `bundle.sh` builds an example or binary for `aarch64-apple-ios-sim` (or
+  `--target aarch64-apple-ios`), assembles `NAME.app` beside the executable
+  from the `Info.plist` template, and ad-hoc signs it. A device bundle is left
+  unsigned: installing on an iPad needs a development team and a provisioning
+  profile, which the script does not handle yet.
+- `sim.sh` boots the simulator when it is shut down, installs and launches the
+  app, waits, and takes the screenshot. It never erases, deletes, or shuts
+  down a simulator; `--terminate` stops the app it launched after the
+  screenshot.
+- `sim-runner.sh` is Cargo's runner for `aarch64-apple-ios-sim`: it starts a
+  test binary with `xcrun simctl spawn`, which returns the binary's exit
+  status. The binary runs outside an app bundle, so tests cannot start
+  `UIApplicationMain`.
+- `screenshot-color.py` reports the fraction of a screenshot's pixels near a
+  color, with the standard library only:
+  `python3 -I scripts/ios/screenshot-color.py target/ios-sim/uikit_smoke/screenshot.png ff00ff --min 0.5`.
+
+The simulator is "iPad Pro 13-inch (M5)" by default, the newest runtime's when
+several exist. `HERDR_IOS_SIMULATOR` picks another by name or UDID (`xcrun
+simctl list devices available`). `RUST_LOG` and `RUST_BACKTRACE` reach the
+app; `RUST_*`, `CARGO_*`, and `HERDR_TEST_*` variables reach test binaries.
