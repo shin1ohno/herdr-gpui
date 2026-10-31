@@ -70,6 +70,9 @@ jiff                 = "0.2.38"
 # Locates installed font files on Linux, as GPUI's own text system does.
 fontdb               = "0.24"
 foreign-types        = "0.5"
+# The `oneshot::Receiver` GPUI's `Platform` trait returns from path prompts, at
+# the version GPUI already links.
+futures-channel      = "0.3.34"
 futures-lite         = "2"
 getrandom            = "0.4.3"
 gpui                 = { package = "gpui-pre", version = "=0.3.6" }
@@ -144,7 +147,7 @@ core-text            = "21"
 etagere              = "0.2.15"
 metal                = "0.33"
 objc2-quartz-core    = { default-features = false, features = ["CALayer", "CAMetalLayer", "CADisplayLink", "CATransaction", "objc2-core-foundation", "objc2-metal", "std"], version = "0.3.2" }
-objc2-ui-kit         = { default-features = false, features = ["UIApplication", "UIColor", "UICommand", "UIDevice", "UIEvent", "UIGeometry", "UIGestureRecognizer", "UIHoverGestureRecognizer", "UIInterface", "UIKey", "UIKeyCommand", "UIKeyConstants", "UIKeyboardLayoutGuide", "UILayoutGuide", "UIOpenURLContext", "UIPanGestureRecognizer", "UIPasteboard", "UIPointerInteraction", "UIPress", "UIPressesEvent", "UIResponder", "UIScene", "UISceneDefinitions", "UISceneOptions", "UISceneSession", "UISceneSessionActivationRequest", "UIScreen", "UIScreenMode", "UITextInput", "UITextInputContext", "UITextInputTraits", "UITouch", "UITraitCollection", "UIView", "UIViewController", "UIWindow", "UIWindowScene", "UIWindowSceneGeometry", "UIWindowSceneGeometryPreferences", "UIWindowSceneGeometryPreferencesIOS", "block2", "objc2-core-foundation", "objc2-quartz-core", "std"], version = "0.3.2" }
+objc2-ui-kit         = { default-features = false, features = ["UIApplication", "UIColor", "UICommand", "UIDevice", "UIEvent", "UIGeometry", "UIGestureRecognizer", "UIHoverGestureRecognizer", "UIInterface", "UIKey", "UIKeyCommand", "UIKeyConstants", "UIKeyboardLayoutGuide", "UILayoutGuide", "UIOpenURLContext", "UIPanGestureRecognizer", "UIPasteboard", "UIPointerInteraction", "UIPress", "UIPressesEvent", "UIResponder", "UIScene", "UISceneConfiguration", "UISceneDefinitions", "UISceneOptions", "UISceneSession", "UISceneSessionActivationRequest", "UIScreen", "UIScreenMode", "UITextInput", "UITextInputContext", "UITextInputTraits", "UITouch", "UITraitCollection", "UIView", "UIViewController", "UIWindow", "UIWindowScene", "UIWindowSceneGeometry", "UIWindowSceneGeometryPreferences", "UIWindowSceneGeometryPreferencesIOS", "block2", "objc2-core-foundation", "objc2-quartz-core", "std"], version = "0.3.2" }
 parking_lot          = "0.12"
 pathfinder_geometry  = "0.5"
 smallvec             = { features = ["const_new", "union"], version = "1.6" }
