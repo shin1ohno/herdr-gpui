@@ -2,11 +2,13 @@
 
 mod backend;
 mod connection;
+mod diagnostics;
 mod endpoint;
 mod event;
 mod frame;
 mod hello;
 mod live;
+mod transport;
 
 use crate::frame::{Decoder, Frame, Kind, encode};
 use serde_json::{Value, json};

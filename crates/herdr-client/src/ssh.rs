@@ -10,26 +10,57 @@
 //! with WSL distributions, which run the same scripts through `wsl.exe`. A host
 //! that cannot run `/bin/sh`, such as Windows OpenSSH, is retried through
 //! PowerShell; see `powershell`.
-use crate::{Result, catalog::validate_target, limits::POLL, session_socket, transport::Stream};
-#[cfg(unix)]
+//!
+//! iPadOS cannot start `ssh`. There the same bridge command runs over the
+//! in-process client (see `in_process`), host keys are pinned in the app's
+//! own known hosts file, and nothing else here that starts `ssh` runs: port
+//! forwards, shared connections, scripts, and the PowerShell fallback refuse.
+use crate::{Result, catalog::validate_target, transport::Stream};
+#[cfg(not(target_os = "ios"))]
+use crate::{limits::POLL, session_socket};
+#[cfg(all(unix, not(target_os = "ios")))]
 use std::os::fd::OwnedFd;
 use std::{
     io::{self, Read, Write},
-    path::Path,
-    process::{Child, Command, Stdio},
+    process::Child,
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
+#[cfg(not(target_os = "ios"))]
+use std::{
+    path::Path,
+    process::{Command, Stdio},
+};
 
+mod core;
 mod error;
+#[cfg(any(target_os = "ios", all(test, unix)))]
+mod exec_output;
 mod failure;
 mod host_key;
+#[cfg(target_os = "ios")]
+mod in_process;
+#[cfg(any(target_os = "ios", all(test, unix)))]
+mod ipad;
 pub(crate) mod mux;
 mod unverified;
+pub use core::core_connect_command;
 pub use error::Error;
 pub use failure::SshFailure;
+#[cfg(target_os = "ios")]
+pub use host_key::{HostKeyChange, changed_host_key, forget_host_key};
 pub use host_key::{HostKeyFingerprint, HostKeyScan, NewHostKey, scan_host_key, trust_host_key};
+#[cfg(target_os = "ios")]
+pub(crate) use in_process::connect;
+#[cfg(target_os = "ios")]
+pub(crate) use in_process::run_remote;
+#[cfg(target_os = "ios")]
+pub use in_process::{
+    authorized_key, connect_command, exec_ssh_stream, forward_command, probe_host_with,
+    resolve_destination, run_ssh_command, script_command, shared_script_command,
+};
 pub use unverified::{HostKeys, MAX_UNVERIFIED_HOSTS, set_host_keys, set_unverified_hosts};
+#[cfg(not(target_os = "ios"))]
 mod powershell;
 
 const READY: &[u8] = b"herdr-remote-output-ready:1\n";
@@ -41,6 +72,30 @@ impl Drop for ChildGuard {
     fn drop(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
+    }
+}
+
+/// What keeps a remote bridge's transport open while its connection runs;
+/// dropping it ends the bridge. A child is killed and reaped. On iPadOS the
+/// in-process tunnel's drop only signals cancellation, never blocking the
+/// connection worker on the network.
+pub(crate) enum BridgeGuard {
+    // Each guard is held only to be dropped.
+    Child(#[allow(dead_code)] ChildGuard),
+    #[cfg(target_os = "ios")]
+    Tunnel(#[allow(dead_code)] herdr_ssh::Tunnel),
+}
+
+impl From<ChildGuard> for BridgeGuard {
+    fn from(child: ChildGuard) -> Self {
+        Self::Child(child)
+    }
+}
+
+#[cfg(target_os = "ios")]
+impl From<herdr_ssh::Tunnel> for BridgeGuard {
+    fn from(tunnel: herdr_ssh::Tunnel) -> Self {
+        Self::Tunnel(tunnel)
     }
 }
 
@@ -70,6 +125,7 @@ const PROBE_DONE: &str = "herdr-probe:done";
 pub(crate) const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 /// `ssh -G` only reads configuration, but a cold start on a busy Windows
 /// machine (antivirus scanning `ssh.exe`) has taken over five seconds.
+#[cfg(not(target_os = "ios"))]
 const RESOLVE_TIMEOUT: Duration = Duration::from_secs(15);
 const PROBE_OUTPUT_LIMIT: u64 = 64 * 1024;
 
@@ -113,6 +169,14 @@ pub enum HostProbe {
     Stopped,
     /// A compatible Herdr server for the session is running.
     Running,
+    /// Only Herdr 2 is installed. Registration and starting its terminal
+    /// remain separate explicit actions; no daemon was started by the probe.
+    #[cfg(any(target_os = "ios", all(test, unix)))]
+    CoreAvailable,
+    /// Herdr 1 needs an update, and Herdr 2 is available as an explicit
+    /// alternative. Keep both facts so registration can offer either path.
+    #[cfg(any(target_os = "ios", all(test, unix)))]
+    OutdatedCoreAvailable,
 }
 
 /// Every candidate reports its client and server status, one block each, so
@@ -195,6 +259,7 @@ pub fn probe_host(target: &str, session: &str) -> Result<HostProbe> {
 
 /// [`probe_host`] checking host keys as `keys` says, for a host whose choice
 /// is not saved yet.
+#[cfg(not(target_os = "ios"))]
 pub fn probe_host_with(target: &str, session: &str, keys: HostKeys) -> Result<HostProbe> {
     validate_target(target)?;
     session_socket(Path::new(""), session)?;
@@ -235,6 +300,7 @@ pub fn probe_host_with(target: &str, session: &str, keys: HostKeys) -> Result<Ho
 }
 
 /// [`probe_host`] for a host whose shell is `cmd.exe` or PowerShell.
+#[cfg(not(target_os = "ios"))]
 fn probe_powershell_host(target: &str, session: &str, keys: HostKeys) -> Result<HostProbe> {
     let mut command = command_with(target, &powershell::probe_command(session), keys);
     command.stderr(Stdio::piped());
@@ -319,6 +385,7 @@ pub struct Destination {
 
 /// Resolve `target` with `ssh -G`, which reads configuration only and never
 /// connects. Blocks briefly: call it from a background thread.
+#[cfg(not(target_os = "ios"))]
 pub fn resolve_destination(target: &str) -> Result<Destination> {
     validate_target(target)?;
     let mut command = crate::environment::command("ssh");
@@ -337,6 +404,7 @@ pub fn resolve_destination(target: &str) -> Result<Destination> {
     destination.ok_or(crate::Error::RemoteOutput)
 }
 
+#[cfg(not(target_os = "ios"))]
 fn parse_destination(output: &[u8]) -> Option<Destination> {
     let text = std::str::from_utf8(output).ok()?;
     let value = |key: &str| {
@@ -357,6 +425,7 @@ fn parse_destination(output: &[u8]) -> Option<Destination> {
 /// bytes of stdout and never stderr, which can carry banners or secrets.
 /// It shares the host's quick-lane master when it can; waiting for one
 /// counts against `timeout`.
+#[cfg(not(target_os = "ios"))]
 fn run_remote(
     target: &str,
     remote_command: &str,
@@ -379,6 +448,7 @@ fn run_remote(
 
 /// Runs `command` with a deadline, keeping at most `PROBE_OUTPUT_LIMIT` bytes
 /// of stdout and discarding stderr.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn run(
     command: &mut Command,
     timeout: Duration,
@@ -391,6 +461,7 @@ pub(crate) fn run(
 
 /// [`run`], also returning a bounded tail of stderr when the caller piped it.
 /// That tail is for classification only: callers never log or show it.
+#[cfg(not(target_os = "ios"))]
 fn run_with_stderr(
     command: &mut Command,
     timeout: Duration,
@@ -454,12 +525,14 @@ fn run_with_stderr(
 /// it fails with "getsockname failed: Not a socket" and exits 127, which reads
 /// as a host without Herdr. There the policy sets `ControlPath=none`, so each
 /// connection authenticates on its own.
+#[cfg(not(target_os = "ios"))]
 pub(super) fn command(target: &str, remote_command: &str) -> Command {
     command_with(target, remote_command, HostKeys::of(target))
 }
 
 /// [`command`] checking host keys as `keys` says rather than as the user's
 /// saved choice for `target` does.
+#[cfg(not(target_os = "ios"))]
 fn command_with(target: &str, remote_command: &str, keys: HostKeys) -> Command {
     let mut command = noninteractive(keys);
     command.args(["-o", "ClearAllForwardings=yes", "--", target]);
@@ -468,6 +541,7 @@ fn command_with(target: &str, remote_command: &str, keys: HostKeys) -> Command {
 }
 
 /// `ssh` with the bridge's connection policy and nothing to connect yet.
+#[cfg(not(target_os = "ios"))]
 fn noninteractive(keys: HostKeys) -> Command {
     let mut command = crate::environment::command("ssh");
     command.args(keys.options()).args(POLICY);
@@ -476,6 +550,7 @@ fn noninteractive(keys: HostKeys) -> Command {
 
 /// The bridge's connection policy. OpenSSH keeps the first value it reads for
 /// an option, so a caller that needs another value passes it before these.
+#[cfg(not(target_os = "ios"))]
 pub(crate) const POLICY: &[&str] = &[
     "-T",
     "-C",
@@ -521,6 +596,7 @@ pub const FORWARD_READY: &str = "herdr-forward-ready";
 /// than in a shared master, so killing the child closes it; a host that needs
 /// an interactively authenticated master cannot be tunnelled. The caller owns
 /// the child: its streams, readiness, and reaping.
+#[cfg(not(target_os = "ios"))]
 pub fn forward_command(
     target: &str,
     local: u16,
@@ -555,6 +631,7 @@ pub fn forward_command(
 /// A one-shot, noninteractive `ssh` child that runs `script` under the remote
 /// `/bin/sh`, whatever the login shell, with the bridge's connection policy.
 /// The caller owns the child: its streams, deadline, and reaping.
+#[cfg(not(target_os = "ios"))]
 pub fn script_command(target: &str, script: &str) -> Result<Command> {
     validate_target(target)?;
     Ok(command(target, &format!("/bin/sh -c {}", quote(script))))
@@ -570,6 +647,7 @@ pub struct SshChannel(#[allow(dead_code)] mux::Channel);
 /// [`script_command`] does. Keep the channel until the child is reaped. May
 /// wait briefly for the host's connection to come up: call it off the UI
 /// thread.
+#[cfg(not(target_os = "ios"))]
 pub fn shared_script_command(
     target: &str,
     script: &str,
@@ -588,8 +666,10 @@ pub fn shared_script_command(
 
 /// How long [`shared_script_command`] waits for a host's shared connection
 /// before connecting directly.
+#[cfg(not(target_os = "ios"))]
 const SHARED_WAIT: Duration = Duration::from_secs(10);
 
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn connect(
     target: &str,
     session: &str,
@@ -612,6 +692,7 @@ pub(crate) fn connect(
 /// compatible `herdr.exe` over one connection, then bridge it over another.
 /// `posix` is why the POSIX bridge closed, kept for a host that turns out to
 /// have no PowerShell either.
+#[cfg(not(target_os = "ios"))]
 fn connect_powershell(
     target: &str,
     session: &str,
@@ -651,6 +732,7 @@ fn connect_powershell(
 /// `coder ssh -- <workspace>`: the discovery script is appended as its final
 /// argument, and the command's standard streams become the connection. The
 /// caller owns the program, its arguments, and any credential it needs.
+#[cfg(not(target_os = "ios"))]
 pub fn connect_command(mut command: Command, session: &str, stop: &AtomicBool) -> Result<Bridge> {
     session_socket(Path::new(""), session)?;
     command.arg(bridge_command(session));
@@ -665,12 +747,14 @@ pub struct Bridge {
     pub(crate) child: ChildGuard,
 }
 
+#[cfg(not(target_os = "ios"))]
 fn bridge(command: Command, stop: &AtomicBool) -> Result<(Stream, ChildGuard)> {
     start_bridge(command, stop, handshake)?.map_err(|closed| Error::Refused(closed.failure).into())
 }
 
 /// A bridge whose child closed its stdout before answering, with the exit
 /// code that tells a failed `ssh` from a remote shell that could not run.
+#[cfg(not(target_os = "ios"))]
 struct Closed {
     code: Option<i32>,
     failure: SshFailure,
@@ -678,6 +762,7 @@ struct Closed {
 
 /// Spawn `command` as a bridge and let `answer` read its banner. The outer
 /// error is any failure but an early close, which is the inner one.
+#[cfg(not(target_os = "ios"))]
 fn start_bridge(
     command: Command,
     stop: &AtomicBool,
@@ -704,7 +789,7 @@ fn start_bridge(
 /// Spawn `command` with one end of a socket pair as its stdin and stdout.
 /// Stderr is piped: never inherit a GUI terminal. Its tail is read only to
 /// classify a failed start, then dropped; see `failure`.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn spawn_bridge(mut command: Command) -> Result<(Stream, ChildGuard)> {
     let (stream, child_stream) = Stream::pair()?;
     command
@@ -865,7 +950,7 @@ fn is_crlf(line: &[u8], expected: &[u8]) -> bool {
 }
 
 // Fixtures that need `/bin/sh` or a socket pair are Unix-only; the rest, and
-// the Windows pipe transport, run everywhere.
-#[cfg(test)]
+// the Windows pipe transport, run everywhere but iPadOS, which starts no `ssh`.
+#[cfg(all(test, not(target_os = "ios")))]
 #[allow(clippy::unwrap_used)] // Test fixtures only.
 mod tests;

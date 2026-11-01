@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod ipad_paths;
 mod save;
 use serde_json::json;
 
@@ -198,6 +199,7 @@ fn selection_write_refuses_nonfiles_without_touching_other_state() {
     assert!(store_selection(&other.join("endpoints.json"), None).is_err());
     fs::remove_dir_all(root).unwrap();
 }
+#[cfg(not(target_os = "ios"))]
 #[test]
 fn paths_use_state_and_explicit_development() {
     let environment = |state: Option<&str>, home: Option<&str>| {

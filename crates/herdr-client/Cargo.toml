@@ -38,6 +38,14 @@ tracing.workspace           = true
 [target.'cfg(unix)'.dependencies]
 rustix.workspace = true
 
+# iPadOS starts no `ssh`: the bridge runs on the in-process SSH client, which
+# signs with this installation's device key (docs/ios.md, "SSH transport").
+[target.'cfg(target_os = "ios")'.dependencies]
+herdr-credentials.workspace = true
+herdr-ssh.workspace         = true
+# `uname` names the device in its key's `authorized_keys` comment.
+rustix = { features = ["system"], workspace = true }
+
 # The Windows daemon binds a named pipe, not an AF_UNIX socket; `interprocess`
 # maps a socket path into the NPFS namespace exactly as upstream Herdr does.
 # `windows-sys` supplies the overlapped pipe calls behind the transport's read
@@ -53,6 +61,8 @@ windows-sys = { features = [
   "Win32_System_Threading",
 ], workspace = true }
 
-# `login_env`'s tests bind a socket that never listens.
+# `login_env`'s tests bind a socket that never listens. The iPadOS SSH
+# classification (`ssh::ipad`) is pure, so its tests run on any Unix host.
 [target.'cfg(unix)'.dev-dependencies]
+herdr-ssh.workspace = true
 nix.workspace = true

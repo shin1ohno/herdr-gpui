@@ -23,7 +23,9 @@ pub fn set_command_environment(apply: fn(&mut Command)) -> bool {
 
 /// `program`, an OpenSSH tool such as `ssh`, with the application's
 /// environment applied. On Unix, a `PATH` set on the command is also where
-/// `program` is looked up; on Windows it is found by [`locate`].
+/// `program` is looked up; on Windows it is found by [`locate`]. iPadOS
+/// starts no OpenSSH tool.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn command(program: &str) -> Command {
     #[cfg(windows)]
     let mut command = crate::new_command(locate(
@@ -69,7 +71,7 @@ fn locate(
         .unwrap_or_else(|| PathBuf::from(file))
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 #[allow(clippy::unwrap_used)] // Test fixtures only.
 mod tests {
     use super::*;

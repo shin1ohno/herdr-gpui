@@ -1,7 +1,11 @@
 //! Why `ssh` closed the bridge before its ready banner. The child's exit code
 //! and a bounded stderr tail are read only to pick a class here; the text is
 //! never retained, logged, or shown, since it can name users, keys, and paths.
+//! iPadOS has no `ssh` child: there the class comes from the in-process
+//! client's typed exit (see `ipad`), and none of the text matching runs.
+#[cfg(not(target_os = "ios"))]
 use crate::Result;
+#[cfg(not(target_os = "ios"))]
 use std::{
     io::{ErrorKind, Read},
     net::{IpAddr, ToSocketAddrs},
@@ -35,8 +39,17 @@ pub enum SshFailure {
     /// alert. `ssh` only sees no route to the host; this class is kept for
     /// when the app's own check confirms the refusal, so an offline device
     /// or a bad route stays `NoRoute`.
-    #[error(
-        "macOS denied Herdr access to your local network. If it just asked, allow it and try again; otherwise turn on Herdr in System Settings › Privacy & Security › Local Network"
+    #[cfg_attr(
+        target_os = "ios",
+        error(
+            "iPadOS denied Herdr access to your local network. In Settings, allow Local Network for Herdr, then try again"
+        )
+    )]
+    #[cfg_attr(
+        not(target_os = "ios"),
+        error(
+            "macOS denied Herdr access to your local network. If it just asked, allow it and try again; otherwise turn on Herdr in System Settings › Privacy & Security › Local Network"
+        )
     )]
     LocalNetworkDenied,
     /// No Herdr was found in the known install locations. One that is
@@ -57,6 +70,7 @@ impl SshFailure {
 
     /// `ssh` exits 255 for its own failures; the bridge script exits 127 when
     /// it found no candidate binary at all. Any other status is the remote's.
+    #[cfg(not(target_os = "ios"))]
     pub(super) fn classify(code: Option<i32>, stderr: &[u8]) -> Self {
         Self::classify_with(code, stderr, resolve, crate::local_network_access)
     }
@@ -64,6 +78,7 @@ impl SshFailure {
     /// [`Self::classify`] with the name lookup a hostname in the error needs
     /// and the check of this app's Local Network permission, which `ssh`, as
     /// this app's child, shares.
+    #[cfg(not(target_os = "ios"))]
     fn classify_with(
         code: Option<i32>,
         stderr: &[u8],
@@ -117,6 +132,7 @@ impl SshFailure {
 
 /// The host in `ssh: connect to host <host> port <port>: ...`. `ssh` prints
 /// the name it was given, so this is an address only when the target was one.
+#[cfg(not(target_os = "ios"))]
 fn refused_host(stderr: &str) -> Option<&str> {
     stderr.lines().rev().find_map(|line| {
         let (_, rest) = line.split_once("connect to host ")?;
@@ -129,6 +145,7 @@ fn refused_host(stderr: &str) -> Option<&str> {
 /// gates: private and link-local ranges, not loopback or the Internet.
 /// Tailscale's ranges are a tunnel, not the LAN: its IPv4 range (100.64/10)
 /// is not private, and its IPv6 one is carved out of unique-local below.
+#[cfg(not(target_os = "ios"))]
 fn is_local(address: IpAddr) -> bool {
     match address {
         IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
@@ -137,17 +154,20 @@ fn is_local(address: IpAddr) -> bool {
 }
 
 /// Tailscale's IPv6 prefix, `fd7a:115c:a1e0::/48`.
+#[cfg(not(target_os = "ios"))]
 fn is_tailscale(address: std::net::Ipv6Addr) -> bool {
     address.segments()[..3] == [0xfd7a, 0x115c, 0xa1e0]
 }
 
 /// How long classification waits for a hostname's addresses. `ssh` has just
 /// resolved the same name, so the system usually answers from its cache.
+#[cfg(not(target_os = "ios"))]
 const RESOLVE_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// The addresses `host` resolves to, or none once `RESOLVE_TIMEOUT` passes.
 /// The lookup runs on its own thread because the resolver cannot be
 /// cancelled; a slow one is abandoned rather than waited on.
+#[cfg(not(target_os = "ios"))]
 fn resolve(host: &str) -> Vec<IpAddr> {
     let (tx, rx) = mpsc::sync_channel(1);
     let host = host.to_owned();
@@ -167,12 +187,15 @@ fn resolve(host: &str) -> Vec<IpAddr> {
 }
 
 /// Bytes of stderr kept for classification. `ssh` reports its failure last.
+#[cfg(not(target_os = "ios"))]
 const STDERR_TAIL: usize = 4096;
 /// How long a closed bridge may take to exit and finish its stderr.
+#[cfg(not(target_os = "ios"))]
 const DIAGNOSE_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Drain the child's stderr for its whole life, so a chatty remote can never
 /// fill the pipe and stall `ssh`, and hand over the tail once it closes.
+#[cfg(not(target_os = "ios"))]
 pub(super) fn drain(stderr: ChildStderr) -> Result<Receiver<Vec<u8>>> {
     let (tx, rx) = mpsc::sync_channel(1);
     thread::Builder::new()
@@ -183,6 +206,7 @@ pub(super) fn drain(stderr: ChildStderr) -> Result<Receiver<Vec<u8>>> {
     Ok(rx)
 }
 
+#[cfg(not(target_os = "ios"))]
 fn tail(mut stderr: impl Read) -> Vec<u8> {
     let mut kept = Vec::new();
     let mut buffer = [0u8; 1024];
@@ -203,6 +227,7 @@ fn tail(mut stderr: impl Read) -> Vec<u8> {
 /// Classify a bridge whose stdout closed before it was ready, with its exit
 /// code when it had one. Waits on the connection worker, at most
 /// `DIAGNOSE_TIMEOUT`, for the exit and stderr.
+#[cfg(not(target_os = "ios"))]
 pub(super) fn diagnose(
     child: &mut Child,
     stderr: &Receiver<Vec<u8>>,
@@ -224,5 +249,5 @@ pub(super) fn diagnose(
     (code, SshFailure::classify(code, &stderr))
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 mod tests;

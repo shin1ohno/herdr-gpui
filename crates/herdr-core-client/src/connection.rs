@@ -29,8 +29,12 @@ pub(crate) const POLL: Duration = Duration::from_millis(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 /// How long the core has to answer the handshake.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+/// An application transport may still be connecting over SSH when it returns.
+const TRANSPORT_HELLO_TIMEOUT: Duration = Duration::from_secs(15);
 /// The longest handshake reply accepted.
 const MAX_HELLO: usize = 64 << 10;
+/// Remote errors reach UI labels; keep their diagnostic text bounded.
+const MAX_REMOTE_ERROR: usize = 4096;
 /// How long a call waits for its answer.
 const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 /// Calls waiting for answers at once.
@@ -53,10 +57,15 @@ struct Answer {
 
 impl Refusal {
     fn into_error(self, method: Method) -> Error {
+        let mut message = self.message;
+        if message.len() > MAX_REMOTE_ERROR {
+            message.truncate(message.floor_char_boundary(MAX_REMOTE_ERROR - '…'.len_utf8()));
+            message.push('…');
+        }
         Error::Refused {
             method,
             kind: self.data.and_then(|data| data.kind),
-            message: self.message,
+            message,
         }
     }
 }
@@ -116,19 +125,32 @@ impl Core {
             source,
         };
         let stream = connect_stream(&endpoint.socket).map_err(connect_error)?;
-        Self::over(stream)
+        Self::over_with_timeout(stream, HELLO_TIMEOUT)
     }
 
-    /// Runs the protocol over `stream`, whose reads must time out after
-    /// about `POLL` so the worker can write in between.
-    pub(crate) fn over(mut stream: impl Read + Write + Send + 'static) -> Result<Self> {
+    /// Runs the protocol over an application-provided transport, including
+    /// `hc connect` carried over SSH. Blocks through the handshake: call it
+    /// from a worker, never the UI thread. The initial hello has a 15 s deadline.
+    ///
+    /// Reads must time out after about 10 ms so the worker can service writes;
+    /// writes must also have a bounded timeout. The worker owns `stream` until
+    /// it ends, so a wrapper can keep its tunnel guard alive. Closing this
+    /// connection never stops the remote core or its terminals.
+    pub fn over(stream: impl Read + Write + Send + 'static) -> Result<Self> {
+        Self::over_with_timeout(stream, TRANSPORT_HELLO_TIMEOUT)
+    }
+
+    fn over_with_timeout(
+        mut stream: impl Read + Write + Send + 'static,
+        hello_timeout: Duration,
+    ) -> Result<Self> {
         let hello = json!({"jsonrpc": "2.0", "id": 0, "method": Method::Hello.as_str(),
             "params": {"framed": true, "generation": GENERATION}});
         let mut line = serde_json::to_vec(&hello)?;
         line.push(b'\n');
         stream.write_all(&line)?;
         stream.flush()?;
-        let (reply, rest) = read_hello(&mut stream)?;
+        let (reply, rest) = read_hello(&mut stream, hello_timeout)?;
         let hello = answer(Method::Hello, &reply)?;
         let hello: Hello =
             serde_json::from_value(hello).map_err(|error| Error::Invalid(Method::Hello, error))?;
@@ -167,7 +189,14 @@ impl Core {
 
     /// Whether the connection dropped; every later call is `Error::Lost`.
     pub fn is_lost(&self) -> bool {
-        self.shared.lost.load(Ordering::Acquire)
+        self.stop.load(Ordering::Acquire) || self.shared.lost.load(Ordering::Acquire)
+    }
+
+    /// Signals the worker to close without flushing queued commands or joining
+    /// it. Existing owners cannot keep a detached connection alive; the core
+    /// and every terminal on it continue running.
+    pub fn disconnect(&self) {
+        self.stop.store(true, Ordering::Release);
     }
 
     pub fn list(&self, all: bool) -> Result<List> {
@@ -274,7 +303,7 @@ impl Core {
 impl Drop for Core {
     fn drop(&mut self) {
         // Streams keep the worker's queue open; they end with the core's link.
-        self.stop.store(true, Ordering::Release);
+        self.disconnect();
     }
 }
 
@@ -292,12 +321,15 @@ fn answer(method: Method, message: &Value) -> Result<Value> {
 }
 
 /// The plain-mode reply line, and any framed bytes read past it.
-fn read_hello(stream: &mut impl Read) -> Result<(Value, Vec<u8>)> {
-    let deadline = Instant::now() + HELLO_TIMEOUT;
+fn read_hello(stream: &mut impl Read, timeout: Duration) -> Result<(Value, Vec<u8>)> {
+    let deadline = Instant::now() + timeout;
     let mut buffer = Vec::new();
     let mut chunk = [0; 4096];
     loop {
         if let Some(end) = buffer.iter().position(|byte| *byte == b'\n') {
+            if end + 1 > MAX_HELLO {
+                return Err(Violation::LongHello(MAX_HELLO).into());
+            }
             let rest = buffer.split_off(end + 1);
             return Ok((serde_json::from_slice(&buffer)?, rest));
         }
@@ -362,6 +394,9 @@ impl<S: Read + Write> Worker<S> {
     fn write_queued(&mut self) -> Result<bool> {
         let mut wrote = false;
         for _ in 0..WRITE_BATCH {
+            if self.stop.load(Ordering::Acquire) {
+                return Ok(false);
+            }
             match self.queue.try_recv() {
                 Ok(frame) => {
                     self.stream.write_all(&frame)?;
@@ -371,7 +406,7 @@ impl<S: Read + Write> Worker<S> {
                 Err(TryRecvError::Disconnected) => return Ok(false),
             }
         }
-        if wrote {
+        if wrote && !self.stop.load(Ordering::Acquire) {
             self.stream.flush()?;
         }
         Ok(true)
@@ -453,3 +488,7 @@ fn connect_stream(path: &std::path::Path) -> io::Result<herdr_client::Stream> {
     stream.set_write_timeout(Some(WRITE_TIMEOUT))?;
     Ok(stream)
 }
+
+#[cfg(test)]
+#[path = "connection/tests.rs"]
+mod tests;

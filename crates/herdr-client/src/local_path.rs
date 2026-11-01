@@ -28,7 +28,9 @@ pub enum PathError {
 
 /// Where configuration lives: `XDG_CONFIG_HOME` (also as the login shell
 /// sets it, see [`crate::local_var`]), else `%APPDATA%` on Windows, else
-/// `~/.config`. Herdr's own files are under its `herdr` directory.
+/// `~/.config`. On iPadOS it stays in the container's `Library/Application
+/// Support`, ignoring external roots. Herdr's files are under `herdr`.
+#[cfg(not(target_os = "ios"))]
 pub fn config_root() -> Result<PathBuf, PathError> {
     match crate::local_var("XDG_CONFIG_HOME").filter(|value| !value.is_empty()) {
         Some(value) => {
@@ -52,6 +54,19 @@ pub fn config_root() -> Result<PathBuf, PathError> {
     }
 }
 
+#[cfg(target_os = "ios")]
+pub fn config_root() -> Result<PathBuf, PathError> {
+    ios_config_root_with(|name| std::env::var_os(name))
+}
+
+#[cfg(any(all(test, unix), target_os = "ios"))]
+fn ios_config_root_with(var: impl Fn(&str) -> Option<OsString>) -> Result<PathBuf, PathError> {
+    var("HOME")
+        .filter(|home| !home.is_empty())
+        .map(|home| PathBuf::from(home).join("Library/Application Support"))
+        .ok_or(PathError::MissingHome)
+}
+
 /// This user's home directory: `HOME`, or `USERPROFILE` on Windows. None
 /// when neither is set to something non-empty.
 pub fn home_dir() -> Option<PathBuf> {
@@ -73,6 +88,19 @@ pub fn state_dir() -> Option<PathBuf> {
     state_dir_with(|name| std::env::var_os(name))
 }
 
+#[cfg(target_os = "ios")]
+fn state_dir_with(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+    ios_state_dir_with(var)
+}
+
+#[cfg(any(all(test, unix), target_os = "ios"))]
+fn ios_state_dir_with(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+    var("HOME")
+        .filter(|home| !home.is_empty())
+        .map(|home| PathBuf::from(home).join("Library/Application Support/herdr/gpui"))
+}
+
+#[cfg(not(target_os = "ios"))]
 fn state_dir_with(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     let var = |name| var(name).filter(|value| !value.is_empty());
     let root = var("XDG_STATE_HOME").map(PathBuf::from).or_else(|| {

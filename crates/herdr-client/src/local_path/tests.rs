@@ -2,8 +2,11 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 
+mod ipad_config_directory;
+mod ipad_state_directory;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(not(target_os = "ios"))]
 mod state_directory;
 
 fn fallback() -> Vec<PathBuf> {

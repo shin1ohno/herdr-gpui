@@ -9,7 +9,8 @@ mod catalog;
 pub mod clipboard;
 mod compat;
 mod connect;
-#[cfg(unix)]
+// Port forwards and shared connections own `ssh` masters; iPadOS has neither.
+#[cfg(all(unix, not(target_os = "ios")))]
 mod control_dir;
 mod discovery;
 mod environment;
@@ -41,7 +42,7 @@ mod upload;
 pub mod workspaces;
 pub mod wsl;
 
-#[cfg(all(test, unix))]
+#[cfg(all(test, unix, not(target_os = "ios")))]
 #[path = "../../test-support/executable.rs"]
 mod test_executable;
 #[cfg(test)]
@@ -52,8 +53,8 @@ pub use crossbeam_channel::Receiver;
 pub use herdr_protocol as protocol;
 
 pub use catalog::{
-    SavedHost, load_saved_host_selection, load_saved_hosts, store_saved_host,
-    store_saved_host_selection, valid_profile_id,
+    SavedHost, load_saved_host_selection, load_saved_hosts, remove_saved_host, rename_saved_host,
+    store_saved_host, store_saved_host_selection, valid_profile_id,
 };
 pub use clipboard::{ClipboardImageCancellation, ClipboardImageUpload};
 pub use compat::{MIN_HERDR_VERSION, VersionMismatch};
@@ -81,6 +82,7 @@ pub use sessions::{
     LocalSession, RemoteSession, SessionState, delete_local_session, delete_remote_session,
     list_local_sessions, list_remote_sessions,
 };
+pub use ssh::core_connect_command;
 pub use ssh::mux::Lane as SshLane;
 pub use ssh::{Bridge, SshChannel, connect_command, script_command, shared_script_command};
 pub use ssh::{
@@ -88,6 +90,11 @@ pub use ssh::{
     MAX_UNVERIFIED_HOSTS, NewHostKey, SshFailure, forward_command, probe_host, probe_host_with,
     remote_config_value, remote_origin_url, resolve_destination, scan_host_key, set_host_keys,
     set_unverified_hosts, trust_host_key,
+};
+#[cfg(target_os = "ios")]
+pub use ssh::{
+    HostKeyChange, authorized_key, changed_host_key, exec_ssh_stream, forget_host_key,
+    run_ssh_command,
 };
 pub use surface_images::{
     MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, MAX_IMAGES, MAX_PLACEMENTS, SurfaceImage, SurfaceImages,

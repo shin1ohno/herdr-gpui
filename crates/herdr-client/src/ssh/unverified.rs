@@ -7,6 +7,10 @@
 //! opt such a host out explicitly, and pushes that list here; every `ssh` this
 //! crate starts for a listed target is told not to check its key. Reading the
 //! list never blocks on I/O, so command builders stay safe on the UI thread.
+//!
+//! iPadOS keeps no list: its in-process client verifies every host, so a
+//! target never reads as [`HostKeys::Skip`] there and choosing it does nothing.
+#[cfg(not(target_os = "ios"))]
 use std::{
     collections::BTreeSet,
     sync::{PoisonError, RwLock},
@@ -15,6 +19,7 @@ use std::{
 /// At most this many targets are kept, as the app's config also bounds them.
 pub const MAX_UNVERIFIED_HOSTS: usize = 256;
 
+#[cfg(not(target_os = "ios"))]
 static HOSTS: RwLock<BTreeSet<String>> = RwLock::new(BTreeSet::new());
 
 /// Whether `ssh` checks a host's key against the known hosts files.
@@ -29,6 +34,7 @@ pub enum HostKeys {
 
 impl HostKeys {
     /// What the user chose for `target`.
+    #[cfg(not(target_os = "ios"))]
     pub fn of(target: &str) -> Self {
         let hosts = HOSTS.read().unwrap_or_else(PoisonError::into_inner);
         if hosts.contains(target) {
@@ -38,9 +44,16 @@ impl HostKeys {
         }
     }
 
+    /// Every host is verified on iPadOS, whatever was chosen.
+    #[cfg(target_os = "ios")]
+    pub fn of(_target: &str) -> Self {
+        Self::Verify
+    }
+
     /// Options placed before [`super::POLICY`], which they override. No known
     /// hosts file is read either: with checking off, a recorded key that no
     /// longer matches still connects but turns off agent and port forwarding.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn options(self) -> &'static [&'static str] {
         match self {
             Self::Verify => &[],
@@ -58,6 +71,7 @@ impl HostKeys {
 
 /// Replace the targets whose host keys are not verified. Targets beyond
 /// [`MAX_UNVERIFIED_HOSTS`] are dropped; the app's config refuses them first.
+#[cfg(not(target_os = "ios"))]
 pub fn set_unverified_hosts<I>(targets: I)
 where
     I: IntoIterator,
@@ -74,6 +88,16 @@ where
     }
 }
 
+/// iPadOS verifies every host, so the saved list is not kept.
+#[cfg(target_os = "ios")]
+pub fn set_unverified_hosts<I>(_targets: I)
+where
+    I: IntoIterator,
+    I::Item: Into<String>,
+{
+}
+
+#[cfg(not(target_os = "ios"))]
 fn bounded<I>(targets: I) -> BTreeSet<String>
 where
     I: IntoIterator,
@@ -86,7 +110,12 @@ where
         .collect()
 }
 
+/// iPadOS verifies every host, so no choice is recorded.
+#[cfg(target_os = "ios")]
+pub fn set_host_keys(_target: &str, _keys: HostKeys) {}
+
 /// Record the user's choice for one target, effective for the next `ssh`.
+#[cfg(not(target_os = "ios"))]
 pub fn set_host_keys(target: &str, keys: HostKeys) {
     let changed = {
         let mut hosts = HOSTS.write().unwrap_or_else(PoisonError::into_inner);
@@ -101,5 +130,5 @@ pub fn set_host_keys(target: &str, keys: HostKeys) {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 mod tests;

@@ -20,7 +20,8 @@ pub use terminal::{
 };
 
 /// Which Herdr runs a host's terminals.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Generation {
     /// The Herdr 1 daemon: it owns workspaces, tabs, and panes and sends rendered cells.
     Herdr1,

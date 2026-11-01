@@ -10,6 +10,10 @@ pub enum Error {
     Cancelled,
     #[error("SSH bridge closed; check host trust, authentication, and remote Herdr installation")]
     Closed,
+    /// The iPadOS in-process client could not start.
+    #[cfg(target_os = "ios")]
+    #[error(transparent)]
+    InProcess(#[from] super::in_process::Error),
     #[error("invalid SSH target (options, controls, and passwords are forbidden)")]
     InvalidTarget,
     /// `ssh -G` named no user known hosts file a host key could be saved to.
@@ -35,6 +39,8 @@ impl Error {
             Self::Unsupported => io::ErrorKind::Unsupported,
             Self::Cancelled => io::ErrorKind::Interrupted,
             Self::Closed => io::ErrorKind::UnexpectedEof,
+            #[cfg(target_os = "ios")]
+            Self::InProcess(error) => error.kind(),
             Self::Refused(failure) => match failure {
                 SshFailure::HostKey | SshFailure::Auth => io::ErrorKind::PermissionDenied,
                 SshFailure::Unreachable | SshFailure::NoRoute | SshFailure::LocalNetworkDenied => {

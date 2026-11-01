@@ -724,3 +724,31 @@ it verifies the daemon is still alive and reconnects to the same boot ID with
 the created workspace/tab state intact. Normal `cargo test` leaves it ignored;
 explicitly running it without `HERDR_TEST_BINARY` fails rather than falling
 back to a personal daemon. No root manifest or additional dependency is needed.
+
+### iPadOS SSH
+
+On iPadOS, SSH uses `herdr-ssh` inside the app and signs with the device's
+Keychain key. `authorized_key` returns the restricted public-key line for the
+user to install on the host. Host keys live in the app container's
+`Library/Application Support/herdr/gpui/ssh/known_hosts`; reconnects never ask
+for trust and never skip verification. SSH errors come from typed tunnel exits,
+not remote stderr. Dropping a tunnel signals cancellation without joining it.
+
+The saved-device catalog also lives under `Library/Application Support`.
+`remove_saved_host` and `rename_saved_host` edit that bounded private catalog
+atomically, without contacting or stopping a daemon. They return false when
+the device has already been removed. These APIs and every key operation perform
+blocking work and belong on background workers. Session listing, confirmed remote
+session deletion, and remote configuration reads use bounded in-process exec
+channels too. `exec_ssh_stream` lets another binary protocol retain that same
+pinned transport and its cancellation guard, without the Herdr 1 handshake.
+Port forwarding, prepared local process commands, and local setup terminals are
+unavailable on iPadOS.
+
+`core_connect_command` builds the validated, quoted command for an explicitly
+requested Herdr 2 connection. Its executable candidates are also used by the
+iOS read-only Core availability probe, which never starts a daemon. Finding only
+Herdr 2 requires a separate registration confirmation; it does not switch an
+existing Herdr 1 device. `run_ssh_command` exposes the bounded, cancellable
+in-process command reader on iOS for ACP discovery work, with a caller-selected
+stdout limit capped at the client's 64 KiB maximum.

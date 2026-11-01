@@ -108,7 +108,7 @@ fn an_already_stopped_session_can_be_deleted_but_a_live_one_is_still_refused() {
     ));
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn remote_delete_is_noninteractive_and_never_retries_a_mutation() {
     let script = delete_script("--json");
@@ -464,7 +464,7 @@ fn an_excessive_remote_listing_is_refused_rather_than_truncated() {
     ));
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn the_remote_listing_walks_the_shared_candidate_roots() {
     // Asserted on the script and on the SSH child's arguments, never by faking

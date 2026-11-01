@@ -10,7 +10,7 @@ use crate::{
     options::{ConnectOptions, validate_options},
     queue,
     session::{Pace, Signals, run_connection},
-    ssh::{self, Bridge},
+    ssh::{self, Bridge, BridgeGuard},
     transport::Stream,
     wsl,
 };
@@ -107,18 +107,19 @@ pub fn connect_with_connector<T: Into<Transport>>(
             let _entered = span.enter();
             tracing::info!(transport, "connection starting");
             let result = (|| {
-                let (stream, child) = match &target {
+                // A guard means a remote bridge, which gets health pings.
+                let (stream, child): (_, Option<BridgeGuard>) = match &target {
                     ConnectTarget::Ssh { target, session } => {
                         let (stream, child) = ssh::connect(target, session, &worker_stop)?;
-                        (stream, Some(child))
+                        (stream, Some(child.into()))
                     }
                     ConnectTarget::Wsl { distro, session } => {
                         let (stream, child) = wsl::connect(distro, session, &worker_stop)?;
-                        (stream, Some(child))
+                        (stream, Some(child.into()))
                     }
                     _ => match connector(&target, &worker_stop)?.into() {
                         Transport::Local(stream) => (stream, None),
-                        Transport::Bridge(Bridge { stream, child }) => (stream, Some(child)),
+                        Transport::Bridge(Bridge { stream, child }) => (stream, Some(child.into())),
                     },
                 };
                 run_connection(

@@ -7,12 +7,18 @@
 //! `ssh` applies the user's `HostKeyAlias`, port, and hashing rules to the
 //! entry. Nothing reaches the user's files until [`trust_host_key`] appends
 //! those exact entries, so the approved fingerprint is the one saved.
-use super::{Error, SshFailure};
-use crate::Result;
-use crate::{StorageOperation, catalog::validate_target};
-#[cfg(unix)]
+//!
+//! iPadOS has no `ssh`: there the same functions pin keys in the app's own
+//! known hosts file through the in-process client (see `pinned`).
+#[cfg(not(target_os = "ios"))]
+use super::Error;
+use super::SshFailure;
+#[cfg(not(target_os = "ios"))]
+use crate::{Result, StorageOperation, catalog::validate_target};
+#[cfg(all(unix, not(target_os = "ios")))]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+#[cfg(not(target_os = "ios"))]
 use std::{
     fs::{DirBuilder, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
@@ -20,8 +26,14 @@ use std::{
     time::Duration,
 };
 
+#[cfg(target_os = "ios")]
+mod pinned;
+#[cfg(target_os = "ios")]
+pub use pinned::{HostKeyChange, changed_host_key, forget_host_key, scan_host_key, trust_host_key};
+
 /// Upper bound on the entries `ssh` records for one host, normally one line
 /// (two when `CheckHostIP` also records the address).
+#[cfg(not(target_os = "ios"))]
 const ENTRIES_LIMIT: u64 = 16 * 1024;
 
 /// What a host's key check found, learned without authenticating.
@@ -42,12 +54,21 @@ pub enum HostKeyScan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewHostKey {
     pub fingerprints: Vec<HostKeyFingerprint>,
+    #[cfg(not(target_os = "ios"))]
     entries: String,
     known_hosts: PathBuf,
     /// The name the host's keys are stored under, and every known hosts file
     /// checked for it, checked again right before the entries are saved.
+    #[cfg(not(target_os = "ios"))]
     name: String,
+    #[cfg(not(target_os = "ios"))]
     checked: Vec<PathBuf>,
+    /// The host and the exact keys the scan saw, which are what an approval
+    /// pins: never a key fetched again after the user compared these.
+    #[cfg(target_os = "ios")]
+    target: herdr_ssh::Target,
+    #[cfg(target_os = "ios")]
+    keys: Vec<herdr_ssh::HostKey>,
 }
 
 /// One key as `ssh-keygen -l` describes it, for the user to compare.
@@ -70,6 +91,7 @@ impl NewHostKey {
 /// Connects to `target` without authenticating, only to learn its host key.
 /// Every authentication method is off, so no credential is offered and no
 /// remote command runs. Blocks on SSH: call it from a background thread.
+#[cfg(not(target_os = "ios"))]
 pub fn scan_host_key(target: &str) -> Result<HostKeyScan> {
     validate_target(target)?;
     let known = known_hosts(target)?;
@@ -135,6 +157,7 @@ pub fn scan_host_key(target: &str) -> Result<HostKeyScan> {
 /// new key into `recorded`, check the user's own files too, and never offer a
 /// credential or touch a shared connection. Nothing is forwarded either, since
 /// the host is not verified: the user's config may forward the agent to it.
+#[cfg(not(target_os = "ios"))]
 fn scan_options(recorded: &Path, files: &[PathBuf]) -> Vec<String> {
     let known: Vec<String> = std::iter::once(recorded)
         .chain(files.iter().map(PathBuf::as_path))
@@ -164,6 +187,7 @@ fn scan_options(recorded: &Path, files: &[PathBuf]) -> Vec<String> {
 /// `path` for a quoted list in an `ssh` option. OpenSSH reads a backslash in
 /// one as an escape before a quote or another backslash, so on Windows, whose
 /// OpenSSH takes either separator, the path is written with forward slashes.
+#[cfg(not(target_os = "ios"))]
 fn option_path(path: &Path) -> String {
     let text = path.display().to_string();
     if cfg!(windows) {
@@ -174,6 +198,7 @@ fn option_path(path: &Path) -> String {
 }
 
 /// What `ssh -G` resolves for a target's host keys.
+#[cfg(not(target_os = "ios"))]
 #[derive(Debug, PartialEq, Eq)]
 struct KnownHosts {
     /// The user files, first one first: that is where `ssh` itself saves a
@@ -185,6 +210,7 @@ struct KnownHosts {
     name: String,
 }
 
+#[cfg(not(target_os = "ios"))]
 impl KnownHosts {
     fn files(&self) -> impl Iterator<Item = &PathBuf> {
         self.user.iter().chain(&self.global)
@@ -194,6 +220,7 @@ impl KnownHosts {
 /// Whether any of `files` already lists a key under `name`; `ssh-keygen -F`
 /// also matches hashed entries. Only a missing file is skipped: one that
 /// cannot be read fails the check rather than passing it.
+#[cfg(not(target_os = "ios"))]
 fn lists_host<'a>(name: &str, files: impl IntoIterator<Item = &'a PathBuf>) -> Result<bool> {
     for file in files {
         match std::fs::metadata(file) {
@@ -226,6 +253,7 @@ fn lists_host<'a>(name: &str, files: impl IntoIterator<Item = &'a PathBuf>) -> R
     Ok(false)
 }
 
+#[cfg(not(target_os = "ios"))]
 fn known_hosts(target: &str) -> Result<KnownHosts> {
     let mut command = crate::environment::command("ssh");
     command.args(["-G", "--", target]);
@@ -239,6 +267,7 @@ fn known_hosts(target: &str) -> Result<KnownHosts> {
 /// `None` unless every user file is an absolute path without quotes, and any
 /// space in one is accounted for (see [`split_paths`]), since `ssh -G` prints
 /// paths unquoted.
+#[cfg(not(target_os = "ios"))]
 fn parse_known_hosts(output: &[u8]) -> Option<KnownHosts> {
     let text = std::str::from_utf8(output).ok()?;
     let value = |key: &str| {
@@ -286,6 +315,7 @@ fn parse_known_hosts(output: &[u8]) -> Option<KnownHosts> {
 /// profile such as `C:\Users\Jane Doe`. A relative file listed after an
 /// absolute one joins it the same way; [`spaces_in_directories`] refuses that
 /// join rather than let it name a file `ssh` never reads.
+#[cfg(not(target_os = "ios"))]
 fn split_paths(list: &str) -> Vec<String> {
     if !cfg!(windows) {
         return list.split_whitespace().map(str::to_owned).collect();
@@ -308,6 +338,7 @@ fn split_paths(list: &str) -> Vec<String> {
 /// in the file name itself, or in a directory that `is_dir` does not find,
 /// may as well separate two listed files, so such a path is refused: trusting
 /// a key there would write it where `ssh` does not look.
+#[cfg(not(target_os = "ios"))]
 fn spaces_in_directories(file: &Path, is_dir: impl Fn(&Path) -> bool) -> bool {
     let components: Vec<_> = file.components().collect();
     let mut prefix = PathBuf::new();
@@ -323,6 +354,7 @@ fn spaces_in_directories(file: &Path, is_dir: impl Fn(&Path) -> bool) -> bool {
 
 /// A path as `ssh -G` prints it. Windows OpenSSH prints its system-wide
 /// directory as `__PROGRAMDATA__`, which it expands only when it opens a file.
+#[cfg(not(target_os = "ios"))]
 fn expand_path(path: &str) -> PathBuf {
     if cfg!(windows)
         && let Some(rest) = path.strip_prefix("__PROGRAMDATA__")
@@ -336,6 +368,7 @@ fn expand_path(path: &str) -> PathBuf {
 }
 
 /// Describes each key in `file`, one per distinct fingerprint.
+#[cfg(not(target_os = "ios"))]
 fn fingerprints(file: &Path) -> Result<Vec<HostKeyFingerprint>> {
     let mut command = crate::environment::command("ssh-keygen");
     command.args(["-l", "-E", "sha256", "-f"]).arg(file);
@@ -364,6 +397,7 @@ fn fingerprints(file: &Path) -> Result<Vec<HostKeyFingerprint>> {
 }
 
 /// One `ssh-keygen -l` line: `256 SHA256:<digest> <host> (ED25519)`.
+#[cfg(not(target_os = "ios"))]
 fn parse_fingerprint(line: &str) -> Option<HostKeyFingerprint> {
     let mut words = line.split_whitespace();
     let bits = words.next()?.parse().ok()?;
@@ -389,6 +423,7 @@ fn parse_fingerprint(line: &str) -> Option<HostKeyFingerprint> {
 
 /// Known hosts lines as `ssh` wrote them, refused if any carries a control
 /// character, so appending them can never add something else.
+#[cfg(not(target_os = "ios"))]
 fn valid_entries(entries: &str) -> Result<String> {
     let mut valid = String::with_capacity(entries.len());
     for line in entries.lines().filter(|line| !line.trim().is_empty()) {
@@ -404,6 +439,7 @@ fn valid_entries(entries: &str) -> Result<String> {
 /// Appends the approved entries to the user's known hosts file, creating it
 /// and its directory privately when missing. Blocks on disk: call it from a
 /// background thread.
+#[cfg(not(target_os = "ios"))]
 pub fn trust_host_key(key: &NewHostKey) -> Result<()> {
     // The files may have changed since the key was shown: a key trusted for
     // the host meanwhile makes this one a replacement, which is never saved.
@@ -452,6 +488,6 @@ pub fn trust_host_key(key: &NewHostKey) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 #[allow(clippy::unwrap_used)] // Test fixtures only.
 mod tests;

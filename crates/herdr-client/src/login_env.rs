@@ -1,6 +1,7 @@
 //! The user's login shell environment, for the children an app started
 //! from the desktop runs: launchd and desktop sessions hand a GUI app a
 //! bare `PATH` and none of the variables a shell profile sets.
+//! iPadOS has no login shell: it uses its container environment without probing.
 #![forbid(unsafe_code)]
 
 use std::{ffi::OsString, process::Command};
@@ -8,20 +9,20 @@ use std::{ffi::OsString, process::Command};
 /// Called only by worker threads, such as the daemon connection's and the
 /// VS Code server's, never by a GPUI render/update.
 pub fn apply(command: &mut Command) {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "ios")))]
     if let Some(environment) = unix::resolve() {
         command.envs(environment.iter().map(|(key, value)| (key, value)));
     } else {
         command.env("PATH", crate::local_path::local_path());
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "ios"))]
     let _ = command;
 }
 
 /// The `PATH` that [`apply`] gives a command, for finding a program on it.
 /// Blocking the first time on Unix, like [`apply`]: run it off the UI thread.
 pub fn path() -> Option<OsString> {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "ios")))]
     return match unix::resolve() {
         Some(environment) => environment
             .iter()
@@ -29,7 +30,7 @@ pub fn path() -> Option<OsString> {
             .map(|(_, value)| value.clone()),
         None => Some(crate::local_path::local_path()),
     };
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "ios"))]
     std::env::var_os("PATH")
 }
 
@@ -37,7 +38,7 @@ pub fn path() -> Option<OsString> {
 /// shell's value when it sets one, else this process's. Blocking the first
 /// time on Unix, like [`apply`]: run it off the UI thread.
 pub fn var(name: &str) -> Option<OsString> {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "ios")))]
     if let Some((_, value)) = unix::resolve().and_then(|environment| {
         environment
             .iter()
@@ -51,7 +52,7 @@ pub fn var(name: &str) -> Option<OsString> {
 /// What the login shell at `shell` exports, probed as [`apply`] probes the
 /// user's, for tests elsewhere that start from a desktop launch's bare
 /// environment.
-#[cfg(all(unix, any(test, feature = "test-support")))]
+#[cfg(all(unix, not(target_os = "ios"), any(test, feature = "test-support")))]
 pub fn probe_for_tests(shell: &std::path::Path) -> Option<Vec<(OsString, OsString)>> {
     unix::probe(
         shell.as_os_str(),
@@ -68,7 +69,7 @@ pub fn probe_for_tests(shell: &std::path::Path) -> Option<Vec<(OsString, OsStrin
 /// daemon answers at the default endpoint: a daemon there needs nothing
 /// adopted, and without one the probe would run anyway to start it.
 pub fn adopt_config_home() {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "ios")))]
     {
         if std::env::var_os("XDG_CONFIG_HOME").is_some()
             || crate::ConnectTarget::Local
@@ -86,7 +87,7 @@ pub fn adopt_config_home() {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod unix {
     use std::{
         ffi::{OsStr, OsString},

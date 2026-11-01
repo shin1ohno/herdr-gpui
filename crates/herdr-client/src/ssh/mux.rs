@@ -18,9 +18,11 @@
 //!   process exits or crashes, the watchdog ends the master.
 //!
 //! Windows OpenSSH cannot share connections, so there every command connects
-//! directly.
-#[cfg(unix)]
+//! directly. iPadOS starts no `ssh` at all: it keeps only [`Lane`], which its
+//! callers name, and refuses the commands that would use one.
+#[cfg(all(unix, not(target_os = "ios")))]
 use std::time::Duration;
+#[cfg(not(target_os = "ios"))]
 use std::time::Instant;
 
 /// Which of a host's masters a command shares. Large transfers get their own
@@ -34,7 +36,7 @@ pub enum Lane {
     Bulk,
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 impl Lane {
     /// Channels open at once on one master. sshd's `MaxSessions` (default
     /// 10) refuses more per connection; a command beyond this connects
@@ -49,25 +51,26 @@ impl Lane {
 
 /// How long the first command waits for a host's master before connecting
 /// directly. SSH gives up connecting after `ConnectTimeout` (10 s).
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 const READY_TIMEOUT: Duration = Duration::from_secs(20);
 /// After a master fails to start, the host's commands connect directly for
 /// this long before another master is tried. Each further failure in a row
 /// doubles it up to `MAX_BACKOFF`, so a host that always refuses one (say,
 /// it needs a password the master cannot type) sees a failed login only
 /// rarely, while a brief refusal recovers within a minute.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 const BACKOFF: Duration = Duration::from_secs(60);
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 const MAX_BACKOFF: Duration = Duration::from_secs(30 * 60);
 /// A master with no channels open for this long is stopped.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 const IDLE: Duration = Duration::from_secs(300);
 
 /// `remote_command` on `target` over the host's `lane` master, with the
 /// channel that must stay alive until the child is reaped; or a direct
 /// connection, with no channel, when sharing is unavailable. Waits for a
 /// master being started until `deadline`, or until `cancelled`.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn command(
     target: &str,
     remote_command: &str,
@@ -91,6 +94,7 @@ pub(crate) fn command(
 /// current masters are retired: commands already on them finish, and the
 /// next one starts a new master. A first connect keeps them, so the master a
 /// startup read just opened is not replaced at once.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn bridge_connecting(target: &str, session: &str) {
     #[cfg(unix)]
     shared::registry().bridge_connecting(target, session);
@@ -101,6 +105,7 @@ pub(crate) fn bridge_connecting(target: &str, session: &str) {
 /// Whether `target`'s host key is checked has changed, so its masters, opened
 /// under the old choice, take no new channels; the next command starts a
 /// master that follows the new one.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn host_keys_changed(target: &str) {
     #[cfg(unix)]
     shared::registry().retire(target);
@@ -108,13 +113,13 @@ pub(crate) fn host_keys_changed(target: &str) {
     let _ = target;
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 pub(crate) use shared::Channel;
 
 /// No master exists on this platform, so no channel is ever handed out.
-#[cfg(not(unix))]
+#[cfg(any(not(unix), target_os = "ios"))]
 #[derive(Debug)]
 pub(crate) enum Channel {}
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod shared;

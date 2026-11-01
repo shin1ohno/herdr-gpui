@@ -13,6 +13,13 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+mod edit;
+pub use edit::{remove_saved_host, rename_saved_host};
+
+// Every in-process catalog writer shares this lock. The desktop Herdr CLI
+// does not participate, so callers still check for duplicates after provisioning.
+static WRITER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SavedHost {
@@ -50,7 +57,6 @@ pub fn store_saved_host(development: bool, host: &SavedHost) -> Result<SavedHost
 fn store_host(path: &Path, host: &SavedHost) -> Result<SavedHost> {
     // Serialize this client's writers, including adds of different devices.
     // Herdr's CLI does not participate in a shared catalog lock.
-    static WRITER: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = WRITER.lock().unwrap_or_else(|error| error.into_inner());
     let mut catalog = load_catalog(path)?;
     if let Some(existing) = catalog
@@ -61,14 +67,18 @@ fn store_host(path: &Path, host: &SavedHost) -> Result<SavedHost> {
         return Ok(existing.clone());
     }
     catalog.ssh.push(host.clone());
-    let content = serde_json::to_vec_pretty(&catalog).map_err(|error| {
+    write_catalog(path, &catalog)?;
+    Ok(host.clone())
+}
+
+fn write_catalog(path: &Path, catalog: &Catalog) -> Result<()> {
+    let content = serde_json::to_vec_pretty(catalog).map_err(|error| {
         Error::storage(StorageOperation::Encode, path, Error::CatalogSchema(error))
     })?;
     // Reuse the reader's schema, ID, field, count and byte limits before writing.
     parse_catalog(&content)
         .map_err(|error| Error::storage(StorageOperation::Validate, path, error))?;
-    write_private(path, &content)?;
-    Ok(host.clone())
+    write_private(path, &content)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -249,6 +259,7 @@ pub(crate) fn write_private(path: &Path, content: &[u8]) -> Result<()> {
 /// Upstream's state root for the endpoint catalog. Windows has no XDG layout by
 /// default, so upstream falls back to `%LOCALAPPDATA%` there; the catalog is
 /// shared with the daemon, so both must agree on where it lives.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn catalog_path(development: bool, var: impl Fn(&str) -> Option<OsString>) -> PathBuf {
     let app = if development { "herdr-dev" } else { "herdr" };
     let root = (|| {
@@ -269,6 +280,25 @@ pub(crate) fn catalog_path(development: bool, var: impl Fn(&str) -> Option<OsStr
     root.map(|base| base.join(app))
         .unwrap_or_else(|| env::temp_dir().join(format!("{app}-state")))
         .join("client/endpoints.json")
+}
+
+#[cfg(target_os = "ios")]
+pub(crate) fn catalog_path(development: bool, var: impl Fn(&str) -> Option<OsString>) -> PathBuf {
+    ios_catalog_path(development, var)
+}
+
+#[cfg(any(test, target_os = "ios"))]
+fn ios_catalog_path(development: bool, var: impl Fn(&str) -> Option<OsString>) -> PathBuf {
+    let app = if development { "herdr-dev" } else { "herdr" };
+    let root = var("HOME")
+        .filter(|home| !home.is_empty())
+        .map(|home| {
+            PathBuf::from(home)
+                .join("Library/Application Support")
+                .join(app)
+        })
+        .unwrap_or_else(|| env::temp_dir().join(format!("{app}-state")));
+    root.join("client/endpoints.json")
 }
 
 fn load_path(path: &Path) -> Result<Vec<SavedHost>> {

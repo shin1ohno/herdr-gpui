@@ -5,11 +5,11 @@
 //! port some other local process took first. Nothing reconnects; a forward
 //! that ends stays ended until someone starts it again. Callers name the
 //! remote port, so this knows nothing of how that port was found.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 use crate::control_dir::{ControlDir, control_path};
 use crate::{Error, Result, catalog::validate_target, ssh};
 use std::num::NonZeroU16;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 use std::{
     net::{Ipv4Addr, TcpListener},
     path::Path,
@@ -41,42 +41,43 @@ pub fn preferred_local_port(remote: NonZeroU16) -> u16 {
 
 /// SSH connects within `ConnectTimeout` and authenticates without prompting,
 /// so a master that has not opened its control socket by now never will.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
 /// Asking a running master for a listener is local and quick.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 const FORWARD_TIMEOUT: Duration = Duration::from_secs(10);
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 const STARTING_POLL: Duration = Duration::from_millis(50);
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 const LISTENING_POLL: Duration = Duration::from_millis(250);
 
 /// The master, shared so its owner can kill it at once while the worker
 /// alone waits for it. Neither side holds the lock across a blocking call.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[derive(Default)]
 struct Slot {
     stopped: bool,
     child: Option<Child>,
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn lock(slot: &Mutex<Slot>) -> MutexGuard<'_, Slot> {
     slot.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// One running forward. Dropping it stops the forward.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 pub struct PortForward {
     slot: Arc<Mutex<Slot>>,
     events: mpsc::Receiver<ForwardEvent>,
 }
 
-/// No SSH child is ever spawned on Windows, so this type has no values.
-#[cfg(windows)]
+/// No SSH child is ever spawned on Windows or iPadOS, so this type has no
+/// values.
+#[cfg(any(windows, target_os = "ios"))]
 pub enum PortForward {}
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 impl PortForward {
     /// Forwards `remote_port` on `target`'s loopback to a local port. Returns
     /// at once: running SSH and choosing the port happen on a worker thread.
@@ -138,14 +139,14 @@ impl PortForward {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 impl Drop for PortForward {
     fn drop(&mut self) {
         self.stop();
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "ios"))]
 impl PortForward {
     pub fn start(target: &str, _remote_port: NonZeroU16) -> Result<Self> {
         validate_target(target)?;
@@ -161,14 +162,14 @@ impl PortForward {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 enum Master {
     Running,
     Stopped,
     Ended(Error),
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn master(slot: &Mutex<Slot>) -> Master {
     let mut slot = lock(slot);
     let Slot { stopped, child } = &mut *slot;
@@ -182,7 +183,7 @@ fn master(slot: &Mutex<Slot>) -> Master {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn run(
     slot: &Mutex<Slot>,
     remote_port: NonZeroU16,
@@ -227,7 +228,7 @@ fn run(
 
 /// Waits for the master, asks it for a listener, then watches it. Returns
 /// why the forward ended, or `None` once its owner stopped it.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn supervise(
     slot: &Mutex<Slot>,
     remote_port: NonZeroU16,
@@ -299,7 +300,7 @@ fn supervise(
 }
 
 /// A loopback port the system considers free right now.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn system_port() -> Result<u16> {
     TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
         .and_then(|listener| listener.local_addr())
@@ -312,7 +313,7 @@ fn system_port() -> Result<u16> {
 /// keep it after this child is killed), and a master only for this forward's
 /// private socket. `ExitOnForwardFailure` stays off so a `LocalForward` or
 /// `RemoteForward` from the user's config that is busy elsewhere cannot end it.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn master_command(target: &str, socket: &Path) -> Command {
     let mut command = crate::environment::command("ssh");
     // The user's host key choice comes first, so it wins over the default.
@@ -354,7 +355,7 @@ fn master_command(target: &str, socket: &Path) -> Command {
 
 /// Asks the master on `socket` to listen on loopback only. It exits 0 only
 /// once that master holds the port.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn forward_command(target: &str, socket: &Path, local_port: u16, remote_port: u16) -> Command {
     let mut command = crate::environment::command("ssh");
     command
@@ -366,6 +367,6 @@ fn forward_command(target: &str, socket: &Path, local_port: u16, remote_port: u1
     command
 }
 
-#[cfg(all(test, unix))]
+#[cfg(all(test, unix, not(target_os = "ios")))]
 #[allow(clippy::unwrap_used)]
 mod tests;

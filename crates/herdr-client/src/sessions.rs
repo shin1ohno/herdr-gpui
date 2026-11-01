@@ -1,23 +1,27 @@
 //! The named local sessions one machine's Herdr installation owns, and which of
 //! them is running. A session socket outlives the daemon that created it, so a
 //! session's state can only come from a connect attempt, never the file itself.
-use crate::ssh::{self, CANDIDATES, script_command};
+#[cfg(not(target_os = "ios"))]
+use crate::ssh::script_command;
+use crate::ssh::{self, CANDIDATES};
 use crate::{
     Result, Stream,
     catalog::validate_target,
     discovery::{config_dir, valid_session_name},
     session_socket,
 };
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 use crate::{limits::POLL, ssh::ChildGuard};
 use serde::Deserialize;
+#[cfg(all(unix, any(not(target_os = "ios"), test)))]
+use std::io::Read;
 use std::{
     fs, io,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-#[cfg(unix)]
-use std::{io::Read, os::fd::OwnedFd, process::Stdio};
+#[cfg(all(unix, not(target_os = "ios")))]
+use std::{os::fd::OwnedFd, process::Stdio};
 
 /// One scan reports at most this many sessions, like the endpoint catalog's
 /// profile cap. More than this is refused rather than silently truncated.
@@ -43,6 +47,7 @@ pub fn delete_local_session(executable: &Path, name: &str) -> Result<()> {
 }
 
 /// Stop and delete a named session on a saved POSIX device after confirmation.
+#[cfg(not(target_os = "ios"))]
 pub fn delete_remote_session(target: &str, name: &str) -> Result<()> {
     validate_target(target)?;
     validate_delete(name)?;
@@ -50,6 +55,23 @@ pub fn delete_remote_session(target: &str, name: &str) -> Result<()> {
         script_command(target, &delete_script(name))?,
         Duration::from_secs(45),
     )
+}
+
+/// Delete a remote session after the same explicit UI confirmation, using
+/// an in-process channel on iPadOS. The command is never replayed on failure.
+#[cfg(target_os = "ios")]
+pub fn delete_remote_session(target: &str, name: &str) -> Result<()> {
+    validate_target(target)?;
+    validate_delete(name)?;
+    let command = format!("/bin/sh -c {}", crate::shell_quote(&delete_script(name)));
+    let (status, _) = match ssh::run_remote(target, &command, Duration::from_secs(45), || false) {
+        Err(crate::Error::Ssh(ssh::Error::Timeout)) => return Err(Error::DeleteTimeout.into()),
+        result => result?,
+    };
+    if !status.success() {
+        return Err(Error::DeleteFailed(status).into());
+    }
+    Ok(())
 }
 
 fn stop_then_delete(
@@ -232,7 +254,7 @@ const DEADLINE: Duration = Duration::from_secs(15);
 
 /// A host listing `LIMIT` sessions with full socket paths stays well under this.
 /// More than that is not a session list, and it is refused instead of buffered.
-#[cfg(unix)]
+#[cfg(all(unix, any(not(target_os = "ios"), test)))]
 const MAX_OUTPUT: usize = 64 * 1024;
 
 /// The `herdr session list --json` envelope. Only the entries are read: the
@@ -279,7 +301,7 @@ exit 127"#
 /// Stderr and stdin are discarded rather than inherited: remote diagnostics can
 /// carry secrets and terminal controls, and a command that reads a terminal it was
 /// not given would hang.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
     let (mut stream, child_stream) = Stream::pair()?;
     stream.set_read_timeout(Some(POLL))?;
@@ -296,6 +318,16 @@ fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
     })
 }
 
+#[cfg(target_os = "ios")]
+fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
+    let command = format!("/bin/sh -c {}", crate::shell_quote(script));
+    let (status, output) = ssh::run_remote(target, &command, DEADLINE, || false)?;
+    if !status.success() {
+        return Err(crate::Error::RemoteCommand(status));
+    }
+    Ok(output)
+}
+
 /// [`remote_stdout`] on Windows, where the child's stdout is a pipe that closes
 /// when `ssh` exits: there is no shared connection to hold it open, so the
 /// listing is everything printed before the exit, bounded as on Unix.
@@ -310,7 +342,7 @@ fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
 /// one of these channels: a child that wrote three bytes and exited leaves the read
 /// waiting, so `gone` says whether the writer has finished, which ends a short or
 /// absent listing at once rather than at the deadline.
-#[cfg(unix)]
+#[cfg(all(unix, any(not(target_os = "ios"), test)))]
 fn read_listing(
     stream: &mut impl Read,
     timeout: Duration,
@@ -345,7 +377,7 @@ fn read_listing(
 }
 
 /// Whether an error means "nothing to read yet" rather than a broken channel.
-#[cfg(unix)]
+#[cfg(all(unix, any(not(target_os = "ios"), test)))]
 fn idle(error: &io::Error) -> bool {
     matches!(
         error.kind(),
@@ -355,7 +387,7 @@ fn idle(error: &io::Error) -> bool {
 
 /// Whether a host has already printed a complete session list, which is the point
 /// past which reading more can only wait for an EOF that may never come.
-#[cfg(unix)]
+#[cfg(all(unix, any(not(target_os = "ios"), test)))]
 fn listed_sessions(output: &[u8]) -> bool {
     output
         .split(|byte| *byte == b'\n')
