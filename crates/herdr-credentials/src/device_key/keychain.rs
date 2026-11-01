@@ -81,6 +81,14 @@ pub(super) fn delete(label: &str) -> Result<(), Error> {
     sec_item::delete(&tagged(label)).map_err(|status| Error::from_status(status, Error::Keychain))
 }
 
+/// Changes only the application tag, preserving the Secure Enclave key and
+/// its access control. Callers hold `KEYCHAIN` and keep destination tags empty.
+pub(super) fn retag(from: &str, to: &str) -> Result<(), Error> {
+    let changes = Query::default().set(Name::ApplicationTag, CFData::from_buffer(to.as_bytes()));
+    sec_item::update(&tagged(from), &changes)
+        .map_err(|status| Error::from_status(status, Error::Keychain))
+}
+
 /// The key's public half as a 65-byte uncompressed SEC1 point.
 pub(super) fn public_sec1(key: &SecKey) -> Result<[u8; 65], Error> {
     let public = key.public_key().ok_or(Error::PublicKey)?;

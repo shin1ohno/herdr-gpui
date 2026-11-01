@@ -57,7 +57,8 @@ pub(crate) use in_process::run_remote;
 #[cfg(target_os = "ios")]
 pub use in_process::{
     authorized_key, connect_command, exec_ssh_stream, forward_command, probe_host_with,
-    resolve_destination, run_ssh_command, script_command, shared_script_command,
+    replace_authorized_key, resolve_destination, run_ssh_command, script_command,
+    shared_script_command,
 };
 pub use unverified::{HostKeys, MAX_UNVERIFIED_HOSTS, set_host_keys, set_unverified_hosts};
 #[cfg(not(target_os = "ios"))]

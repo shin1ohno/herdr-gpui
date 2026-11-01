@@ -4,6 +4,8 @@ mod configuration;
 mod fonts;
 mod general;
 mod indicators;
+#[cfg(any(target_os = "ios", test))]
+pub(in crate::settings_window) mod ipad_key;
 mod language;
 pub(in crate::settings_window) mod notifications;
 pub(in crate::settings_window) mod remote_control;

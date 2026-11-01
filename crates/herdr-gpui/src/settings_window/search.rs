@@ -33,6 +33,10 @@ impl SettingsWindow {
         let results = (!query.trim().is_empty()).then(|| catalog::search(query));
         if results != self.search_results {
             if results.is_some() {
+                #[cfg(any(target_os = "ios", test))]
+                {
+                    self.ipad_key.confirming = false;
+                }
                 // The results replace the page and any slider being dragged.
                 self.drop_number_preview(cx);
             }
@@ -50,6 +54,7 @@ impl SettingsWindow {
                 ThemeName::follows_system(self.drafted_theme())
             }
             catalog::Availability::Windows => cfg!(windows),
+            catalog::Availability::Ipad => crate::ipad_ui::active(),
         }
     }
 

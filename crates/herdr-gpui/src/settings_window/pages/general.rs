@@ -58,6 +58,13 @@ impl SettingsWindow {
         div()
             .flex()
             .flex_col()
+            .map(|page| {
+                #[cfg(any(target_os = "ios", test))]
+                let page = page.when(crate::ipad_ui::active(), |page| {
+                    page.child(self.render_ipad_key(cx))
+                });
+                page
+            })
             .child(ui::section(
                 theme,
                 &fl!("settings-general-section-interface"),

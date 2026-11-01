@@ -10,6 +10,8 @@ mod cloud_devices;
 #[cfg_attr(test, allow(dead_code, unused_imports))]
 pub(crate) use cloud_devices::open as open_cloud;
 mod controls;
+#[cfg(any(target_os = "ios", test))]
+pub(crate) mod device_key;
 mod inputs;
 #[cfg(windows)]
 mod launch_at_login;
@@ -188,6 +190,8 @@ struct SettingsWindow {
     code: controls::code::CodeSettings,
     px0: controls::px0::Px0Settings,
     chat_env: controls::chat_env::ChatEnvSettings,
+    #[cfg(any(target_os = "ios", test))]
+    ipad_key: pages::ipad_key::IpadKeySettings,
     remote: pages::remote_control::RemoteSettings,
     /// The open override dropdown, if any; its list renders inside its button.
     dropdown: Option<ui::Dropdown>,
@@ -353,6 +357,8 @@ impl SettingsWindow {
             code: Default::default(),
             px0: Default::default(),
             chat_env: Default::default(),
+            #[cfg(any(target_os = "ios", test))]
+            ipad_key: Default::default(),
             remote: Default::default(),
             dropdown: None,
             number_edit: None,
@@ -621,6 +627,10 @@ impl SettingsWindow {
 
     /// Shared entry point for the native titlebar and keyboard close actions.
     pub(super) fn should_close(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        #[cfg(any(target_os = "ios", test))]
+        {
+            self.ipad_key.confirming = false;
+        }
         self.hover_theme(None, cx);
         if self.closing.is_some() {
             return false;
@@ -713,6 +723,13 @@ impl SettingsWindow {
         self.dismiss_control_font_picker(window, cx);
         self.clear_search(cx);
         self.section = section;
+        #[cfg(any(target_os = "ios", test))]
+        {
+            self.ipad_key.confirming = false;
+            if section == Section::General {
+                self.open_ipad_key(cx);
+            }
+        }
         // A page opened from search or elsewhere shows in a short list too.
         self.navigation_scroll.scroll_to_item(section.nav_item());
         if section == Section::Code {

@@ -23,6 +23,8 @@ pub(super) enum Availability {
     Always,
     /// Only while the drafted theme follows the system as a light/dark pair.
     FollowingSystemTheme,
+    /// Only on iPadOS, whose SSH identity lives in the app's Keychain.
+    Ipad,
     /// Only on Windows, which has the only platform code for it.
     Windows,
 }
@@ -74,6 +76,20 @@ const fn feature(feature: Feature) -> Entry {
 }
 
 pub(super) const CATALOG: &[Entry] = &[
+    entry(
+        Section::General,
+        "general-ipad-key",
+        "settings-ipad-key",
+        "settings-ipad-key-description",
+    )
+    .only(Availability::Ipad),
+    entry(
+        Section::General,
+        "general-ipad-key-replace",
+        "settings-ipad-key-replace",
+        "settings-ipad-key-replace-description",
+    )
+    .only(Availability::Ipad),
     entry(
         Section::Theme,
         "theme-mode",

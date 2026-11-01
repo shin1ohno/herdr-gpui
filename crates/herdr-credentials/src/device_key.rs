@@ -6,13 +6,14 @@
 //! synchronizable, and in no shared access group. It is created only when a
 //! lookup finds none, and every caller then uses the key the Keychain holds.
 //!
-//! The signature conversion and the lookup-or-create rule are plain Rust, so
-//! their tests also run on the build host.
+//! The signature conversion, lookup-or-create rule, and replacement ordering
+//! are plain Rust, so their tests also run on the build host.
 
 mod create;
 mod error;
 #[cfg(target_os = "ios")]
 mod keychain;
+mod replace;
 mod signature;
 
 pub use error::Error;
@@ -22,8 +23,8 @@ use security_framework::key::SecKey;
 #[cfg(target_os = "ios")]
 use std::sync::{Mutex, PoisonError};
 
-/// Held while looking up, creating, or deleting the key, so two scenes that
-/// ask at once both end with the key the first one created. The Keychain
+/// Held while looking up, creating, replacing, or deleting the key, so two
+/// scenes that ask at once both end with the key the first one created. The Keychain
 /// does not refuse a second key under the same tag (each key is its own
 /// item), so this lock is what keeps it to one; the item is in no shared
 /// access group, so no other process can add one under the label.
@@ -45,16 +46,55 @@ impl DeviceKey {
     /// is a transient error, never a reason to create a new key.
     pub fn load_or_create(label: &str) -> crate::Result<Self> {
         let _keychain = KEYCHAIN.lock().unwrap_or_else(PoisonError::into_inner);
-        let private = create::find_or_create(|| keychain::find(label), || keychain::create(label))?;
-        let public = keychain::public_sec1(&private)?;
-        Ok(Self { private, public })
+        let tags = replace::Tags::new(label);
+        Ok(create::find_or_create(
+            || {
+                replace::recover(
+                    |slot| Self::find(tags.tag(slot)),
+                    |from, to| keychain::retag(tags.tag(from), tags.tag(to)),
+                )
+            },
+            || keychain::create(label),
+        )?)
+    }
+
+    /// Replaces this installation's key while holding the same lock as
+    /// `load_or_create`. The replacement is stored under a temporary tag and
+    /// read back, including its public key, before the old key is moved.
+    /// Interrupted label changes recover the old key on the next lookup.
+    /// Once promoted, the new key is authoritative; cleanup of the old item
+    /// is best effort and retried before another replacement can create a key.
+    /// The old public key must be removed from hosts and the new one added.
+    pub fn replace(label: &str) -> crate::Result<Self> {
+        let _keychain = KEYCHAIN.lock().unwrap_or_else(PoisonError::into_inner);
+        let tags = replace::Tags::new(label);
+        Ok(replace::replace(
+            |slot| Self::find(tags.tag(slot)),
+            || keychain::create(tags.tag(replace::Slot::Staged)),
+            |from, to| keychain::retag(tags.tag(from), tags.tag(to)),
+            |slot| keychain::delete(tags.tag(slot)),
+        )?)
     }
 
     /// Deletes the key under `label`, so the next `load_or_create` makes a
     /// new one; the old public key must then be removed from hosts.
     pub fn delete(label: &str) -> crate::Result<()> {
         let _keychain = KEYCHAIN.lock().unwrap_or_else(PoisonError::into_inner);
+        let tags = replace::Tags::new(label);
+        // Delete recovery items first, so a partial failure cannot resurrect
+        // an old key after the active item has been removed.
+        keychain::delete(tags.tag(replace::Slot::Staged))?;
+        keychain::delete(tags.tag(replace::Slot::Retired))?;
         Ok(keychain::delete(label)?)
+    }
+
+    fn find(label: &str) -> Result<Option<Self>, Error> {
+        keychain::find(label)?
+            .map(|private| {
+                let public = keychain::public_sec1(&private)?;
+                Ok(Self { private, public })
+            })
+            .transpose()
     }
 
     /// The 65-byte uncompressed SEC1 public point.

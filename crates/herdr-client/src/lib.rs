@@ -95,7 +95,7 @@ pub use ssh::{
 #[cfg(target_os = "ios")]
 pub use ssh::{
     HostKeyChange, authorized_key, changed_host_key, exec_ssh_stream, forget_host_key,
-    run_ssh_command,
+    replace_authorized_key, run_ssh_command,
 };
 pub use surface_images::{
     MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, MAX_IMAGES, MAX_PLACEMENTS, SurfaceImage, SurfaceImages,

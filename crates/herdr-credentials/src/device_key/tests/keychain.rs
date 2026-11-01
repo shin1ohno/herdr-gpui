@@ -19,28 +19,6 @@ use crate::{
     sec_item::tests::{device_only, stored, synchronizable},
 };
 use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-/// A label no other test or run uses, whose key is deleted when the test
-/// ends, passed or failed.
-struct Label(String);
-
-impl Label {
-    fn new() -> Self {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        Self(format!(
-            "dev.herdr.gpui.test.device-key.{}.{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ))
-    }
-}
-
-impl Drop for Label {
-    fn drop(&mut self) {
-        let _ = DeviceKey::delete(&self.0);
-    }
-}
 
 #[test]
 #[ignore = "needs a Keychain access group; see this module's docs"]

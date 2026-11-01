@@ -265,6 +265,10 @@ pub(super) fn known_hosts() -> Result<KnownHosts> {
 /// with the device key; only its signatures reach the client.
 fn client_key() -> Result<ClientKey> {
     let device = DeviceKey::load_or_create(KEY_LABEL).map_err(Error::DeviceKey)?;
+    client_key_from(device)
+}
+
+fn client_key_from(device: DeviceKey) -> Result<ClientKey> {
     let public = device.public_sec1();
     let sign = move |message: &[u8]| {
         device.sign(message).map_err(|error| {
@@ -282,7 +286,22 @@ fn client_key() -> Result<ClientKey> {
 /// with no PTY or forwarding, and named after this device. Creates the key
 /// on first use; blocks on the Keychain, so call it off the UI thread.
 pub fn authorized_key() -> Result<String> {
+    Ok(authorized_key_line(&client_key()?))
+}
+
+/// Replaces this installation's device key and returns the new restricted
+/// `authorized_keys` line. Each new connection reads the Keychain again, so
+/// it uses this new key automatically. Live tunnels keep their authenticated
+/// sessions; replacement neither disconnects nor reconnects them. Every
+/// computer needs the new line installed and the old line removed.
+/// Blocks on the Keychain: call only after user confirmation, off the UI thread.
+pub fn replace_authorized_key() -> Result<String> {
+    let device = DeviceKey::replace(KEY_LABEL).map_err(Error::DeviceKey)?;
+    Ok(authorized_key_line(&client_key_from(device)?))
+}
+
+fn authorized_key_line(key: &ClientKey) -> String {
     let device = rustix::system::uname();
     let name = device.nodename().to_string_lossy();
-    Ok(client_key()?.authorized_keys_line(&ipad::key_comment(&name)))
+    key.authorized_keys_line(&ipad::key_comment(&name))
 }

@@ -5,7 +5,8 @@
 
 use super::Setup;
 use crate::HerdrWindow;
-use crate::i18n::{Localize, fl};
+use crate::i18n::fl;
+use crate::settings_window::device_key::{self, Line, Operation};
 use crate::window::Flash;
 use gpui::{prelude::*, *};
 
@@ -13,17 +14,10 @@ use gpui::{prelude::*, *};
 #[derive(Default)]
 pub(in crate::menu) struct DeviceKey {
     line: Line,
+    /// An open form must stop offering a key Settings has just retired.
+    _changed: Option<Subscription>,
     /// Held so the read is not cancelled; dropping the form drops it.
     _task: Option<Task<()>>,
-}
-
-#[derive(Default)]
-enum Line {
-    #[default]
-    Loading,
-    Ready(String),
-    /// Why the key could not be read, such as a locked device.
-    Failed(String),
 }
 
 impl HerdrWindow {
@@ -32,25 +26,24 @@ impl HerdrWindow {
         let Some(setup) = &mut self.menu.device_setup else {
             return;
         };
-        let background = cx
-            .background_executor()
-            .spawn(async { herdr_client::authorized_key() });
+        if setup.device_key._changed.is_none() {
+            setup.device_key._changed = Some(
+                cx.observe_global::<device_key::Revision>(|this, cx| this.load_device_key(cx)),
+            );
+        }
+        setup.device_key.line = Line::Loading;
+        let background = device_key::load(cx.background_executor(), Operation::Read);
         setup.device_key._task = Some(cx.spawn(async move |this, cx| {
             let result = background.await;
             let _ = this.update(cx, |this, cx| {
                 let Some(setup) = &mut this.menu.device_setup else {
                     return;
                 };
-                setup.device_key.line = match result {
-                    Ok(line) => Line::Ready(line),
-                    Err(error) => {
-                        tracing::warn!(category = "device_setup", "Device key unavailable");
-                        Line::Failed(error.localize())
-                    }
-                };
+                setup.device_key.line = result.into();
                 cx.notify();
             });
         }));
+        cx.notify();
     }
 
     pub(super) fn render_device_key(
@@ -104,6 +97,13 @@ impl HerdrWindow {
                                 .cursor_pointer()
                                 .child(fl!("add-device-ipad-key-copy"))
                                 .on_click(cx.listener(move |this, _, _, cx| {
+                                    // A replacement can invalidate this painted
+                                    // button before the next frame redraws it.
+                                    if !this.menu.device_setup.as_ref().is_some_and(|setup| {
+                                        matches!(&setup.device_key.line, Line::Ready(line) if line == &copied)
+                                    }) {
+                                        return;
+                                    }
                                     cx.write_to_clipboard(ClipboardItem::new_string(
                                         copied.clone(),
                                     ));

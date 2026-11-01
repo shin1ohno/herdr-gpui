@@ -12,6 +12,7 @@ mod background_drafts;
 mod config_watch;
 mod en_xa;
 mod gpu_settings;
+mod ipad_key;
 mod language_picker;
 mod language_reload;
 #[cfg(windows)]
