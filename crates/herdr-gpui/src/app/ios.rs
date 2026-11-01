@@ -35,10 +35,6 @@ pub(crate) fn run() -> std::process::ExitCode {
     let outcome = failed.clone();
     let platform = Rc::new(IosPlatform::new());
     let application = Application::with_platform(platform.clone()).with_assets(icons::Icons);
-    let urls_cx = application.to_async();
-    application.on_open_urls(move |urls| {
-        urls_cx.update(|cx| crate::host_key_code::open_urls(urls, cx));
-    });
     application.run(move |cx| {
         browser_tabs.install(cx);
         group_layouts.install(cx);
@@ -55,6 +51,7 @@ pub(crate) fn run() -> std::process::ExitCode {
         window_state.install(cx);
         // After the stores, so a flush always has them to write.
         watch_lifecycle(&platform, cx);
+        watch_open_urls(&platform, cx);
         cx.set_global(appearance.select(light_appearance(cx)));
         let language = cx.global::<InitialAppearance>().config.language.clone();
         crate::i18n::install(&language, cx);
@@ -104,6 +101,16 @@ fn watch_lifecycle(platform: &IosPlatform, cx: &App) {
         if phase == AppLifecyclePhase::Background {
             flush_for_background(&cx);
         }
+    }));
+}
+
+/// Host key codes arrive as `herdr-ipad:` URLs. Like lifecycle phases, the
+/// platform delivers them from their own main-queue block, after the scene
+/// that carried a launch URL has connected.
+fn watch_open_urls(platform: &IosPlatform, cx: &App) {
+    let cx = cx.to_async();
+    platform.on_open_urls(Box::new(move |urls| {
+        cx.update(|cx| crate::host_key_code::open_urls(urls, cx));
     }));
 }
 

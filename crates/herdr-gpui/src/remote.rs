@@ -17,7 +17,10 @@ pub(crate) mod nearby;
 mod revoke;
 pub(crate) mod supervisor;
 
-pub(crate) use dialog::{PairingDialog, addresses, qr_square};
+pub(crate) use dialog::{PairingDialog, addresses};
+// The desktop's host key code window paints its QR code the same way.
+#[cfg(not(target_os = "ios"))]
+pub(crate) use dialog::qr_square;
 pub use herdr_remote_control::app::Error;
 pub(crate) use herdr_remote_control::app::{Result, pairing, qr, service};
 use herdr_remote_control::control::Device;
