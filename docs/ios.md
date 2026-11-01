@@ -228,7 +228,9 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
 
 `aarch64-apple-ios` is a device, `aarch64-apple-ios-sim` the simulator on an
 Apple silicon Mac. `cargo check -p herdr-uikit --target aarch64-apple-ios-sim`
-checks the platform; on other targets the crate is empty.
+checks the platform; on other targets the crate is empty. A device bundle is
+signed for a development team with its provisioning profile; see
+[Installing on an iPad](#installing-on-an-ipad).
 
 ## Running in the simulator
 
@@ -265,9 +267,9 @@ The scripts behind the recipes are in `scripts/ios/`:
 
 - `bundle.sh` builds an example or binary for `aarch64-apple-ios-sim` (or
   `--target aarch64-apple-ios`), assembles `NAME.app` beside the executable
-  from the `Info.plist` template, and ad-hoc signs it. A device bundle is left
-  unsigned: installing on an iPad needs a development team and a provisioning
-  profile, which the script does not handle yet.
+  from the `Info.plist` template, and ad-hoc signs it for the simulator. A
+  device bundle is signed with `--team TEAM` or `--profile PATH`; without
+  either it is left unsigned and the script exits with status 3.
   Simulator executables embed private, bundle-specific Keychain entitlements
   in `__TEXT,__entitlements`; those placeholders are never used on a device.
   `--no-default-features` and `--features LIST` select Cargo features.
@@ -295,6 +297,92 @@ changes nothing there: its log is the JSON-lines file under the app
 container, `Library/Application Support/herdr/gpui/logs/herdr-gpui.jsonl`
 (`xcrun simctl get_app_container <device> <bundle id> data` prints the
 container).
+
+## Installing on an iPad
+
+`just ios-device` builds the real client in release mode without desktop
+cloud provider features, signs it for your development team, installs it on a
+connected iPad, launches it, checks that it is still running after five
+seconds, and copies its log back. It needs:
+
+- Xcode signed in to an account in the team (Xcode > Settings > Accounts).
+- The iPad paired with this Mac (Xcode's Devices and Simulators window, with
+  the iPad attached by USB), registered with the team (the developer
+  account's Devices list), and with Developer Mode on (Settings > Privacy &
+  Security > Developer Mode).
+- The iPad connected, by USB or on the same network, and unlocked.
+- The Rust target: `rustup target add aarch64-apple-ios`.
+
+The team and bundle identifier are yours, so they come from the environment
+or options rather than the repository:
+
+```sh
+export HERDR_IOS_TEAM=TEAMID          # your ten-character team ID
+export HERDR_IOS_BUNDLE_ID=com.example.herdr-gpui
+just ios-device                       # the only paired iPad
+just ios-device --device "My iPad"    # by name, CoreDevice identifier, or UDID
+just ios-device --dev --no-launch     # dev build, install only
+```
+
+`HERDR_IOS_DEVICE` sets the default device. Signing needs a bundle
+identifier under a domain you control: the project's own `so.pen.herdr-gpui`
+belongs to whoever registered it first, so signing never falls back to it,
+and `device.sh` and a signing `bundle.sh` exit with status 2 until
+`HERDR_IOS_BUNDLE_ID` or `--bundle-id` names one. `HERDR_IOS_BUNDLE_ID` also
+sets device bundles from `bundle.sh`, examples appending `.example.NAME` to
+it. Simulator bundles ignore it and keep `so.pen.herdr-gpui`, so exporting it
+leaves the simulator's data container and Keychain items where they were.
+
+The first time, no provisioning profile covers the new identifier.
+`scripts/ios/provision.sh` then generates a throwaway one-file app with that
+identifier and automatic signing in a temporary directory, and builds it with
+`xcodebuild -allowProvisioningUpdates`. Xcode registers an explicit App ID
+for the identifier with the team and downloads a development profile
+for the team's registered devices into
+`~/Library/Developer/Xcode/UserData/Provisioning Profiles`. When the login
+keychain holds no valid development certificate for the team, Xcode may also
+create one, putting its private key in the keychain; it appears under
+Certificates in the developer account. Later runs find the profile and talk
+to no Apple service until it expires. The App ID appears under Certificates,
+Identifiers & Profiles in the developer account, where it can be removed.
+Xcode is asked only when the search of installed profiles ran and found
+nothing; a profile it cannot read is skipped with its reason. If a profile
+for the identifier exists but predates the iPad's registration, the script
+names it: delete it and run again so Xcode downloads one that lists the
+iPad.
+
+A profile qualifies when it is for iOS and has not expired, its app ID is
+the exact identifier (preferred) or a wildcard covering it, it lists the
+iPad's UDID, and it holds the certificate of a signing identity in the login
+keychain. The bundle carries the profile as
+`embedded.mobileprovision` and is signed by that identity's SHA-1 with
+entitlements derived from the profile: the application and team identifiers,
+`get-task-allow` as the profile grants it, and a Keychain access group
+narrowed from the profile's `TEAMID.*` to the app's own `TEAMID.IDENTIFIER`.
+Nothing else the profile allows is claimed. `bundle.sh --team TEAMID` or
+`--profile PATH` signs a device bundle the same way without installing it; a
+profile given with `--profile` that is expired or not for iOS is refused
+before the build.
+
+On first use the app asks for Local Network access, which adding and reaching
+a computer on the local network needs. A denial can be reversed in Settings >
+Privacy & Security > Local Network.
+
+`scripts/ios/device.sh` behind the recipe writes to
+`target/ios-device/herdr-gpui/` (`--out DIR` elsewhere): `herdr-gpui.jsonl`,
+the app's log copied from
+`Library/Application Support/herdr/gpui/logs/herdr-gpui.jsonl` in its data
+container, and devicectl's `launch.json` and `processes.json`. It retries an
+install once after CoreDevice error 3002, a dropped transfer. It exits with
+status 2 for invalid options, 3 when the iPad is not ready (unreachable,
+unpaired, without Developer Mode, or reporting no UDID), 4 when the app is no
+longer running after `--wait` seconds, and 1 on any other failure, including
+a launch or process listing that devicectl could not complete. Once the app
+is installed it copies the log and prints the summary whatever the outcome;
+crash reports are in Xcode's Devices and Simulators window. Relative `--app`
+and `--out` paths given to `just ios-device` are relative to the directory
+`just` was run from. It never uninstalls an app or erases its data, and the
+only process it ends is an earlier copy of the same app, when launching.
 
 ## Choosing the remote backend
 
@@ -326,10 +414,10 @@ the text input adapter reports a left-to-right base writing direction, and
 the renderer does not support Core Video surfaces or subpixel sprites. GPUI's
 in-window menus and grayscale text rendering remain available.
 
-Physical-device signing and provisioning are not automated. Secure Enclave
-key creation, native keyboard/IME composition, trackpad behavior, multiple
-scenes, and narrow multitasking layouts still need checks on an iPad. Simulator
-unit tests and a successful launch do not establish those behaviors.
+Secure Enclave key creation, native keyboard/IME composition, trackpad
+behavior, multiple scenes, and narrow multitasking layouts still need checks
+on an iPad. Simulator unit tests and a successful launch do not establish
+those behaviors.
 
 Manual checks in the simulator, against a private loopback `sshd` with Herdr
 1 and herdr-core, have covered adding a device with its host key confirmed,

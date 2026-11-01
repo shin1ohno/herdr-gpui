@@ -382,6 +382,20 @@ ios-app wait="5":
     app=$(bash scripts/ios/bundle.sh --package herdr-gpui --bin herdr-gpui --no-default-features)
     bash scripts/ios/sim.sh --wait "{{wait}}" "$app"
 
+# The same client signed for a development team (HERDR_IOS_TEAM or --team)
+# under your own bundle identifier (HERDR_IOS_BUNDLE_ID or --bundle-id),
+# installed on a connected iPad and launched, with its log copied to
+# target/ios-device/herdr-gpui. Release build unless --dev; other options
+# in `bash scripts/ios/device.sh --help` and docs/ios.md. Relative --app and
+# --out paths are relative to the directory just was run from.
+[macos]
+[positional-arguments]
+ios-device *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{quote(invocation_directory())}}
+    exec bash {{quote(justfile_directory())}}/scripts/ios/device.sh "$@"
+
 # herdr-uikit's tests inside the iPad simulator, each test binary started by
 # scripts/ios/sim-runner.sh with `xcrun simctl spawn`. Boots the simulator
 # when needed. Built at the bundle's minimum OS, like `just ios-sim`.

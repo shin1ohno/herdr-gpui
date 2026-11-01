@@ -1,5 +1,7 @@
-"""Exercise simulator entitlements and device isolation without building an app."""
+"""Exercise simulator entitlements and device signing without building an app."""
 
+from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,6 +14,35 @@ import unittest
 
 
 SCRIPT = Path(__file__).with_name("bundle.sh")
+PROVISION = Path(__file__).with_name("provision.sh")
+REPOSITORY = Path(__file__).resolve().parents[2]
+TEAM = "TEAMID1234"
+CERTIFICATE = b"isolated development certificate"
+CERTIFICATE_SHA = hashlib.sha1(CERTIFICATE).hexdigest().upper()
+OTHER_SHA = hashlib.sha1(b"another identity").hexdigest().upper()
+
+
+DEVICE = "00000000-0000000000000001"
+
+
+def profile_plist(app_pattern=f"{TEAM}.*", days=30, devices=(DEVICE,)):
+    """A development profile as security cms -D prints it, for the fakes."""
+    return plistlib.dumps({
+        "Name": "Isolated test profile",
+        "ApplicationIdentifierPrefix": [TEAM],
+        "TeamIdentifier": [TEAM],
+        "Platform": ["iOS"],
+        "ExpirationDate": datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=days),
+        "DeveloperCertificates": [CERTIFICATE],
+        "ProvisionedDevices": list(devices),
+        "Entitlements": {
+            "application-identifier": app_pattern,
+            "com.apple.developer.team-identifier": TEAM,
+            "keychain-access-groups": [f"{TEAM}.*"],
+            "get-task-allow": True,
+            "aps-environment": "development",
+        },
+    })
 
 
 @unittest.skipUnless(sys.platform == "darwin", "bundling uses macOS plutil")
@@ -26,11 +57,22 @@ class BundleTests(unittest.TestCase):
         self.executable.parent.mkdir()
         self.executable.write_bytes(b"isolated test executable")
         self.log = self.root / "calls.jsonl"
+        self.home = self.root / "home"
+        self.xcode_profiles = (
+            self.home / "Library/Developer/Xcode/UserData/Provisioning Profiles"
+        )
+        self.xcode_profiles.mkdir(parents=True)
+        environment = {
+            key: value for key, value in os.environ.items() if not key.startswith("HERDR_IOS_")
+        }
         self.env = {
-            **os.environ,
+            **environment,
+            "HOME": str(self.home),
             "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}",
             "HERDR_BUNDLE_TEST_LOG": str(self.log),
             "HERDR_BUNDLE_TEST_BINARY": str(self.executable),
+            "HERDR_BUNDLE_TEST_PROFILES": str(self.xcode_profiles),
+            "HERDR_BUNDLE_TEST_IDENTITIES": f"{OTHER_SHA} {CERTIFICATE_SHA}",
         }
         self.tool(
             tools,
@@ -60,9 +102,64 @@ class BundleTests(unittest.TestCase):
             tools,
             "codesign",
             r'''
-            import json, os, sys
+            import json, os, pathlib, plistlib, sys
+            args = sys.argv[1:]
+            record = {"tool": "codesign", "args": args}
+            if "--entitlements" in args:
+                path = pathlib.Path(args[args.index("--entitlements") + 1])
+                record["entitlements"] = plistlib.loads(path.read_bytes())
+                embedded = pathlib.Path(args[-1]) / "embedded.mobileprovision"
+                record["embedded"] = embedded.read_bytes().hex() if embedded.exists() else None
             with open(os.environ["HERDR_BUNDLE_TEST_LOG"], "a") as log:
-                log.write(json.dumps({"tool": "codesign", "args": sys.argv[1:]}) + "\n")
+                log.write(json.dumps(record) + "\n")
+            ''',
+        )
+        # Profiles in these tests are plain plists, so `cms -D` prints them.
+        self.tool(
+            tools,
+            "security",
+            r'''
+            import json, os, sys
+            args = sys.argv[1:]
+            with open(os.environ["HERDR_BUNDLE_TEST_LOG"], "a") as log:
+                log.write(json.dumps({"tool": "security", "args": args}) + "\n")
+            if args[:3] == ["cms", "-D", "-i"]:
+                sys.stdout.buffer.write(open(args[3], "rb").read())
+            elif args[:1] == ["find-identity"]:
+                shas = os.environ["HERDR_BUNDLE_TEST_IDENTITIES"].split()
+                for index, sha in enumerate(shas, 1):
+                    print(f'  {index}) {sha} "Apple Development: Isolated ({index})"')
+                print(f"     {len(shas)} valid identities found")
+            else:
+                sys.exit(2)
+            ''',
+        )
+        self.tool(
+            tools,
+            "xcodegen",
+            r'''
+            import json, os, pathlib, sys
+            args = sys.argv[1:]
+            spec = pathlib.Path(args[args.index("--spec") + 1])
+            record = {"tool": "xcodegen", "args": args, "spec": spec.read_text()}
+            with open(os.environ["HERDR_BUNDLE_TEST_LOG"], "a") as log:
+                log.write(json.dumps(record) + "\n")
+            ''',
+        )
+        # Xcode's automatic signing downloads the profile into its directory.
+        self.tool(
+            tools,
+            "xcodebuild",
+            r'''
+            import json, os, pathlib, sys
+            with open(os.environ["HERDR_BUNDLE_TEST_LOG"], "a") as log:
+                log.write(json.dumps({"tool": "xcodebuild", "args": sys.argv[1:]}) + "\n")
+            created = os.environ.get("HERDR_BUNDLE_TEST_XCODE_CREATES")
+            if created is None:
+                print("error: No Account for Team")
+                sys.exit(65)
+            target = pathlib.Path(os.environ["HERDR_BUNDLE_TEST_PROFILES"]) / "created.mobileprovision"
+            target.write_bytes(pathlib.Path(created).read_bytes())
             ''',
         )
         self.tool(
@@ -86,8 +183,50 @@ class BundleTests(unittest.TestCase):
             check=False,
         )
 
-    def calls(self):
-        return [json.loads(line) for line in self.log.read_text().splitlines()]
+    def run_provision(self, *args):
+        return subprocess.run(
+            ["bash", str(PROVISION), *args],
+            env=self.env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def calls(self, tool=None):
+        if not self.log.exists():
+            return []
+        calls = [json.loads(line) for line in self.log.read_text().splitlines()]
+        return [call for call in calls if tool is None or call["tool"] == tool]
+
+    def write_profile(self, path, **kwargs):
+        path.write_bytes(profile_plist(**kwargs))
+        return path
+
+    def assert_signed_for(self, result, bundle_id, profile):
+        self.assertEqual(result.returncode, 0, result.stderr)
+        app = Path(result.stdout.splitlines()[-1])
+        self.assertEqual(app, self.executable.parent / "herdr-gpui.app")
+        self.assertEqual((app / "embedded.mobileprovision").read_bytes(), profile.read_bytes())
+        signing = [call for call in self.calls("codesign") if "--sign" in call["args"]]
+        self.assertEqual(len(signing), 1)
+        args = signing[0]["args"]
+        self.assertEqual(args[args.index("--sign") + 1], CERTIFICATE_SHA)
+        self.assertIn("--timestamp=none", args)
+        self.assertEqual(signing[0]["embedded"], profile.read_bytes().hex())
+        self.assertEqual(signing[0]["entitlements"], {
+            "application-identifier": f"{TEAM}.{bundle_id}",
+            "com.apple.developer.team-identifier": TEAM,
+            "keychain-access-groups": [f"{TEAM}.{bundle_id}"],
+            "get-task-allow": True,
+        })
+        verify = [call for call in self.calls("codesign") if "--verify" in call["args"]]
+        self.assertEqual(verify[0]["args"], ["--verify", "--strict", str(app)])
+        info = plistlib.loads((app / "Info.plist").read_bytes())
+        self.assertEqual(info["CFBundleIdentifier"], bundle_id)
+        self.assertEqual(info["CFBundleSupportedPlatforms"], ["iPhoneOS"])
+        build = self.calls("cargo")[0]
+        self.assertEqual(build["args"][0], "build")
+        self.assertNotIn("entitlements", build)
 
     def test_simulator_links_private_keychain_entitlements_only_into_the_executable(self):
         result = self.run_bundle(
@@ -111,7 +250,7 @@ class BundleTests(unittest.TestCase):
         self.assertTrue(signatures)
         self.assertTrue(all("--entitlements" not in call["args"] for call in signatures))
 
-    def test_device_never_gets_simulator_entitlements_or_ad_hoc_signing(self):
+    def test_device_without_a_team_stays_unsigned_and_names_the_options(self):
         result = self.run_bundle("--bin", "herdr-gpui", "--target", "aarch64-apple-ios")
         self.assertEqual(result.returncode, 3, result.stderr)
         calls = self.calls()
@@ -119,6 +258,165 @@ class BundleTests(unittest.TestCase):
         self.assertEqual(calls[0]["args"][0], "build")
         self.assertNotIn("entitlements", calls[0])
         self.assertIn("unsigned device bundle", result.stderr)
+        self.assertIn("--team", result.stderr)
+        self.assertIn("--profile", result.stderr)
+        self.assertFalse((self.executable.parent / "herdr-gpui.app/embedded.mobileprovision").exists())
+
+    def test_device_with_a_profile_signs_with_the_identity_the_profile_lists(self):
+        profile = self.write_profile(self.root / "given profile.mobileprovision")
+        result = self.run_bundle(
+            "--package", "herdr-gpui", "--bin", "herdr-gpui", "--target", "aarch64-apple-ios",
+            "--bundle-id", "dev.herdr.signed", "--team", TEAM, "--profile", str(profile),
+        )
+        self.assert_signed_for(result, "dev.herdr.signed", profile)
+        self.assertFalse(self.calls("xcodebuild"))
+
+    def test_team_from_the_environment_finds_xcodes_installed_profile(self):
+        profile = self.write_profile(
+            self.xcode_profiles / "installed.mobileprovision", app_pattern=f"{TEAM}.dev.herdr.env"
+        )
+        self.env["HERDR_IOS_TEAM"] = TEAM
+        self.env["HERDR_IOS_BUNDLE_ID"] = "dev.herdr.env"
+        result = self.run_bundle("--bin", "herdr-gpui", "--target", "aarch64-apple-ios")
+        self.assert_signed_for(result, "dev.herdr.env", profile)
+        self.assertFalse(self.calls("xcodebuild"))
+
+    def test_missing_profile_is_created_by_xcode_before_the_build(self):
+        created = self.write_profile(self.root / "xcode would download.mobileprovision")
+        self.env["HERDR_BUNDLE_TEST_XCODE_CREATES"] = str(created)
+        scratch = self.root / "scratch"
+        scratch.mkdir()
+        self.env["TMPDIR"] = str(scratch)
+        result = self.run_bundle(
+            "--bin", "herdr-gpui", "--target", "aarch64-apple-ios", "--release",
+            "--bundle-id", "dev.herdr.created", "--team", TEAM,
+        )
+        self.assert_signed_for(result, "dev.herdr.created", created)
+        spec = self.calls("xcodegen")[0]["spec"]
+        self.assertIn('PRODUCT_BUNDLE_IDENTIFIER: "dev.herdr.created"', spec)
+        self.assertIn(f'DEVELOPMENT_TEAM: "{TEAM}"', spec)
+        self.assertIn("CODE_SIGN_STYLE: Automatic", spec)
+        generate = self.calls("xcodegen")[0]["args"]
+        self.assertIn("--no-env", generate)
+        spec_path = Path(generate[generate.index("--spec") + 1]).resolve()
+        args = self.calls("xcodebuild")[0]["args"]
+        derived = Path(args[args.index("-derivedDataPath") + 1]).resolve()
+        for path in (spec_path, derived):
+            self.assertTrue(path.is_relative_to(scratch.resolve()), path)
+            self.assertFalse(path.is_relative_to(REPOSITORY), path)
+        self.assertFalse(spec_path.exists(), "the stub outlives provision.sh")
+        self.assertIn("-allowProvisioningUpdates", args)
+        self.assertEqual(args[args.index("-destination") + 1], "generic/platform=iOS")
+        tools = [call["tool"] for call in self.calls()]
+        self.assertLess(tools.index("xcodebuild"), tools.index("cargo"))
+        self.assertNotIn(TEAM, result.stdout.splitlines()[-1])
+
+    def test_unprovisionable_team_fails_before_compiling(self):
+        result = self.run_bundle(
+            "--bin", "herdr-gpui", "--target", "aarch64-apple-ios", "--team", TEAM,
+            "--bundle-id", "dev.herdr.unprovisioned",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Sign in to Xcode", result.stderr)
+        self.assertFalse(self.calls("cargo"))
+        self.assertFalse(self.calls("codesign"))
+
+    def test_profile_without_a_keychain_identity_fails_before_compiling(self):
+        profile = self.write_profile(self.root / "given.mobileprovision")
+        self.env["HERDR_BUNDLE_TEST_IDENTITIES"] = OTHER_SHA
+        result = self.run_bundle(
+            "--bin", "herdr-gpui", "--target", "aarch64-apple-ios", "--profile", str(profile),
+            "--bundle-id", "dev.herdr.given",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no signing identity", result.stderr)
+        self.assertFalse(self.calls("cargo"))
+
+    def test_expired_profile_given_explicitly_fails_before_compiling(self):
+        profile = self.write_profile(self.root / "expired.mobileprovision", days=-1)
+        result = self.run_bundle(
+            "--bin", "herdr-gpui", "--target", "aarch64-apple-ios", "--profile", str(profile),
+            "--bundle-id", "dev.herdr.given",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("expired", result.stderr)
+        self.assertFalse(self.calls("cargo"))
+        self.assertFalse(self.calls("codesign"))
+
+    def test_signing_never_falls_back_to_the_projects_bundle_id(self):
+        for args in (("--team", TEAM), ("--profile", str(self.write_profile(self.root / "p")))):
+            result = self.run_bundle("--bin", "herdr-gpui", "--target", "aarch64-apple-ios", *args)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("HERDR_IOS_BUNDLE_ID", result.stderr)
+        self.env["HERDR_IOS_TEAM"] = TEAM
+        result = self.run_bundle("--example", "demo", "--target", "aarch64-apple-ios")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_simulator_keeps_the_projects_bundle_id_whatever_the_environment(self):
+        self.env["HERDR_IOS_BUNDLE_ID"] = "dev.herdr.device-only"
+        result = self.run_bundle("--bin", "herdr-gpui")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        info = plistlib.loads((self.executable.parent / "herdr-gpui.app/Info.plist").read_bytes())
+        self.assertEqual(info["CFBundleIdentifier"], "so.pen.herdr-gpui")
+        self.assertEqual(
+            self.calls("cargo")[0]["entitlements"]["application-identifier"],
+            "HERDRSIM.so.pen.herdr-gpui",
+        )
+
+    def test_provision_refuses_values_that_could_escape_the_stub_spec(self):
+        for args in (
+            ("--team", TEAM, "--bundle-id", 'a"\n  OTHER: x'),
+            ("--team", TEAM, "--bundle-id", "${HOME}"),
+            ("--team", TEAM, "--bundle-id", "a b"),
+            ("--team", "abc", "--bundle-id", "dev.herdr.ok"),
+            ("--team", f'{TEAM}"', "--bundle-id", "dev.herdr.ok"),
+        ):
+            result = self.run_provision(*args)
+            self.assertEqual(result.returncode, 2, (args, result.stderr))
+        self.assertFalse(self.log.exists())
+
+    def test_provision_never_asks_xcode_after_a_failed_search(self):
+        created = self.write_profile(self.root / "xcode would download.mobileprovision")
+        self.env["HERDR_BUNDLE_TEST_XCODE_CREATES"] = str(created)
+        unreadable = self.root / "unreadable profiles"
+        unreadable.mkdir()
+        unreadable.chmod(0)
+        self.addCleanup(unreadable.chmod, 0o700)
+        result = self.run_provision(
+            "--team", TEAM, "--bundle-id", "dev.herdr.broken", "--profiles-dir", str(unreadable),
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("searching the installed provisioning profiles failed", result.stderr)
+        self.assertFalse(self.calls("xcodegen"))
+        self.assertFalse(self.calls("xcodebuild"))
+
+    def test_provision_names_a_profile_that_predates_the_device(self):
+        stale = self.write_profile(
+            self.xcode_profiles / "stale.mobileprovision",
+            app_pattern=f"{TEAM}.dev.herdr.stale", devices=("someone-else",),
+        )
+        self.env["HERDR_BUNDLE_TEST_XCODE_CREATES"] = str(stale)
+        result = self.run_provision(
+            "--team", TEAM, "--bundle-id", "dev.herdr.stale", "--device", DEVICE,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("does not list device", result.stderr)
+        self.assertIn("delete that profile", result.stderr)
+        self.assertEqual(len(self.calls("xcodebuild")), 1)
+
+    def test_signing_options_are_refused_for_the_simulator(self):
+        result = self.run_bundle("--bin", "herdr-gpui", "--team", TEAM)
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(self.log.exists())
+
+    def test_team_in_the_environment_leaves_the_simulator_ad_hoc(self):
+        self.env["HERDR_IOS_TEAM"] = TEAM
+        result = self.run_bundle("--bin", "herdr-gpui")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        signing = [call for call in self.calls("codesign") if "--sign" in call["args"]]
+        self.assertEqual(signing[0]["args"][signing[0]["args"].index("--sign") + 1], "-")
+        self.assertFalse(self.calls("security"))
 
     def test_bundle_declares_local_network_access_and_only_ssh_discovery(self):
         result = self.run_bundle("--package", "herdr-gpui", "--bin", "herdr-gpui")

@@ -2,7 +2,8 @@
 # Build a Cargo example or binary for iPadOS and assemble it into an .app with
 # scripts/ios/Info.plist, linked for that template's MinimumOSVersion. A
 # simulator bundle is ad-hoc signed, which is all `xcrun simctl install`
-# needs; a device bundle is left unsigned.
+# needs. A device bundle is signed for a development team with its
+# provisioning profile (scripts/ios/provision.sh), or left unsigned without one.
 #
 # The bundle's absolute path is the last line on stdout and everything else
 # goes to stderr, so `app=$(scripts/ios/bundle.sh --example NAME)` works.
@@ -21,14 +22,23 @@ Options:
                    Disable the package's default Cargo features
   --features LIST  Enable the comma-separated Cargo features
   --bundle-id ID   CFBundleIdentifier (default: so.pen.herdr-gpui, with
-                   .example.NAME appended for an example)
+                   .example.NAME appended for an example; for a device,
+                   $HERDR_IOS_BUNDLE_ID replaces that default, and signing
+                   needs one or the other, never the project's own)
+  --team TEAM      Development team that signs a device bundle (default:
+                   $HERDR_IOS_TEAM); finds or creates its profile with
+                   scripts/ios/provision.sh
+  --profile PATH   Provisioning profile that signs a device bundle, instead
+                   of the one provision.sh finds
   -h, --help       Show this help
 
 The bundle is written beside the built executable, as NAME.app.
 
-For aarch64-apple-ios the bundle is built and assembled but not signed:
-installing on an iPad needs an Apple development team and a provisioning
-profile, which this script does not handle yet. It exits with status 3.
+For aarch64-apple-ios the bundle carries the profile as
+embedded.mobileprovision and is signed with the keychain identity whose
+certificate the profile lists, for entitlements derived from the profile.
+Without --team or --profile it is assembled but not signed, and the script
+exits with status 3.
 EOF
 }
 
@@ -37,6 +47,9 @@ target=aarch64-apple-ios-sim
 profile_args=()
 feature_args=()
 bundle_id=
+team=${HERDR_IOS_TEAM:-}
+signing_profile=
+signing_flags=false
 kind=
 name=
 
@@ -75,6 +88,16 @@ while (($# > 0)); do
       bundle_id=${2:?"--bundle-id needs an identifier"}
       shift 2
       ;;
+    --team)
+      team=${2:?"--team needs a team ID"}
+      signing_flags=true
+      shift 2
+      ;;
+    --profile)
+      signing_profile=${2:?"--profile needs a path"}
+      signing_flags=true
+      shift 2
+      ;;
     -h | --help)
       usage
       exit 0
@@ -101,8 +124,17 @@ case "$target" in
     ;;
 esac
 
+# The simulator keeps the project's identifier whatever the environment says,
+# so exporting HERDR_IOS_BUNDLE_ID for device work leaves its data container
+# and Keychain group where they were.
+implicit_bundle_id=false
 if [[ -z $bundle_id ]]; then
-  bundle_id=so.pen.herdr-gpui
+  if [[ $platform == iPhoneOS && -n ${HERDR_IOS_BUNDLE_ID:-} ]]; then
+    bundle_id=$HERDR_IOS_BUNDLE_ID
+  else
+    bundle_id=so.pen.herdr-gpui
+    implicit_bundle_id=true
+  fi
   # Bundle identifiers allow letters, digits, hyphens, and periods only.
   if [[ $kind == example ]]; then bundle_id+=.example.${name//_/-}; fi
 fi
@@ -110,12 +142,45 @@ if [[ ! $bundle_id =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; then
   echo "error: '$bundle_id' is not a valid bundle identifier" >&2
   exit 2
 fi
+if [[ $platform == iPhoneSimulator && $signing_flags == true ]]; then
+  echo "error: --team and --profile sign a device bundle (--target aarch64-apple-ios)" >&2
+  exit 2
+fi
+if [[ $platform == iPhoneOS && -n $team && ! $team =~ ^[A-Z0-9]{10}$ ]]; then
+  echo "error: '$team' is not a ten-character team ID" >&2
+  exit 2
+fi
+# Provisioning registers the identifier as an App ID with the team, which
+# for the project's own identifier would claim or collide with it.
+if [[ $platform == iPhoneOS && (-n $team || -n $signing_profile) &&
+  $implicit_bundle_id == true ]]; then
+  echo "error: signing a device bundle needs your own bundle identifier: pass" \
+    "--bundle-id ID or set HERDR_IOS_BUNDLE_ID (for example com.example.herdr-gpui)" >&2
+  exit 2
+fi
+if [[ -n $signing_profile && ! -f $signing_profile ]]; then
+  echo "error: no provisioning profile at $signing_profile" >&2
+  exit 2
+fi
+if [[ -n $signing_profile ]]; then
+  # Absolute before the cd below, so a path relative to the caller still works.
+  signing_profile=$(cd "$(dirname "$signing_profile")" && pwd)/$(basename "$signing_profile")
+fi
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root"
 # shellcheck source=scripts/ios/lib.sh
 source scripts/ios/lib.sh
 ios_export_deployment_target
+
+# Entitlements are derived per build and never kept: a stale file could sign
+# a bundle with another app's identifiers.
+work=$(mktemp -d /tmp/herdr-ios-bundle.XXXXXX)
+trap 'rm -rf -- "$work"' EXIT
+signing=false
+if [[ $platform == iPhoneOS && (-n $team || -n $signing_profile) ]]; then
+  signing=true
+fi
 
 if command -v rustup >/dev/null && ! rustup target list --installed | grep -qx "$target"; then
   echo "error: the Rust target $target is not installed: rustup target add $target" >&2
@@ -130,9 +195,7 @@ if [[ $platform == iPhoneSimulator ]]; then
   # Simulator Security.framework reads this Mach-O section. A codesign-only
   # entitlement cannot grant Keychain access to an ad-hoc simulator binary.
   # Link only the final executable so dependencies retain their build cache.
-  entitlements_dir=$(mktemp -d /tmp/herdr-ios-entitlements.XXXXXX)
-  trap 'rm -rf -- "$entitlements_dir"' EXIT
-  entitlements=$entitlements_dir/simulator.plist
+  entitlements=$work/simulator.plist
   cat >"$entitlements" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -143,6 +206,18 @@ if [[ $platform == iPhoneSimulator ]]; then
 EOF
   cargo_subcommand=rustc
   link_args=(-- -C "link-arg=-Wl,-sectcreate,__TEXT,__entitlements,$entitlements")
+elif [[ $signing == true ]]; then
+  # Resolved before the build, so a missing profile or identity fails in
+  # seconds rather than after a release compile.
+  if [[ -z $signing_profile ]]; then
+    signing_profile=$(bash scripts/ios/provision.sh --team "$team" --bundle-id "$bundle_id" | tail -n 1)
+  fi
+  entitlements=$work/device.plist
+  python3 -I scripts/ios/profile.py entitlements --profile "$signing_profile" \
+    --bundle-id "$bundle_id" ${team:+--team "$team"} --out "$entitlements"
+  security find-identity -v -p codesigning >"$work/identities.txt"
+  identity=$(python3 -I scripts/ios/profile.py identity --profile "$signing_profile" \
+    --identities "$work/identities.txt")
 fi
 messages=$(cargo "$cargo_subcommand" --locked --package "$package" --target "$target" \
   "--$kind" "$name" ${profile_args[@]+"${profile_args[@]}"} \
@@ -194,12 +269,22 @@ if grep -q '\$(' "$plist"; then
   exit 1
 fi
 
-if [[ $platform == iPhoneOS ]]; then
+if [[ $platform == iPhoneOS && $signing != true ]]; then
   echo "Assembled an unsigned device bundle: $app" >&2
-  echo "error: installing on an iPad needs an Apple development team and a" \
-    "provisioning profile; device signing is not supported by this script yet" >&2
+  echo "error: installing on an iPad needs a signed bundle: pass --team TEAM" \
+    "(or set HERDR_IOS_TEAM) or --profile PATH" >&2
   printf '%s\n' "$app"
   exit 3
+fi
+if [[ $platform == iPhoneOS ]]; then
+  # The profile is a sealed resource of the bundle, so it is copied first.
+  cp "$signing_profile" "$app/embedded.mobileprovision"
+  codesign --force --sign "$identity" --entitlements "$entitlements" \
+    --timestamp=none "$app" >&2
+  codesign --verify --strict "$app" >&2
+  echo "Bundled and signed $bundle_id ($version) for a device with identity $identity" >&2
+  printf '%s\n' "$app"
+  exit 0
 fi
 
 # Signing the bundle, not just the linker-signed executable, binds Info.plist
