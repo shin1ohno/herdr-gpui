@@ -106,7 +106,11 @@ fn git(checkout: &Path, args: &[&str]) {
             "commit.gpgsign=false",
         ])
         .args(args)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("HOME", checkout)
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", checkout.join("test-gitconfig"))
         .status()
         .unwrap();
     assert!(status.success(), "git {args:?}");
@@ -151,7 +155,11 @@ fn one_script_reads_the_repository_agents_and_branches() {
     // The repository it reads is the one detection alone reads.
     let alone = Command::new("/bin/sh")
         .args(["-c", &repo::detection_script(&checkout.to_string_lossy())])
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("HOME", dir.path())
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", dir.path().join("gitconfig"))
         .output()
         .unwrap();
     let target = ConnectTarget::Ssh {
