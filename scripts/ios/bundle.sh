@@ -15,6 +15,9 @@ Usage: scripts/ios/bundle.sh [options] (--example NAME | --bin NAME)
 
 Options:
   --package PKG    Cargo package with the example or binary (default: herdr-uikit)
+  --manifest-path PATH
+                   Cargo manifest (default: this repository's workspace;
+                   relative paths are resolved from the caller's directory)
   --target TRIPLE  aarch64-apple-ios-sim, the simulator on Apple silicon
                    (default), or aarch64-apple-ios, a device
   --release        Build with the release profile (default: dev)
@@ -43,6 +46,7 @@ EOF
 }
 
 package=herdr-uikit
+manifest_args=()
 target=aarch64-apple-ios-sim
 profile_args=()
 feature_args=()
@@ -66,6 +70,14 @@ while (($# > 0)); do
       ;;
     --package)
       package=${2:?"--package needs a name"}
+      shift 2
+      ;;
+    --manifest-path)
+      if [[ $# -lt 2 || -z $2 ]]; then
+        echo "error: --manifest-path needs a path" >&2
+        exit 2
+      fi
+      manifest_args=(--manifest-path "$2")
       shift 2
       ;;
     --target)
@@ -113,6 +125,16 @@ done
 if [[ -z $kind ]]; then
   usage >&2
   exit 2
+fi
+if ((${#manifest_args[@]} > 0)); then
+  manifest_path=${manifest_args[1]}
+  if [[ ! -f $manifest_path ]]; then
+    echo "error: no Cargo manifest at $manifest_path" >&2
+    exit 2
+  fi
+  # Keep a caller-relative manifest valid after changing to this repository.
+  manifest_path=$(cd "$(dirname "$manifest_path")" && pwd)/$(basename "$manifest_path")
+  manifest_args=(--manifest-path "$manifest_path")
 fi
 
 case "$target" in
@@ -220,6 +242,7 @@ elif [[ $signing == true ]]; then
     --identities "$work/identities.txt")
 fi
 messages=$(cargo "$cargo_subcommand" --locked --package "$package" --target "$target" \
+  ${manifest_args[@]+"${manifest_args[@]}"} \
   "--$kind" "$name" ${profile_args[@]+"${profile_args[@]}"} \
   ${feature_args[@]+"${feature_args[@]}"} --message-format=json-render-diagnostics \
   ${link_args[@]+"${link_args[@]}"})

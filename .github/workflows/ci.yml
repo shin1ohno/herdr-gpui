@@ -226,7 +226,8 @@ jobs:
         with:
           key: ios
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Lint both iPad targets and test simulator tooling
+      # lint.sh finds the pinned herdr-uikit Cargo git checkout; no sibling clone is needed.
+      - name: Lint both iPad targets, the resolved UIKit crate, and test simulator tooling
         run: bash scripts/ios/lint.sh
 
   # Match the other platforms' Rust checks without an extra optimized build.

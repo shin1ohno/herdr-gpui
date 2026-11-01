@@ -10,9 +10,19 @@ python3 -I -B -m unittest discover -s scripts/ios -p 'test_*.py'
 source scripts/ios/lib.sh
 ios_export_deployment_target
 
+# Resolve the pinned platform checkout instead of requiring a sibling clone in CI.
+uikit_manifest=$(cargo metadata --locked --format-version 1 \
+  --filter-platform aarch64-apple-ios-sim | python3 -I -c '
+import json, sys
+print(next(package["manifest_path"] for package in json.load(sys.stdin)["packages"]
+           if package["name"] == "herdr-uikit"))
+')
+
 for target in aarch64-apple-ios aarch64-apple-ios-sim; do
+  cargo clippy --locked --manifest-path "$uikit_manifest" --all-targets \
+    --target-dir "${CARGO_TARGET_DIR:-$root/target}" --target "$target" -- -D warnings
   cargo clippy --locked --all-targets --target "$target" \
-    -p herdr-uikit -p herdr-client -p herdr-credentials -p herdr-ssh \
+    -p herdr-client -p herdr-credentials -p herdr-ssh \
     -p herdr-backend -p herdr-core-client -- -D warnings
   cargo clippy --locked -p herdr-gpui --no-default-features \
     --all-targets --target "$target" -- -D warnings

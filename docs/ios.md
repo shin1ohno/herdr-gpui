@@ -8,12 +8,13 @@ against.
 ## Shape
 
 - **Platform.** GPUI has no iOS platform, but `gpui::Application::with_platform`
-  takes any `gpui::Platform`. `crates/herdr-uikit` is that platform:
+  takes any `gpui::Platform`. The separate
+  [`herdr-uikit`](https://github.com/shin1ohno/herdr-uikit) repository is that platform:
   `UIApplicationMain`, scenes as windows, a `UIView` hosting a `CAMetalLayer`,
   touch, pointer, hardware keyboard, and `UITextInput` input. Its Metal renderer
   and Core Text text system are ported from GPUI's macOS crates
-  (`crates/herdr-uikit/NOTICE.md`). Herdr UI builds an `IosPlatform` and hands
-  it to `gpui::Application::with_platform` on `target_os = "ios"`, keeping it to
+  ([`NOTICE.md`](https://github.com/shin1ohno/herdr-uikit/blob/00a8dba10b49f55332f6bc875f20ad8071f2d424/NOTICE.md)).
+  Herdr UI builds an `IosPlatform` and hands it to `gpui::Application::with_platform` on `target_os = "ios"`, keeping it to
   register for lifecycle phases, where desktop targets call
   `gpui_platform::application()`.
 - **Touch.** GPUI's core already recognizes gestures from raw `TouchEvent`s
@@ -252,10 +253,41 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
 ## Building
 
 `aarch64-apple-ios` is a device, `aarch64-apple-ios-sim` the simulator on an
-Apple silicon Mac. `cargo check -p herdr-uikit --target aarch64-apple-ios-sim`
-checks the platform; on other targets the crate is empty. A device bundle is
-signed for a development team with its provisioning profile; see
+Apple silicon Mac. The workspace depends on the public `herdr-uikit` git
+repository, pinned to a commit in `Cargo.toml`; its sources are no longer a
+workspace member. `bash scripts/ios/lint.sh` checks that platform from Cargo's
+git checkout and the app on both iOS targets; on other targets the platform
+crate is empty. A device bundle is signed for a development team with its
+provisioning profile; see
 [Installing on an iPad](#installing-on-an-ipad).
+
+For platform development and the example/test recipes, clone `herdr-uikit`
+beside this repository, as `../herdr-uikit`. Its standalone manifest and
+lockfile build its examples and tests; Cargo cannot build a dependency's
+examples through this workspace's manifest. For example:
+
+```sh
+cargo check --locked --manifest-path ../herdr-uikit/Cargo.toml --target aarch64-apple-ios-sim
+bash scripts/ios/bundle.sh --manifest-path ../herdr-uikit/Cargo.toml --example hello
+```
+
+To develop both repositories together, put this local override in
+`.cargo/config.toml` (git-ignored; create `.cargo/` if needed):
+
+```toml
+[patch."https://github.com/shin1ohno/herdr-uikit"]
+herdr-uikit = { path = "../herdr-uikit" }
+```
+
+Cargo and the scripts read this override automatically. Use an absolute
+path in the patch when working in a nested worktree. A patch changes
+Cargo.lock; keep that lockfile change local, too. CI uses the pinned git
+dependency without the override or a sibling clone. This repository has no checked-in
+Cargo configuration: if GitHub HTTPS URLs are rewritten to SSH on your Mac,
+set `CARGO_NET_GIT_FETCH_WITH_CLI=true` before an online Cargo fetch.
+CI lints the resolved platform and runs the Python tooling tests; running
+the platform's Rust tests in the simulator uses `just test-ios` with the
+sibling clone.
 
 ## Running in the simulator
 
@@ -267,10 +299,10 @@ Rust targets: `rustup target add aarch64-apple-ios aarch64-apple-ios-sim`.
 | `just lint-ios` | Clippy over the UIKit platform, SSH, credentials, clients, and the real app, for a device and for the simulator |
 | `just ios-sim EXAMPLE [WAIT]` | Builds the example, bundles it, runs it in the simulator for `WAIT` seconds (default 5), and saves a screenshot |
 | `just ios-app [WAIT]` | Builds and runs the real iPad client with desktop cloud providers disabled |
-| `just test-ios` | Runs `herdr-uikit`'s tests inside the simulator, then the screenshot checker's own tests |
+| `just test-ios` | Runs the sibling `herdr-uikit`'s tests inside the simulator, then the simulator tooling's Python tests |
 | `just test-ssh /absolute/path/to/sshd /absolute/path/to/ssh-keygen` | Tests the SSH transport against its own isolated server; never uses a personal daemon |
 
-Two examples live in `crates/herdr-uikit/examples`:
+Two examples live in the external `../herdr-uikit/examples`:
 
 - `uikit_smoke` is UIKit alone, without GPUI or this crate's modules: a
   magenta window with a white label. When it runs and its screenshot is
@@ -297,6 +329,8 @@ The scripts behind the recipes are in `scripts/ios/`:
   either it is left unsigned and the script exits with status 3.
   Simulator executables embed private, bundle-specific Keychain entitlements
   in `__TEXT,__entitlements`; those placeholders are never used on a device.
+  `--manifest-path PATH` selects an external Cargo manifest (paths are
+  relative to the caller); without it, binaries build from this workspace.
   `--no-default-features` and `--features LIST` select Cargo features.
 - `sim.sh` boots the simulator when it is shut down, installs and launches the
   app, waits, and takes the screenshot. It never erases, deletes, or shuts

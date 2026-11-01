@@ -416,7 +416,7 @@ lint-ios:
 ios-sim example wait="5":
     #!/usr/bin/env bash
     set -euo pipefail
-    app=$(bash scripts/ios/bundle.sh --example "{{example}}")
+    app=$(bash scripts/ios/bundle.sh --manifest-path ../herdr-uikit/Cargo.toml --example "{{example}}")
     bash scripts/ios/sim.sh --wait "{{wait}}" "$app"
 
 # The complete iPad client, without desktop cloud provider features.
@@ -441,7 +441,7 @@ ios-device *args:
     cd {{quote(invocation_directory())}}
     exec bash {{quote(justfile_directory())}}/scripts/ios/device.sh "$@"
 
-# herdr-uikit's tests inside the iPad simulator, each test binary started by
+# The sibling herdr-uikit checkout's tests inside the iPad simulator, started by
 # scripts/ios/sim-runner.sh with `xcrun simctl spawn`. Boots the simulator
 # when needed. Built at the bundle's minimum OS, like `just ios-sim`.
 [macos]
@@ -450,7 +450,7 @@ test-ios:
     set -euo pipefail
     source scripts/ios/lib.sh
     ios_export_deployment_target
-    CARGO_TARGET_AARCH64_APPLE_IOS_SIM_RUNNER="{{justfile_directory()}}/scripts/ios/sim-runner.sh" cargo test --locked -p herdr-uikit --target aarch64-apple-ios-sim
+    CARGO_TARGET_AARCH64_APPLE_IOS_SIM_RUNNER="{{justfile_directory()}}/scripts/ios/sim-runner.sh" cargo test --locked --manifest-path ../herdr-uikit/Cargo.toml --target-dir "${CARGO_TARGET_DIR:-{{justfile_directory()}}/target}" --target aarch64-apple-ios-sim
     python3 -I -B -m unittest discover -s scripts/ios -p 'test_*.py'
 
 # A private SSH server: never discovers or contacts a user's daemon.

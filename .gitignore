@@ -30,3 +30,6 @@ mise.local.toml
 # Wrangler local state for the site Worker.
 .wrangler/
 __pycache__/
+
+# Uncommitted Cargo overrides for developing the external UIKit platform.
+/.cargo/config.toml

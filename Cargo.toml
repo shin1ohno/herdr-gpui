@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-backend", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-core-client", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-github", "crates/herdr-gpui", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-luau", "crates/herdr-mods", "crates/herdr-nearby", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-ssh", "crates/herdr-terminal", "crates/herdr-uikit", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
+members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-backend", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-core-client", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-github", "crates/herdr-gpui", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-luau", "crates/herdr-mods", "crates/herdr-nearby", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-ssh", "crates/herdr-terminal", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
 resolver = "2"
 
 [workspace.package]
@@ -70,9 +70,6 @@ jiff                 = "0.2.38"
 # Locates installed font files on Linux, as GPUI's own text system does.
 fontdb               = "0.24"
 foreign-types        = "0.5"
-# The `oneshot::Receiver` GPUI's `Platform` trait returns from path prompts, at
-# the version GPUI already links.
-futures-channel      = "0.3.34"
 futures-lite         = "2"
 # Sends frames on herdr-remote-control's WebSocket test client; axum already links it.
 futures-util         = { default-features = false, features = ["sink"], version = "0.3" }
@@ -104,7 +101,7 @@ herdr-remote         = { default-features = false, path = "crates/herdr-remote" 
 herdr-remote-control         = { default-features = false, path = "crates/herdr-remote-control" }
 herdr-ssh            = { path = "crates/herdr-ssh" }
 herdr-terminal       = { path = "crates/herdr-terminal" }
-herdr-uikit          = { path = "crates/herdr-uikit" }
+herdr-uikit          = { git = "https://github.com/shin1ohno/herdr-uikit", rev = "00a8dba10b49f55332f6bc875f20ad8071f2d424" }
 herdr-updater        = { path = "crates/herdr-updater" }
 herdr-usage          = { path = "crates/herdr-usage" }
 herdr-vcs            = { path = "crates/herdr-vcs" }
@@ -140,24 +137,9 @@ objc2-core-foundation = { default-features = false, features = ["CFCGTypes", "st
 objc2-web-kit        = { default-features = false, features = ["WKSnapshotConfiguration", "WKUIDelegate", "WKWebView", "block2", "objc2-app-kit", "objc2-core-foundation", "std"], version = "0.3.2" }
 # Asks for Dock badge permission; the version GPUI's macOS platform already links.
 objc2-user-notifications ={ default-features = false, features = ["UNUserNotificationCenter", "block2", "std"], version = "0.3.2" }
-# The iPadOS GPUI platform (crates/herdr-uikit). UIKit through objc2; the Metal
-# renderer and CoreText text system ported from GPUI's macOS crates keep the
-# `metal`, `objc`, and Core Text versions those crates and zed-font-kit link,
-# so Core Graphics is the 0.24 line Core Text 21 expects, not the 0.25 above.
-cbindgen             = { default-features = false, version = "0.28.0" }
+# The device-only credential store uses Core Foundation for Keychain values.
 core-foundation      = "0.10"
-core-graphics-text   = { package = "core-graphics", version = "0.24" }
-core-text            = "21"
-etagere              = "0.2.15"
-metal                = "0.33"
-objc2-quartz-core    = { default-features = false, features = ["CALayer", "CAMetalLayer", "CADisplayLink", "CATransaction", "objc2-core-foundation", "objc2-metal", "std"], version = "0.3.2" }
 objc2-ui-kit         = { default-features = false, features = ["UIApplication", "UIBezierPath", "UIColor", "UICommand", "UIDevice", "UIEvent", "UIGeometry", "UIGestureRecognizer", "UIHoverGestureRecognizer", "UIHoverStyle", "UIInteraction", "UIInterface", "UIKey", "UIKeyCommand", "UIKeyConstants", "UIKeyboardLayoutGuide", "UILayoutGuide", "UIOpenURLContext", "UIPanGestureRecognizer", "UIPasteboard", "UIPointerInteraction", "UIPointerRegion", "UIPointerStyle", "UIPress", "UIPressesEvent", "UIResponder", "UIScene", "UISceneConfiguration", "UISceneDefinitions", "UISceneOptions", "UISceneSession", "UISceneSessionActivationRequest", "UIScreen", "UIScreenMode", "UITextInput", "UITextInputContext", "UITextInputTraits", "UITouch", "UITraitCollection", "UIView", "UIViewController", "UIWindow", "UIWindowScene", "UIWindowSceneGeometry", "UIWindowSceneGeometryPreferences", "UIWindowSceneGeometryPreferencesIOS", "block2", "objc2-core-foundation", "objc2-quartz-core", "std"], version = "0.3.2" }
-parking_lot          = "0.12"
-pathfinder_geometry  = "0.5"
-smallvec             = { features = ["const_new", "union"], version = "1.6" }
-# `gpui::PlatformWindow::prompt` and `gpui::Platform` name futures' oneshot
-# channel, which GPUI does not re-export; the version GPUI already links.
-futures              = { default-features = false, features = ["std"], version = "0.3.34" }
 raw-window-handle    = "0.6"
 # herdr-acp's in-pane chat view.
 ratatui              = { default-features = false, features = ["crossterm"], version = "0.30" }

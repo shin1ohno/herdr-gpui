@@ -174,9 +174,10 @@ class BundleTests(unittest.TestCase):
         path.write_text("#!/usr/bin/env python3\n" + textwrap.dedent(body).lstrip())
         path.chmod(0o755)
 
-    def run_bundle(self, *args):
+    def run_bundle(self, *args, cwd=None):
         return subprocess.run(
-            ["bash", str(SCRIPT), *args],
+            ["bash", str(SCRIPT.resolve()), *args],
+            cwd=cwd,
             env=self.env,
             text=True,
             capture_output=True,
@@ -238,6 +239,7 @@ class BundleTests(unittest.TestCase):
         call = self.calls()[0]
         self.assertEqual(call["args"][0], "rustc")
         self.assertIn("--locked", call["args"])
+        self.assertNotIn("--manifest-path", call["args"])
         self.assertIn("--no-default-features", call["args"])
         self.assertEqual(call["args"][call["args"].index("--features") + 1], "test-feature")
         self.assertEqual(call["entitlements"], {
@@ -249,6 +251,34 @@ class BundleTests(unittest.TestCase):
         signatures = [call for call in self.calls() if call["tool"] == "codesign"]
         self.assertTrue(signatures)
         self.assertTrue(all("--entitlements" not in call["args"] for call in signatures))
+
+    def test_external_manifest_is_resolved_from_the_caller_and_passed_to_cargo(self):
+        manifest = self.root / "external platform" / "Cargo.toml"
+        manifest.parent.mkdir()
+        manifest.write_text('[package]\nname = "herdr-uikit"\nversion = "0.1.0"\n')
+        for target, subcommand, status in (
+            ("aarch64-apple-ios-sim", "rustc", 0),
+            ("aarch64-apple-ios", "build", 3),
+        ):
+            with self.subTest(target=target):
+                result = self.run_bundle(
+                    "--manifest-path", "external platform/Cargo.toml",
+                    "--example", "hello", "--target", target, cwd=self.root,
+                )
+                self.assertEqual(result.returncode, status, result.stderr)
+                args = self.calls("cargo")[-1]["args"]
+                self.assertEqual(args[0], subcommand)
+                self.assertEqual(args[args.index("--manifest-path") + 1], str(manifest.resolve()))
+                self.assertEqual(args[args.index("--package") + 1], "herdr-uikit")
+                self.assertEqual(args[args.index("--example") + 1], "hello")
+                self.assertTrue((self.executable.parent / "hello.app/Info.plist").is_file())
+
+    def test_invalid_manifest_options_exit_before_invoking_any_build_tool(self):
+        for args in (("--manifest-path",), ("--manifest-path", str(self.root / "missing.toml"))):
+            with self.subTest(args=args):
+                result = self.run_bundle("--example", "hello", *args)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertFalse(self.calls())
 
     def test_device_without_a_team_stays_unsigned_and_names_the_options(self):
         result = self.run_bundle("--bin", "herdr-gpui", "--target", "aarch64-apple-ios")
