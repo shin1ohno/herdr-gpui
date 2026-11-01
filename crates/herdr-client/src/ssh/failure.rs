@@ -39,12 +39,7 @@ pub enum SshFailure {
     /// alert. `ssh` only sees no route to the host; this class is kept for
     /// when the app's own check confirms the refusal, so an offline device
     /// or a bad route stays `NoRoute`.
-    #[cfg_attr(
-        target_os = "ios",
-        error(
-            "iPadOS denied Herdr access to your local network. In Settings, allow Local Network for Herdr, then try again"
-        )
-    )]
+    #[cfg_attr(target_os = "ios", error("{}", Self::IPADOS_LOCAL_NETWORK_DENIED))]
     #[cfg_attr(
         not(target_os = "ios"),
         error(
@@ -62,6 +57,10 @@ pub enum SshFailure {
 }
 
 impl SshFailure {
+    /// What [`Self::LocalNetworkDenied`] says on iPadOS. Named so the app can
+    /// check its own message for it on any host.
+    pub const IPADOS_LOCAL_NETWORK_DENIED: &str = "iPadOS denied Herdr access to your local network. In Settings, allow Local Network for Herdr, then try again";
+
     /// Whether retrying soon is pointless: the user has to fix something
     /// outside the app first, such as a key, the known hosts, or an install.
     pub fn needs_user(self) -> bool {

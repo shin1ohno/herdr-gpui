@@ -2,7 +2,7 @@ use super::*;
 use herdr_backend::Generation;
 
 #[gpui::test]
-fn ipad_session_probes_only_ask_the_selected_herdr1_host(cx: &mut gpui::TestAppContext) {
+fn ipad_session_probes_only_ask_herdr1_hosts(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     view.update(cx, |view, _| {
         for (id, generation) in [
@@ -25,14 +25,12 @@ fn ipad_session_probes_only_ask_the_selected_herdr1_host(cx: &mut gpui::TestAppC
         view.selected_endpoint = 1;
         let targets = view.probe_targets();
         let ids: Vec<_> = targets.iter().map(|(id, _)| id.as_str()).collect();
+        // Only the unfolded device is asked; on iPad a Herdr 2 host never
+        // unfolds, so it is never a target.
         if cfg!(target_os = "ios") {
-            assert_eq!(ids, ["ssh:selected"]);
+            assert_eq!(ids, ["ssh:selected", "ssh:other"]);
         } else {
             assert_eq!(ids, ["ssh:selected", "ssh:other", "ssh:core"]);
-        }
-        view.selected_endpoint = view.endpoints.len() - 1;
-        if cfg!(target_os = "ios") {
-            assert!(view.probe_targets().is_empty());
         }
     });
 }

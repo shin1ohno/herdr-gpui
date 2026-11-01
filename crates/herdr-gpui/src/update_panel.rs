@@ -264,6 +264,9 @@ impl HerdrWindow {
         let accent = crate::menu::accent(theme);
         let state = self.update_preview.as_ref().unwrap_or(self.updater.state());
         let (message, action) = match state {
+            // iPadOS installs updates through the App Store or Xcode, which
+            // the app says itself rather than through the updater's reason.
+            State::Disabled(_) if cfg!(target_os = "ios") => (fl!("update-panel-ipad"), None),
             State::Disabled(reason) => {
                 (fl!("update-panel-disabled", reason = reason.as_str()), None)
             }

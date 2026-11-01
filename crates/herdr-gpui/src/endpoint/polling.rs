@@ -311,7 +311,8 @@ impl HerdrWindow {
     /// page starts one; results are cached between opens.
     pub(crate) fn poll_sessions(&mut self, cx: &mut Context<Self>) {
         let development = self.local_development();
-        let open = self.menu.page == Some(crate::menu::Page::Sessions);
+        let open = self.menu.page == Some(crate::menu::Page::Devices)
+            && self.menu.unfolded_device.is_some();
         let now = Instant::now();
         let targets = self.probe_targets();
         self.sessions.devices.forget_replaced(&targets);
@@ -323,10 +324,17 @@ impl HerdrWindow {
             }
             return;
         }
-        let mut changed = !cfg!(target_os = "ios") && self.sessions.poll(development, open, now);
-        if self.sessions.devices.poll(&targets, open, now) {
-            changed = true;
-        }
+        // New answers add or take away rows under the unfolded device; the
+        // keys stay on the row they were on, not on its old place.
+        // Only the unfolded device shows its sessions, so only it is asked.
+        let unfolded = self.menu.unfolded_device.clone().filter(|_| open);
+        let local = unfolded.as_deref() == Some(self.endpoints[0].id.as_str());
+        let changed = self.keep_picker_selection(|this| {
+            // iPad has no local daemon whose sessions it could scan.
+            let scanned = !cfg!(target_os = "ios") && this.sessions.poll(development, local, now);
+            let wanted = unfolded.as_deref().filter(|_| !local);
+            this.sessions.devices.poll(&targets, wanted, now) || scanned
+        });
         if changed {
             cx.notify();
         }
@@ -340,10 +348,9 @@ impl HerdrWindow {
             .iter()
             .skip(1)
             .filter(|endpoint| endpoint.enabled)
+            // iPad asks only a Herdr 1 host over SSH, the only kind it unfolds.
             .filter(|endpoint| {
-                !cfg!(target_os = "ios")
-                    || (endpoint.id == self.endpoints[self.selected_endpoint].id
-                        && endpoint.backend_generation() == herdr_backend::Generation::Herdr1)
+                crate::menu::devices::lists_sessions(cfg!(target_os = "ios"), endpoint)
             })
             .filter_map(|endpoint| {
                 Some((

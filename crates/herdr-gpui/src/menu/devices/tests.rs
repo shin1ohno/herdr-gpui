@@ -15,6 +15,7 @@ mod boat_rail;
 mod cloud_providers;
 mod core_generation_picker;
 mod en_xa;
+mod fold;
 mod host_key;
 #[cfg(not(target_os = "ios"))]
 mod host_key_choice;
@@ -27,6 +28,7 @@ mod picker_projection;
 #[cfg(feature = "cloud")]
 mod rail;
 mod scope;
+mod selection;
 #[cfg(all(unix, not(target_os = "ios")))]
 mod setup_activation;
 #[cfg(all(unix, not(target_os = "ios")))]

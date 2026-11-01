@@ -90,7 +90,9 @@ add-device-ipad-intro = Connect to a computer over SSH. This iPad verifies its h
 add-device-ipad-install = Install or update Herdr on { $target } from that computer, then check the device again here.
 add-device-ipad-authorize = { $target } refused this iPad’s public key. Add the public key shown above to the computer’s ~/.ssh/authorized_keys, then check the device again.
 add-device-ipad-check-host = Check Remote Login and Herdr on { $target } from that computer, then try again. This iPad cannot open a local setup terminal.
+# The SSH host form's opt-in to connect without verifying the host's key.
 add-device-skip-host-key = Skip host key verification (dangerous)
+# Shown while the opt-in is on. Coder is a product name; keep it as it is.
 add-device-skip-host-key-warning = Herdr will accept any key this host offers, now and on every connection. Anyone who can intercept the connection can impersonate the host and read your terminals. Use it only for hosts that keep no key, such as Coder workspaces.
 add-device-core-available = Herdr 2 is installed on { $target }. Add it as a Herdr 2 host? Starting a terminal remains a separate action.
 add-device-outdated-core-available = Herdr 1 on { $target } is too old for this app, and Herdr 2 is installed. Add it as a Herdr 2 host, or update Herdr 1 from that computer and choose Check again. Starting a terminal remains a separate action.

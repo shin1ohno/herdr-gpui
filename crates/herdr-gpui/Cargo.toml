@@ -131,7 +131,13 @@ integration-test = [
 ]
 
 [target.'cfg(unix)'.dependencies]
-rustix.workspace = true
+# `system`: the host name nearby pairing advertises over Bluetooth.
+rustix = { features = ["system"], workspace = true }
+
+# iPad's in-process SSH errors are plain Rust, so their messages are checked
+# on any Unix host too.
+[target.'cfg(unix)'.dev-dependencies]
+herdr-ssh.workspace = true
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]
 # Desktop platforms need their native text and window backends explicitly.

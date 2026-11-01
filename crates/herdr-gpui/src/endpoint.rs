@@ -184,7 +184,7 @@ impl Endpoint {
     }
 
     #[cfg(any(target_os = "ios", test))]
-    fn set_backend_generation(&mut self, backend: herdr_backend::Generation) -> bool {
+    pub(crate) fn set_backend_generation(&mut self, backend: herdr_backend::Generation) -> bool {
         if self.backend == backend {
             return false;
         }

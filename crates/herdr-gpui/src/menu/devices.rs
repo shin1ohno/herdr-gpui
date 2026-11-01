@@ -9,13 +9,13 @@ mod catalog;
 #[cfg(feature = "coder")]
 pub(super) mod coder;
 pub(crate) use add_device::enter;
-mod discover;
+pub(crate) mod discover;
 mod error;
 mod host_key;
 mod host_key_choice;
 mod host_menu;
 mod local_network;
-mod picker;
+pub(super) mod picker;
 pub(super) mod rail;
 mod saved_warning;
 mod scope;
@@ -33,7 +33,6 @@ use crate::i18n::fl;
 use crate::{Command, HerdrWindow};
 use gpui::{prelude::*, *};
 use herdr_client::ConnectTarget;
-use rail::add_device_offer;
 
 pub(super) const MENU_GAP: f32 = 12.;
 
@@ -71,15 +70,26 @@ impl From<SetupUnavailable> for SharedString {
 }
 pub(super) const MENU_WIDTH: f32 = 280.;
 
-/// How tall an anchored list above the sidebar footer may be, measured from the
-/// origin of the button that opened it. The device picker and the session list
-/// clamp at the same place, so neither grows over the terminal.
-pub(super) fn list_height(anchor_y: Pixels) -> Pixels {
-    room_above(anchor_y).max(px(48.)).min(px(420.))
+/// Whether the picker lists `endpoint` as a device. On iPad the local endpoint
+/// is an internal sentinel, never a device a person can select.
+fn picker_lists(ipad: bool, endpoint: &crate::endpoint::Endpoint) -> bool {
+    !ipad || endpoint.id != crate::endpoint::LOCAL
 }
 
-/// The device picker's list: the same cap, less the room the activity card
-/// above it takes when the window is too short for both.
+/// Whether the picker unfolds `endpoint` to its sessions. iPad has no local
+/// daemon and reaches Herdr 2 hosts through `hc connect`, which has no session
+/// list, so there only an enabled SSH host running Herdr 1 lists sessions.
+pub(crate) fn lists_sessions(ipad: bool, endpoint: &crate::endpoint::Endpoint) -> bool {
+    !ipad
+        || (endpoint.enabled
+            && matches!(endpoint.connection.target, ConnectTarget::Ssh { .. })
+            && endpoint.backend_generation() == herdr_backend::Generation::Herdr1)
+}
+
+/// How tall the device picker's list may be, measured from the origin of the
+/// control that opened it, so it never grows over the terminal: the room
+/// above, less what the activity card above it takes when the window is too
+/// short for both.
 fn device_list_height(anchor_y: Pixels) -> Pixels {
     (room_above(anchor_y) - px(activity_card::ROOM))
         .max(px(48.))
@@ -261,19 +271,20 @@ impl HerdrWindow {
     fn picker_endpoints(&self) -> impl Iterator<Item = &crate::endpoint::Endpoint> {
         self.endpoints
             .iter()
-            .filter(|endpoint| !cfg!(target_os = "ios") || endpoint.id != crate::endpoint::LOCAL)
+            .filter(|endpoint| picker_lists(cfg!(target_os = "ios"), endpoint))
     }
 
+    /// Whether device `index` unfolds to its sessions in the picker.
+    fn device_lists_sessions(&self, index: usize) -> bool {
+        self.endpoints
+            .get(index)
+            .is_some_and(|endpoint| lists_sessions(cfg!(target_os = "ios"), endpoint))
+    }
+
+    /// Whether the device this window is on unfolds to its sessions, which is
+    /// what the Sessions shortcut opens.
     pub(in crate::menu) fn sessions_available(&self) -> bool {
-        !cfg!(target_os = "ios")
-            || self
-                .endpoints
-                .get(self.selected_endpoint)
-                .is_some_and(|endpoint| {
-                    endpoint.enabled
-                        && matches!(endpoint.connection.target, ConnectTarget::Ssh { .. })
-                        && endpoint.backend_generation() == herdr_backend::Generation::Herdr1
-                })
+        self.device_lists_sessions(self.selected_endpoint)
     }
 
     fn picker_connection_text(&self, endpoint: &crate::endpoint::Endpoint) -> String {
@@ -293,8 +304,9 @@ impl HerdrWindow {
             .count()
     }
 
-    /// Where the Sessions list opens while the footer is hidden: the sidebar's
-    /// bottom-left corner, where the footer's button would sit.
+    /// Where the Sessions shortcut opens the picker while the footer is
+    /// hidden: the sidebar's bottom-left corner, where the footer's picker
+    /// would sit.
     pub(crate) fn render_sessions_anchor(&self) -> impl IntoElement {
         let anchor = self.sessions_anchor.clone();
         canvas(
@@ -311,8 +323,8 @@ impl HerdrWindow {
     pub(crate) fn render_device_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let button_bounds = std::rc::Rc::new(std::cell::Cell::new(Bounds::<Pixels>::default()));
         let painted_bounds = button_bounds.clone();
-        // The window owns this cell, so the shortcut and the click anchor the
-        // list in the same place and it outlives this frame's rebuild.
+        // The window owns this cell, so the Sessions shortcut opens the list
+        // where the picker opens, and it outlives this frame's rebuild.
         let painted_sessions = self.sessions_anchor.clone();
         let hint: SharedString = self
             .config
@@ -468,6 +480,7 @@ impl HerdrWindow {
                             |_, _, _| (),
                             move |bounds, _, _, _| {
                                 painted_bounds.set(bounds);
+                                painted_sessions.set(bounds.origin);
                             },
                         )
                         .absolute()
@@ -484,55 +497,6 @@ impl HerdrWindow {
                         }
                     })),
             )
-            .when(self.sessions_available(), |footer| {
-                footer.child(
-                    div()
-                        .id("device-sessions")
-                        .role(Role::Button)
-                        .aria_label(fl!("devices-sessions"))
-                        .map(|button| {
-                            self.chrome_stop(crate::window::chrome_focus::Region::Sidebar, button)
-                        })
-                        .relative()
-                        .debug_selector(|| "device-sessions".into())
-                        .size(px(28.))
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(crate::config::corners::CONTROL))
-                        .cursor_pointer()
-                        .tooltip(move |_, cx| {
-                            cx.new(|_| SettingsHint {
-                                text: fl!("devices-sessions").into(),
-                                foreground,
-                                surface,
-                            })
-                            .into()
-                        })
-                        .hover(|s| s.bg(rgb(self.theme.active)))
-                        .child(
-                            svg()
-                                .path("icons/sessions.svg")
-                                .size(px(18.))
-                                .text_color(rgb(self.theme.foreground)),
-                        )
-                        .child(
-                            canvas(
-                                |_, _, _| (),
-                                move |bounds, _, _, _| {
-                                    painted_sessions.set(bounds.origin);
-                                },
-                            )
-                            .absolute()
-                            .inset_0()
-                            .size_full(),
-                        )
-                        .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
-                            this.open_sessions(this.sessions_anchor.get(), window, cx);
-                        })),
-                )
-            })
             .when(!bar, |footer| {
                 footer.child(
                     div()
@@ -567,6 +531,56 @@ impl HerdrWindow {
             })
     }
 
+    /// Machines still being added: progress only, not selectable rows, so
+    /// keyboard navigation keeps its indices.
+    #[cfg(feature = "cloud")]
+    fn cloud_job_rows(&self, mut view: Stateful<Div>) -> Stateful<Div> {
+        if !self.cloud_jobs.is_empty() {
+            view = view.child(
+                div()
+                    .p(px(8.))
+                    .text_color(rgb(self.theme.muted))
+                    .child(fl!("devices-adding")),
+            );
+        }
+        for (index, provision) in self.cloud_jobs.iter().enumerate() {
+            view = view.child(
+                div()
+                    .debug_selector(move || format!("device-adding-{index}"))
+                    .p(px(8.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(div().truncate().child(provision.name.clone()))
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_size(px(self.config.ui.size * 0.85))
+                                    .text_color(rgb(self.theme.muted))
+                                    .child(format!(
+                                        "{} · {}",
+                                        crate::cloud::name(provision.provider),
+                                        provision.status
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .size(px(7.))
+                            .flex_none()
+                            .rounded_full()
+                            .bg(colors::accent(&self.theme)),
+                    ),
+            );
+        }
+        view
+    }
+
     /// Shared by the picker and overview, including isolated-window guards.
     pub(crate) fn open_device_setup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(reason) = self.device_setup_unavailable() {
@@ -593,120 +607,6 @@ impl HerdrWindow {
         {
             self.menu.settings_opened = Some(provider);
         }
-    }
-
-    /// The picker's rows after the devices: Add Device, then Sessions.
-    fn add_device_row(&self) -> usize {
-        self.picker_endpoints().count() + 1
-    }
-
-    fn session_list_row(&self) -> usize {
-        self.add_device_row() + 1
-    }
-
-    fn choose_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if index == self.session_list_row() && self.sessions_available() {
-            // Where the picker opened, so the list replaces it in place.
-            self.open_sessions(self.menu.anchor, window, cx);
-        } else if index > self.add_device_row() {
-            return;
-        } else if index == self.add_device_row() {
-            self.open_device_setup(window, cx);
-        } else {
-            let id = if index == 0 {
-                None
-            } else {
-                let Some(endpoint) = self.picker_endpoints().nth(index - 1).filter(|e| e.enabled)
-                else {
-                    return;
-                };
-                Some(endpoint.id.clone())
-            };
-            self.dismiss_menu(window, cx);
-            if let Some(id) = &id
-                && !self.select_endpoint(id, cx)
-            {
-                return;
-            }
-            self.set_device_scope(id.map_or(DeviceScope::All, DeviceScope::only));
-        }
-        cx.notify();
-    }
-
-    /// Adds a device to the sidebar's list or takes it away, leaving the picker
-    /// open to pick more. Taking away the device on screen selects the first
-    /// one still listed, so the terminal always belongs to a listed device;
-    /// like any switch of device, that closes the picker.
-    fn toggle_listed_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        // All Devices, Add Device, and Sessions have nothing to add.
-        let Some(endpoint) = index
-            .checked_sub(1)
-            .and_then(|index| self.picker_endpoints().nth(index))
-        else {
-            return self.choose_device(index, window, cx);
-        };
-        if !endpoint.enabled {
-            return;
-        }
-        let enabled = self
-            .picker_endpoints()
-            .filter(|endpoint| endpoint.enabled)
-            .map(|endpoint| endpoint.id.as_str());
-        let Some(scope) = self.device_filter.toggled(
-            &endpoint.id,
-            &self.endpoints[self.selected_endpoint].id,
-            enabled,
-        ) else {
-            return;
-        };
-        if !scope.shows(&self.endpoints[self.selected_endpoint].id) {
-            let Some(next) = self
-                .displayed_devices()
-                .into_iter()
-                .find(|(_, endpoint)| endpoint.enabled && scope.shows(&endpoint.id))
-                .map(|(_, endpoint)| endpoint.id.clone())
-            else {
-                return;
-            };
-            if !self.select_endpoint(&next, cx) {
-                return;
-            }
-        }
-        self.set_device_scope(scope);
-        cx.notify();
-    }
-
-    pub(super) fn devices_key(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.menu.page == Some(Page::AddDevice) {
-            if !self.add_device_key(event, window, cx) {
-                return;
-            }
-        } else {
-            let key = event.keystroke.key.as_str();
-            let count = self.add_device_row() + 1 + usize::from(self.sessions_available());
-            match key {
-                "up" | "down" => {
-                    let index = self.menu.selected.unwrap_or(0).min(count - 1);
-                    self.menu.selected =
-                        Some((index + if key == "up" { count - 1 } else { 1 }) % count);
-                    if let Some(index) = self.menu.selected {
-                        self.menu.devices_scroll.scroll_to_item(index + 1);
-                    }
-                    cx.notify();
-                }
-                "enter" => self.choose_device(self.menu.selected.unwrap_or(0), window, cx),
-                "space" => self.toggle_listed_device(self.menu.selected.unwrap_or(0), window, cx),
-                "escape" => self.dismiss_menu(window, cx),
-                _ => {}
-            }
-        }
-        cx.stop_propagation();
-        window.prevent_default();
     }
 }
 

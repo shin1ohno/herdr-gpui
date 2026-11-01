@@ -55,7 +55,7 @@ pub enum Error {
     TailscaleTimeout,
     #[cfg_attr(
         target_os = "ios",
-        error("Setting up a device in a local terminal is unavailable on iPadOS.")
+        error("{}", Self::IPADOS_TERMINAL_SETUP_UNAVAILABLE)
     )]
     #[cfg_attr(
         not(target_os = "ios"),
@@ -63,4 +63,14 @@ pub enum Error {
     )]
     TerminalSetupUnavailable,
     // keep-sorted end
+}
+
+impl Error {
+    /// What [`Self::TerminalSetupUnavailable`] says on iPadOS, named so tests
+    /// on any host check `error-devices-setup-ipad` against it. Like every
+    /// `#[error]`, it is the log's text; the window shows the message.
+    #[cfg(any(target_os = "ios", test))]
+    pub(crate) const IPADOS_TERMINAL_SETUP_UNAVAILABLE: &str =
+        // i18n: data
+        "Setting up a device in a local terminal is unavailable on iPadOS.";
 }

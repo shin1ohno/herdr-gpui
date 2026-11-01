@@ -3,6 +3,7 @@
 
 settings-cloud-railway-note = Temporary VM from railway.new, created with the SSH key below.
 settings-cloud-railway-unavailable = Cloud devices are unavailable on Windows.
+settings-cloud-railway-unavailable-ipad = Cloud devices are unavailable on iPadOS.
 settings-cloud-railway-key = SSH key
 settings-cloud-railway-source-generate = Generate a new key
 settings-cloud-railway-source-existing = Use an existing key

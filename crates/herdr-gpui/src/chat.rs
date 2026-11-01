@@ -13,6 +13,7 @@
 //! ([`link`]) that does the blocking I/O, a [`session`] that applies what it
 //! reads, and a view drawn from prepared state. A pane whose endpoint cannot
 //! be reached shows its terminal cells as before.
+// i18n: migrated
 
 mod chats;
 mod discovery;
@@ -21,8 +22,8 @@ mod glide;
 mod harnesses;
 mod link;
 mod list;
-mod page;
-mod pasted;
+pub(crate) mod page;
+pub(crate) mod pasted;
 mod prepared;
 #[cfg(feature = "integration-test")]
 pub(crate) mod preview;
@@ -33,9 +34,10 @@ mod session;
 mod start;
 mod summary;
 mod terminal;
+mod text;
 mod view;
-mod visual;
-mod widgets;
+pub(crate) mod visual;
+pub(crate) mod widgets;
 mod window;
 
 pub(crate) use chats::{ChatInput, Chats, LauncherDeck, Toward};
@@ -49,9 +51,7 @@ pub(super) fn now_ms() -> u64 {
             u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
         })
 }
-#[cfg(any(test, not(target_os = "ios")))]
-pub(crate) use start::Error as StartError;
-pub(crate) use start::{PROGRAM_ENV, Program};
+pub(crate) use start::{Error as StartError, PROGRAM_ENV, Program};
 
 use herdr_chat_protocol::{ByeReason, EndpointId};
 use std::io;
@@ -183,6 +183,7 @@ pub(crate) fn remote_program_script(args: &str) -> String {
         .map(|dir| format!("\"{dir}/herdr-acp\" "))
         .collect();
     format!(
+        // i18n: data
         "for p in {candidates}\"$(command -v herdr-acp)\"; do [ -x \"$p\" ] && exec \"$p\" {args}; done; \
          echo \"herdr-acp is not installed here: install it in ~/.herdr/bin\" >&2; exit 127"
     )

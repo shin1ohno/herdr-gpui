@@ -181,12 +181,7 @@ pub enum Error {
     LocalGit(#[source] io::Error),
     /// The search waited for the permission and macOS still refused it.
     /// Turning it on applies to the next search; the app need not restart.
-    #[cfg_attr(
-        target_os = "ios",
-        error(
-            "iPadOS has not allowed Herdr on your local network. In Settings, allow Local Network for Herdr, then search again"
-        )
-    )]
+    #[cfg_attr(target_os = "ios", error("{}", Self::IPADOS_LOCAL_NETWORK_DENIED))]
     #[cfg_attr(
         not(target_os = "ios"),
         error(
@@ -212,6 +207,8 @@ pub enum Error {
     MissingStateRoot,
     #[error(transparent)]
     Mods(#[from] crate::mods::Error),
+    #[error(transparent)]
+    Nearby(#[from] crate::remote::nearby::Error),
     #[error("No current daemon snapshot.")]
     NoSnapshot,
     #[error("No tab selected.")]
@@ -374,6 +371,13 @@ pub enum Error {
     #[error(transparent)]
     WslDrop(#[from] crate::window::wsl_drop::Error),
     // keep-sorted end
+}
+
+impl Error {
+    /// What [`Self::LocalNetworkDenied`] says on iPadOS, named so tests on
+    /// any host check `error-local-network-denied-ipad` against it.
+    #[cfg(any(target_os = "ios", test))]
+    pub(crate) const IPADOS_LOCAL_NETWORK_DENIED: &str = "iPadOS has not allowed Herdr on your local network. In Settings, allow Local Network for Herdr, then search again";
 }
 
 mod config;

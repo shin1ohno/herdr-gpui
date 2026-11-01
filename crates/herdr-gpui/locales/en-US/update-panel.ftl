@@ -10,6 +10,8 @@ update-panel-not-known = Not yet known
 update-panel-whats-new = What's new
 # $reason says why, in the updater's own words.
 update-panel-disabled = In-app updates unavailable: { $reason }
+# iPadOS only. App Store and Xcode are product names; keep them as they are.
+update-panel-ipad = In-app updates are unavailable on iPadOS. Install updates through the App Store or Xcode.
 update-panel-idle = Check GitHub for a new app release.
 update-panel-checking = Checking for updates...
 update-panel-current = You are running the latest available release.

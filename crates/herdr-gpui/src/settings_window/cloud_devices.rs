@@ -305,7 +305,11 @@ impl SettingsWindow {
             .min_w_0()
             .child(super::search::track_bounds("cloud-accounts".into()))
             .when(crate::cloud::unavailable().is_some(), |section| {
-                section.child(self.control_note(fl!("settings-cloud-unavailable")))
+                section.child(self.control_note(if cfg!(target_os = "ios") {
+                    fl!("settings-cloud-unavailable-ipad")
+                } else {
+                    fl!("settings-cloud-unavailable")
+                }))
             })
             .child(self.render_cloud_setup(cx))
             .when(CloudProvider::ALL.len() > 1, |section| {

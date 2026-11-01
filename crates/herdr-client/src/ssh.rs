@@ -39,7 +39,7 @@ mod exec_output;
 mod failure;
 mod host_key;
 #[cfg(target_os = "ios")]
-mod in_process;
+pub mod in_process;
 #[cfg(any(target_os = "ios", all(test, unix)))]
 mod ipad;
 pub(crate) mod mux;

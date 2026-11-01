@@ -5,7 +5,7 @@
 
 use super::Setup;
 use crate::HerdrWindow;
-use crate::i18n::fl;
+use crate::i18n::{Localize, fl};
 use crate::window::Flash;
 use gpui::{prelude::*, *};
 
@@ -45,7 +45,7 @@ impl HerdrWindow {
                     Ok(line) => Line::Ready(line),
                     Err(error) => {
                         tracing::warn!(category = "device_setup", "Device key unavailable");
-                        Line::Failed(error.to_string())
+                        Line::Failed(error.localize())
                     }
                 };
                 cx.notify();

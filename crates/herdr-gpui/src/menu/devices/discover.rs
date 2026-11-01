@@ -8,7 +8,7 @@
 #[cfg(not(target_os = "ios"))]
 use crate::i18n::fl;
 
-pub(super) mod bonjour;
+pub(crate) mod bonjour;
 mod complete;
 mod render;
 #[cfg(not(target_os = "ios"))]

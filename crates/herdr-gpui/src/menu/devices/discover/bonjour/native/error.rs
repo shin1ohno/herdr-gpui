@@ -19,6 +19,13 @@ pub enum Error {
 #[error("DNS-SD status {0}")]
 pub struct Status(pub(super) i32);
 
+impl Status {
+    /// Apple's numeric DNS-SD status.
+    pub(crate) fn code(&self) -> i32 {
+        self.0
+    }
+}
+
 impl Error {
     pub(super) fn status(operation: &'static str, code: i32) -> Self {
         Self::DnsSd {

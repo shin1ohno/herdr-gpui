@@ -13,7 +13,7 @@ use crate::{
         CloudProvider,
         worker::{self, Worker},
     },
-    i18n::fl,
+    i18n::{Localize, fl},
     railway::setup::{self, AddRequest, Overview},
     search_input::SearchInput,
 };
@@ -161,7 +161,9 @@ impl SettingsWindow {
                 if let Some(card) = &mut self.railway_card {
                     card.changing = false;
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }
@@ -367,7 +369,11 @@ impl SettingsWindow {
             .debug_selector(|| "cloud-railway-card".into())
             .child(self.control_note(fl!("settings-cloud-railway-note")));
         if crate::cloud::unavailable().is_some() {
-            about = about.child(self.control_note(fl!("settings-cloud-railway-unavailable")));
+            about = about.child(self.control_note(if cfg!(target_os = "ios") {
+                fl!("settings-cloud-railway-unavailable-ipad")
+            } else {
+                fl!("settings-cloud-railway-unavailable")
+            }));
         }
         let mut key = self
             .cloud_card(fl!("settings-cloud-railway-key"))
