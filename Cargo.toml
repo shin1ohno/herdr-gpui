@@ -100,7 +100,9 @@ herdr-orchestrator   = { path = "crates/herdr-orchestrator" }
 herdr-protocol       = { path = "crates/herdr-protocol" }
 herdr-remote         = { default-features = false, path = "crates/herdr-remote" }
 herdr-remote-control         = { default-features = false, path = "crates/herdr-remote-control" }
+herdr-ssh            = { path = "crates/herdr-ssh" }
 herdr-terminal       = { path = "crates/herdr-terminal" }
+herdr-uikit          = { path = "crates/herdr-uikit" }
 herdr-updater        = { path = "crates/herdr-updater" }
 herdr-usage          = { path = "crates/herdr-usage" }
 herdr-vcs            = { path = "crates/herdr-vcs" }
@@ -147,7 +149,7 @@ core-text            = "21"
 etagere              = "0.2.15"
 metal                = "0.33"
 objc2-quartz-core    = { default-features = false, features = ["CALayer", "CAMetalLayer", "CADisplayLink", "CATransaction", "objc2-core-foundation", "objc2-metal", "std"], version = "0.3.2" }
-objc2-ui-kit         = { default-features = false, features = ["UIApplication", "UIColor", "UICommand", "UIDevice", "UIEvent", "UIGeometry", "UIGestureRecognizer", "UIHoverGestureRecognizer", "UIInterface", "UIKey", "UIKeyCommand", "UIKeyConstants", "UIKeyboardLayoutGuide", "UILayoutGuide", "UIOpenURLContext", "UIPanGestureRecognizer", "UIPasteboard", "UIPointerInteraction", "UIPress", "UIPressesEvent", "UIResponder", "UIScene", "UISceneConfiguration", "UISceneDefinitions", "UISceneOptions", "UISceneSession", "UISceneSessionActivationRequest", "UIScreen", "UIScreenMode", "UITextInput", "UITextInputContext", "UITextInputTraits", "UITouch", "UITraitCollection", "UIView", "UIViewController", "UIWindow", "UIWindowScene", "UIWindowSceneGeometry", "UIWindowSceneGeometryPreferences", "UIWindowSceneGeometryPreferencesIOS", "block2", "objc2-core-foundation", "objc2-quartz-core", "std"], version = "0.3.2" }
+objc2-ui-kit         = { default-features = false, features = ["UIApplication", "UIBezierPath", "UIColor", "UICommand", "UIDevice", "UIEvent", "UIGeometry", "UIGestureRecognizer", "UIHoverGestureRecognizer", "UIHoverStyle", "UIInteraction", "UIInterface", "UIKey", "UIKeyCommand", "UIKeyConstants", "UIKeyboardLayoutGuide", "UILayoutGuide", "UIOpenURLContext", "UIPanGestureRecognizer", "UIPasteboard", "UIPointerInteraction", "UIPointerRegion", "UIPointerStyle", "UIPress", "UIPressesEvent", "UIResponder", "UIScene", "UISceneConfiguration", "UISceneDefinitions", "UISceneOptions", "UISceneSession", "UISceneSessionActivationRequest", "UIScreen", "UIScreenMode", "UITextInput", "UITextInputContext", "UITextInputTraits", "UITouch", "UITraitCollection", "UIView", "UIViewController", "UIWindow", "UIWindowScene", "UIWindowSceneGeometry", "UIWindowSceneGeometryPreferences", "UIWindowSceneGeometryPreferencesIOS", "block2", "objc2-core-foundation", "objc2-quartz-core", "std"], version = "0.3.2" }
 parking_lot          = "0.12"
 pathfinder_geometry  = "0.5"
 smallvec             = { features = ["const_new", "union"], version = "1.6" }
@@ -172,8 +174,12 @@ roxmltree            = "0.21"
 rusqlite             = { features = ["bundled"], version = "0.40" }
 rodio                = { default-features = false, features = ["playback", "symphonia-mp3", "tracing"], version = "0.22.2" }
 rustix               = { features = ["event", "fs", "process", "pty", "termios"], version = "=1.1.5" }
+# The iPad's SSH client runs inside the app and authenticates through its device key.
+russh                = { default-features = false, features = ["ring", "rsa"], version = "=0.65.0" }
 secrecy              = { features = ["serde"], version = "=0.10.3" }
 security-framework   = "=3.7.0"
+# Queries for device-only Keychain items; the version security-framework links.
+security-framework-sys = "=2.17.0"
 serde                = { features = ["derive"], version = "1" }
 serde_json           = "1"
 serde_ignored        = "0.1.14"

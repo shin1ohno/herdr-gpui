@@ -1,18 +1,24 @@
 //! Where Herdr UI keeps a saved sign-in: the macOS login Keychain in a signed
-//! release, the Linux Secret Service, Windows Credential Manager, or, with an
-//! explicit opt-in, a private `0600` file. GitHub and the cloud providers keep
-//! their secrets here under the same policy. Every call may block on the
-//! system's keyring, so callers run it on a background worker, never on the
-//! UI thread.
+//! release, the Linux Secret Service, Windows Credential Manager, the iPad's
+//! device-only Keychain, or, with an explicit opt-in on a desktop, a private
+//! `0600` file. GitHub and the cloud providers keep their secrets here under
+//! the same policy. Every call may block on the system's keyring, so callers
+//! run it on a background worker, never on the UI thread.
 
 #[cfg(windows)]
 mod credential_manager;
-#[cfg(target_os = "ios")]
+// Built for host tests too: its signature conversion and lookup rule are
+// plain Rust.
+#[cfg(any(target_os = "ios", test))]
 pub mod device_key;
 mod error;
 pub mod file;
+#[cfg(target_os = "ios")]
+pub mod ios_keychain;
 #[cfg(target_os = "macos")]
 mod keychain;
+#[cfg(target_os = "ios")]
+mod sec_item;
 #[cfg(target_os = "linux")]
 mod secret_service;
 
@@ -38,12 +44,18 @@ pub const RELEASE_BUILD: bool = option_env!("HERDR_RELEASE_VERSION").is_some();
 // Only the signed release pipeline sets `HERDR_RELEASE_VERSION`, so only it uses
 // Keychain. The Secret Service grants access per user session, not per binary,
 // so every Linux build uses it, and Credential Manager grants it per Windows
-// account, so every Windows build uses that.
-pub const KEYRING: bool =
-    (cfg!(target_os = "macos") && RELEASE_BUILD) || cfg!(target_os = "linux") || cfg!(windows);
+// account, so every Windows build uses that. The iPad's Keychain is reached
+// through the app's own access group, which stays the same from build to
+// build, so every iOS build uses it.
+pub const KEYRING: bool = (cfg!(target_os = "macos") && RELEASE_BUILD)
+    || cfg!(target_os = "linux")
+    || cfg!(windows)
+    || cfg!(target_os = "ios");
 // The private file relies on POSIX ownership and mode bits, so platforms
 // without them keep the environment as their only source of a saved token.
-pub const FILE: bool = cfg!(unix);
+// iOS has them, but a plaintext file in the app's container would go into the
+// device's backups, so the iPad keeps saved sign-ins in its Keychain only.
+pub const FILE: bool = cfg!(unix) && !cfg!(target_os = "ios");
 // macOS development builds have no other secure store to fall back on, so the
 // private file is their default.
 pub const FILE_DEFAULT: bool = cfg!(target_os = "macos") && !KEYRING;
@@ -53,6 +65,16 @@ pub const FILE_DEFAULT: bool = cfg!(target_os = "macos") && !KEYRING;
 pub const OPT_IN: bool = FILE && !cfg!(target_os = "macos");
 // An unsigned build must never reach the Keychain, whatever else changes here.
 const _: () = assert!(!(KEYRING && cfg!(target_os = "macos")) || RELEASE_BUILD);
+// No build and no opt-in may choose the plaintext file on the iPad.
+const _: () = assert!(
+    !cfg!(target_os = "ios")
+        || (KEYRING
+            && !FILE
+            && !FILE_DEFAULT
+            && !OPT_IN
+            && matches!(Store::for_policy(true), Store::Keyring)
+            && matches!(Store::for_policy(false), Store::Keyring))
+);
 
 /// Where a saved sign-in lives for this build.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -60,8 +82,8 @@ pub enum Store {
     /// No persistent store: the environment only.
     #[default]
     Environment,
-    /// The app-specific macOS login Keychain, Linux Secret Service, or
-    /// Windows Credential Manager entry.
+    /// The app-specific macOS login Keychain, Linux Secret Service, Windows
+    /// Credential Manager, or device-only iPad Keychain entry.
     Keyring,
     /// A private `0600` file beside the GUI config.
     File,
@@ -93,12 +115,12 @@ impl Store {
 pub struct Entry<E> {
     // Only the keyrings address entries by these.
     #[cfg_attr(
-        not(any(target_os = "macos", target_os = "linux", windows)),
+        not(any(target_os = "macos", target_os = "linux", windows, target_os = "ios")),
         allow(dead_code)
     )]
     pub service: &'static str,
     #[cfg_attr(
-        not(any(target_os = "macos", target_os = "linux", windows)),
+        not(any(target_os = "macos", target_os = "linux", windows, target_os = "ios")),
         allow(dead_code)
     )]
     pub account: &'static str,
@@ -157,8 +179,10 @@ pub fn keyring_read(service: &str, account: &str) -> Result<Option<SecretString>
     return secret_service::read(service, account);
     #[cfg(windows)]
     return credential_manager::read(service, account);
+    #[cfg(target_os = "ios")]
+    return ios_keychain::read(service, account);
     // `Store::Keyring` is never selected elsewhere.
-    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", windows, target_os = "ios")))]
     {
         let _ = (service, account);
         Ok(None)
@@ -182,7 +206,13 @@ pub fn keyring_save(
     return secret_service::save(service, label, token, account);
     #[cfg(windows)]
     return credential_manager::save(service, label, token, account);
-    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+    // Like the macOS Keychain, the iPad's shows no label for these entries.
+    #[cfg(target_os = "ios")]
+    return {
+        let _ = label;
+        ios_keychain::save(service, account, token)
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "linux", windows, target_os = "ios")))]
     {
         let _ = (service, label, token, account);
         Err(Error::Policy)

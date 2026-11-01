@@ -23,6 +23,14 @@ rustix.workspace = true
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework.workspace = true
 
+# The iPad's device key and saved sign-ins: the data protection Keychain and
+# the Secure Enclave. security-framework wraps keys and signatures; the
+# Keychain queries go through its sys crate (src/sec_item.rs).
+[target.'cfg(target_os = "ios")'.dependencies]
+core-foundation.workspace        = true
+security-framework.workspace     = true
+security-framework-sys.workspace = true
+
 # The Secret Service client GPUI's Linux platform links, with its async-io
 # backend, so this adds no runtime.
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -35,4 +43,6 @@ oo7.workspace          = true
 windows-sys = { features = ["Win32_Foundation", "Win32_Security_Credentials"], workspace = true }
 
 [dev-dependencies]
+# Signs and verifies P-256 in tests, to check the device key's signatures.
+p256.workspace     = true
 tempfile.workspace = true

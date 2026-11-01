@@ -10,6 +10,23 @@ version.workspace      = true
 [lints]
 workspace = true
 
+[features]
+# Opt-in tests against a private `sshd` (`just test-ssh`).
+integration-test = []
+
 [dependencies]
+base64.workspace    = true
+russh.workspace     = true
+sha2.workspace      = true
 thiserror.workspace = true
+tokio               = { features = ["io-util", "net", "rt", "sync", "time"], workspace = true }
 tracing.workspace   = true
+
+[dev-dependencies]
+anyhow.workspace   = true
+p256.workspace     = true
+tempfile.workspace = true
+
+[[test]]
+name              = "sshd"
+required-features = ["integration-test"]

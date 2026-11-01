@@ -107,6 +107,10 @@ pub fn read_checked<E: From<Error>>(
     name: &CStr,
     validate: fn(&SecretString) -> Result<(), E>,
 ) -> Result<Option<SecretString>, E> {
+    // The iPad keeps no plaintext file, whatever store a caller names.
+    if !crate::FILE {
+        return Ok(None);
+    }
     let dir = directory(path)?;
     let Some(file) = existing(&dir, name)? else {
         return Ok(None);
@@ -134,6 +138,15 @@ pub fn store_checked<E: From<Error>>(
 ) -> Result<(), E> {
     if token.is_some() && !plaintext {
         return Err(Error::Policy.into());
+    }
+    // The iPad keeps no plaintext file, whatever store a caller names: there
+    // is nothing to remove, and nothing may be written.
+    if !crate::FILE {
+        return if token.is_some() {
+            Err(Error::Unsupported.into())
+        } else {
+            Ok(())
+        };
     }
     write_checked(path, name, token, validate)
 }
@@ -182,5 +195,5 @@ fn write_checked<E: From<Error>>(
     Ok(result?)
 }
 
-#[cfg(all(test, unix))]
+#[cfg(all(test, unix, not(target_os = "ios")))]
 mod tests;

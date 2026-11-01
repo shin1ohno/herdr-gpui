@@ -12,18 +12,23 @@
 //! of any key type must make every other key a changed key.
 //!
 //! The crate builds on every Unix target, so its integration tests run on
-//! macOS against a private `sshd`.
+//! macOS against a private `sshd` (`just test-ssh`).
 
 #![cfg(unix)]
-// Wave 0 skeleton for the SSH transport streams; bodies are `todo!()`.
-#![allow(dead_code, clippy::todo)]
 
+// keep-sorted start
+mod classify;
 mod client_key;
+mod config;
 mod error;
+mod exec;
+mod handler;
 mod host_key;
 mod known_hosts;
+mod runtime;
 mod target;
 mod tunnel;
+// keep-sorted end
 
 pub use client_key::{ClientKey, SignError};
 pub use error::{Error, Failure, Result};

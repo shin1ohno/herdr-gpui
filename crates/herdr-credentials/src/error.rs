@@ -10,10 +10,16 @@ pub enum Error {
     #[cfg(windows)]
     #[error(transparent)]
     CredentialManager(#[from] crate::credential_manager::Error),
+    #[cfg(target_os = "ios")]
+    #[error(transparent)]
+    DeviceKey(#[from] crate::device_key::Error),
     #[error("Invalid GitHub credential encoding.")]
     Encoding(#[source] std::str::Utf8Error),
     #[error("Cannot access private credential file.")]
     Io(#[source] io::Error),
+    #[cfg(target_os = "ios")]
+    #[error(transparent)]
+    IosKeychain(#[from] crate::ios_keychain::Error),
     #[cfg(target_os = "macos")]
     #[error("Cannot read GitHub Keychain entry. Unlock your login Keychain or set GH_TOKEN.")]
     KeychainRead(#[source] security_framework::base::Error),
