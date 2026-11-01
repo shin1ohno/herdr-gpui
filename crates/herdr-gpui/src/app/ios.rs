@@ -2,9 +2,16 @@
 //! Services that need a local daemon or child processes are never started here.
 
 use super::{Config, InitialAppearance, StartupAppearance, light_appearance, open_window};
-use crate::{APP_VERSION, bind_keys, diagnostics, icons, updater};
-use gpui::{App, Application};
+use crate::{APP_VERSION, bind_keys, diagnostics, icons, state_file, updater};
+use gpui::{App, AppLifecyclePhase, Application, AsyncApp, Platform};
 use herdr_client::ConnectTarget;
+use herdr_uikit::{BackgroundTask, IosPlatform};
+use std::{rc::Rc, time::Duration};
+
+/// How long saving state may take once the app is in the background. The
+/// system grants a background task about 30 seconds; every store writes one
+/// small file.
+const BACKGROUND_FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub(crate) fn run() -> std::process::ExitCode {
     if let Err(error) = diagnostics::init(crate::log_targets::LOG_TARGETS) {
@@ -24,9 +31,10 @@ pub(crate) fn run() -> std::process::ExitCode {
     let fan_out_journal = crate::fan_out::Journal::load();
     let keychain_grants = crate::usage::KeychainGrants::load();
     let window_state = crate::window_state::WindowState::load();
-    let failed = std::rc::Rc::new(std::cell::Cell::new(false));
+    let failed = Rc::new(std::cell::Cell::new(false));
     let outcome = failed.clone();
-    let application: Application = herdr_uikit::application().with_assets(icons::Icons);
+    let platform = Rc::new(IosPlatform::new());
+    let application = Application::with_platform(platform.clone()).with_assets(icons::Icons);
     application.run(move |cx| {
         browser_tabs.install(cx);
         group_layouts.install(cx);
@@ -41,6 +49,8 @@ pub(crate) fn run() -> std::process::ExitCode {
         fan_out_journal.install(cx);
         keychain_grants.install(cx);
         window_state.install(cx);
+        // After the stores, so a flush always has them to write.
+        watch_lifecycle(&platform, cx);
         cx.set_global(appearance.select(light_appearance(cx)));
         let language = cx.global::<InitialAppearance>().config.language.clone();
         crate::i18n::install(&language, cx);
@@ -79,6 +89,42 @@ pub(crate) fn run() -> std::process::ExitCode {
     } else {
         std::process::ExitCode::SUCCESS
     }
+}
+
+/// Saves state whenever the app goes to the background, since iPadOS may end
+/// it there without a quit. The stores' quit hooks stop their writers, so
+/// they are not used; everything keeps running for when the app returns.
+fn watch_lifecycle(platform: &IosPlatform, cx: &App) {
+    let cx = cx.to_async();
+    platform.on_app_lifecycle(Box::new(move |phase| {
+        if phase == AppLifecyclePhase::Background {
+            flush_for_background(&cx);
+        }
+    }));
+}
+
+/// The platform calls lifecycle handlers from their own main-queue block,
+/// outside any app update, so updating the app here cannot borrow it twice.
+fn flush_for_background(cx: &AsyncApp) {
+    // Held until the Settings drafts and the stores are written, or the
+    // flush's deadline passes: the platform's own task ends when this handler
+    // returns.
+    let task = BackgroundTask::begin("Saving state");
+    let flush = cx.update(|cx| state_file::background::flush(cx, BACKGROUND_FLUSH_TIMEOUT));
+    cx.foreground_executor()
+        .spawn(async move {
+            let flushed = flush.await;
+            drop(task);
+            tracing::info!(
+                category = "lifecycle",
+                drafts = flushed.drafts,
+                synced = flushed.stores.synced,
+                lost = flushed.stores.lost,
+                timed_out = flushed.stores.timed_out,
+                "Saved state for the background"
+            );
+        })
+        .detach();
 }
 
 fn install_actions(cx: &mut App) {

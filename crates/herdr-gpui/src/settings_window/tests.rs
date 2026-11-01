@@ -8,6 +8,7 @@ use std::sync::{
 
 mod activity_bar_windows;
 mod appearance_messages;
+mod background_drafts;
 mod config_watch;
 mod en_xa;
 mod gpu_settings;

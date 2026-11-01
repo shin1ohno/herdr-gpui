@@ -10,6 +10,12 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+#[cfg(any(target_os = "ios", test))]
+pub(crate) mod background;
+mod sync;
+#[cfg(any(target_os = "ios", test))]
+pub(crate) use sync::{SyncReport, sync_all};
+
 /// The file's bytes, or `None` when it does not exist yet.
 pub(crate) fn read(path: &Path, limit: u64) -> crate::Result<Option<Vec<u8>>> {
     let file = match fs::File::open(path) {
@@ -47,30 +53,56 @@ pub(crate) fn write<T: Serialize + ?Sized>(path: &Path, value: &T) -> crate::Res
 }
 
 /// Saves the most recent value handed to it. Values replaced before the
-/// worker reads them are never written.
+/// worker reads them are never written. Each writer registers itself so
+/// `sync_all` can wait for its latest value.
 pub(crate) struct Writer<T> {
-    pending: Arc<Mutex<Option<T>>>,
+    barrier: Arc<sync::Barrier>,
+    /// The latest value and its generation (`sync::Barrier::queue`).
+    pending: Arc<Mutex<Option<(u64, T)>>>,
     wake: mpsc::SyncSender<()>,
     worker: JoinHandle<()>,
 }
 
 impl<T: Serialize + Send + 'static> Writer<T> {
     pub(crate) fn start(name: &str, path: PathBuf) -> io::Result<Self> {
-        let pending = Arc::new(Mutex::new(None::<T>));
+        Self::spawn(name, path, &sync::REGISTRY, |path, value| {
+            write(path, value)
+        })
+    }
+
+    /// Starts the worker with `write` and registers it with `registry`; tests
+    /// pass their own of both.
+    fn spawn(
+        name: &str,
+        path: PathBuf,
+        registry: &sync::Registry,
+        write: impl Fn(&Path, &T) -> crate::Result<()> + Send + 'static,
+    ) -> io::Result<Self> {
+        let barrier = Arc::new(sync::Barrier::new(name));
+        let pending = Arc::new(Mutex::new(None::<(u64, T)>));
         let mailbox = pending.clone();
+        let progress = barrier.clone();
+        let finished = sync::FinishOnDrop(barrier.clone());
         let (wake, receiver) = mpsc::sync_channel(1);
         let label = name.to_owned();
         let worker = thread::Builder::new().name(name.into()).spawn(move || {
+            let _finished = finished;
             for () in receiver {
                 let snapshot = mailbox.lock().ok().and_then(|mut pending| pending.take());
-                if let Some(snapshot) = snapshot
-                    && let Err(error) = write(&path, &snapshot)
-                {
+                let Some((generation, snapshot)) = snapshot else {
+                    continue;
+                };
+                if let Err(error) = write(&path, &snapshot) {
                     tracing::warn!(%error, file = label, "Cannot save state");
                 }
+                // A failed write is recorded too: a sync waits for the
+                // attempt, not for a disk that may never accept the value.
+                progress.written(generation);
             }
         })?;
+        registry.register(&barrier);
         Ok(Self {
+            barrier,
             pending,
             wake,
             worker,
@@ -79,10 +111,21 @@ impl<T: Serialize + Send + 'static> Writer<T> {
 
     pub(crate) fn save(&self, value: T) {
         if let Ok(mut pending) = self.pending.lock() {
-            *pending = Some(value);
+            *pending = Some((self.barrier.queue(), value));
         }
         // A full wake queue already guarantees that the latest value is read.
         let _ = self.wake.try_send(());
+    }
+
+    /// Waits until every value saved before the call was written (or failed
+    /// to write), the worker ended, or `deadline` passed. Blocks, so callers
+    /// run it off the UI thread.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the app syncs every writer through sync_all")
+    )]
+    fn sync_until(&self, deadline: std::time::Instant) -> sync::Synced {
+        self.barrier.sync_until(Some(deadline))
     }
 
     /// Writes whatever is still pending, then stops the worker. Blocks, so
@@ -96,32 +139,4 @@ impl<T: Serialize + Send + 'static> Writer<T> {
 }
 
 #[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used)]
-    use super::*;
-
-    #[test]
-    fn missing_files_are_empty_and_oversized_files_are_rejected() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("state.json");
-        assert!(read(&path, 8).unwrap().is_none());
-        fs::write(&path, b"123456789").unwrap();
-        assert!(matches!(
-            read(&path, 8),
-            Err(crate::Error::StateFileSize { limit: 8, .. })
-        ));
-        assert_eq!(read(&path, 9).unwrap().unwrap(), b"123456789");
-    }
-
-    #[test]
-    fn the_latest_value_is_written_before_finish_returns() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("nested/state.json");
-        let writer = Writer::start("state-test", path.clone()).unwrap();
-        writer.save(vec![1]);
-        writer.save(vec![2, 3]);
-        writer.finish();
-        let bytes = read(&path, 1024).unwrap().unwrap();
-        assert_eq!(serde_json::from_slice::<Vec<i32>>(&bytes).unwrap(), [2, 3]);
-    }
-}
+mod tests;

@@ -1,5 +1,7 @@
 //! Independent native preferences window. Disk work never owns a window or a socket.
 // i18n: migrated
+#[cfg(any(target_os = "ios", test))]
+mod background;
 mod catalog;
 #[cfg(feature = "cloud")]
 mod cloud_devices;
@@ -83,6 +85,23 @@ pub(crate) fn open(source: WeakEntity<HerdrWindow>, cx: &mut App) {
             view.watch_config(cx);
         })
     });
+}
+
+/// Writes the open Settings window's unsaved drafts, as its "Save now" does,
+/// and leaves the window open. iPadOS calls it when the app goes to the
+/// background, where the app may be ended without a quit. The task resolves
+/// once the drafts are written (or failed to be), so the caller can keep the
+/// app awake until then.
+#[cfg(any(target_os = "ios", test))]
+pub(crate) fn save_open_drafts(cx: &mut App) -> Task<()> {
+    let Some(model) = cx
+        .try_global::<SettingsWindowHandle>()
+        .and_then(|handle| handle.model.as_ref())
+        .and_then(WeakEntity::upgrade)
+    else {
+        return Task::ready(());
+    };
+    model.update(cx, |view, cx| view.save_drafts_for_background(cx))
 }
 
 fn open_with(

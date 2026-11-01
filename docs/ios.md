@@ -12,8 +12,10 @@ against.
   `UIApplicationMain`, scenes as windows, a `UIView` hosting a `CAMetalLayer`,
   touch, pointer, hardware keyboard, and `UITextInput` input. Its Metal renderer
   and Core Text text system are ported from GPUI's macOS crates
-  (`crates/herdr-uikit/NOTICE.md`). Herdr UI calls `herdr_uikit::application()`
-  on `target_os = "ios"` where desktop targets call `gpui_platform::application()`.
+  (`crates/herdr-uikit/NOTICE.md`). Herdr UI builds an `IosPlatform` and hands
+  it to `gpui::Application::with_platform` on `target_os = "ios"`, keeping it to
+  register for lifecycle phases, where desktop targets call
+  `gpui_platform::application()`.
 - **Touch.** GPUI's core already recognizes gestures from raw `TouchEvent`s
   (`gpui-pre/src/window.rs`, `dispatch_touch_event`): taps become clicks, pans
   become scroll with momentum, and long presses and touch drags have their own
@@ -109,6 +111,29 @@ module reconciles them:
 
 `Info.plist` declares `UIApplicationSceneManifest` with
 `UIApplicationSupportsMultipleScenes = true` and no storyboard.
+
+### Going to the background
+
+iPadOS suspends an app soon after its last scene leaves the screen and may
+later end it without `applicationWillTerminate:`, so GPUI's quit callbacks
+cannot be relied on to save anything. When the app as a whole reaches the
+background, the platform begins a UIKit background task in
+`sceneDidEnterBackground:` and holds it until GPUI's lifecycle callback for
+that phase has run (`herdr_uikit::BackgroundTask`). Herdr UI's callback takes
+its own task and holds it, for up to two seconds in all, while two things are
+written. First the open Settings window's unsaved drafts, as "Save now" writes
+them (theme, then layout, then sidebar), also when a load or save was already
+running. Then every `state_file::Writer` store's latest value, waited on from
+the background executor: browser tabs and layouts, worktree notes, viewed
+review files, overview marks, notification mutes, palette ranking, dispatch
+history, and window state. Every new `Writer` registers itself, so a store
+added later is covered too. The app log records one `lifecycle` line with
+whether the drafts finished and how many stores synced, timed out, or were
+lost because their writer ended before writing; each lost or timed-out store
+also gets a warning naming its file. The stores keep running, so nothing
+changes when the app returns. The quit hooks themselves are not run: they stop
+the writers, reset the Settings theme preview, and close port forwards and
+tunnels, none of which should happen to an app that may come back.
 
 ## SSH transport
 
