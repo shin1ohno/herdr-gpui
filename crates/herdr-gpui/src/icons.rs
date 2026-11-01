@@ -3,6 +3,18 @@ use std::borrow::Cow;
 
 pub(super) struct Icons;
 
+/// ACP reports a generic identity but carries the harness's display name.
+/// Only iPad chrome uses that fallback; canonical daemon identities win.
+pub(crate) fn of_agent(agent: &herdr_client::protocol::ClientShellAgent) -> AgentIcon {
+    let icon = AgentIcon::from_identity(agent.agent.as_deref());
+    if crate::ipad_ui::layout() && icon == AgentIcon::Generic {
+        let display = agent.display_agent.as_deref().map(str::to_ascii_lowercase);
+        AgentIcon::from_identity(display.as_deref())
+    } else {
+        icon
+    }
+}
+
 /// Declares each agent mark once: its variant, Herdr's canonical
 /// `agent_label` identity, and the embedded asset named after that identity.
 macro_rules! agent_icons {
@@ -486,3 +498,7 @@ mod tests {
 #[cfg(test)]
 #[path = "icons/tests/omo.rs"]
 mod omo_tests;
+
+#[cfg(test)]
+#[path = "icons/tests/of_agent.rs"]
+mod of_agent_tests;

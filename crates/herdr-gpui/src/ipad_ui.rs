@@ -1,14 +1,25 @@
-//! Whether the window offers the iPad's touch affordances: menus a long press
-//! opens on rows that have none on the desktop, a placeholder that offers to
-//! reconnect, and dialogs that wrap and scroll inside a small window.
+//! iPad affordances use [`active`] for behavior, [`layout`] for geometry and
+//! appearance, and target cfgs only for platform capabilities.
 //!
-//! Headless tests take the iPad side, so its paths run on a desktop host.
-//! [`desktop`] switches the calling thread to the desktop side, so the
-//! behaviour these gates keep for the desktop is tested as well.
+//! Tests enable behavior by default, but keep desktop geometry unless
+//! [`ipad_layout`] is held. [`desktop`] takes precedence over both gates.
+//!
+//! Theme roles (no iPad colors are hard-coded):
+//! - Terminal: `background`; sidebar: `sidebar_background()`; bars: `surface`.
+//! - Borders and floating parts: `active`; body: `foreground`; secondary: `subtext()`.
+//! - Selection and focus: `primary()`, with `text_on(primary())` for its text.
+//!   PR2 introduces the iPad Nord accent override with its first caller.
+//! - Working/warnings: `palette[3]`; idle: `palette[6]`; done: `palette[2]`;
+//!   blocked: `palette[1]`. Dot shapes retain the existing status meanings.
+
+mod kbd;
+pub(crate) mod metrics;
+pub(crate) use kbd::kbd;
 
 #[cfg(test)]
 thread_local! {
     static DESKTOP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static IPAD_LAYOUT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// True on iPadOS, and in tests unless [`desktop`] is in effect.
@@ -20,6 +31,33 @@ pub(crate) fn active() -> bool {
     #[cfg(not(test))]
     {
         cfg!(target_os = "ios")
+    }
+}
+
+/// iPad geometry and appearance; tests opt in without moving desktop fixtures.
+pub(crate) fn layout() -> bool {
+    #[cfg(test)]
+    {
+        IPAD_LAYOUT.get() && !DESKTOP.get()
+    }
+    #[cfg(not(test))]
+    {
+        cfg!(target_os = "ios")
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn ipad_layout() -> IpadLayout {
+    IpadLayout(IPAD_LAYOUT.replace(true))
+}
+
+#[cfg(test)]
+pub(crate) struct IpadLayout(bool);
+
+#[cfg(test)]
+impl Drop for IpadLayout {
+    fn drop(&mut self) {
+        IPAD_LAYOUT.set(self.0);
     }
 }
 
@@ -40,3 +78,6 @@ impl Drop for Desktop {
         DESKTOP.set(false);
     }
 }
+
+#[cfg(test)]
+mod tests;

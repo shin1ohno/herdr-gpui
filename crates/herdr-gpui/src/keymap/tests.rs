@@ -4,10 +4,12 @@ use herdr_client::protocol::ClientShellCommand;
 
 mod custom_defaults;
 mod custom_reference;
+mod glyphs;
 mod literal_plus;
 mod pane_keys;
 mod platform_defaults;
 mod shift_enter;
+mod styled;
 
 fn overrides(entries: &[(&str, Binding)]) -> BTreeMap<String, Binding> {
     entries

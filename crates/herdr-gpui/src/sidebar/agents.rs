@@ -281,19 +281,29 @@ impl Indicators {
         Self {
             icons,
             edge_rail,
-            colors: [
-                AgentStatus::Unknown,
-                AgentStatus::Idle,
-                AgentStatus::Working,
-                AgentStatus::Done,
-                AgentStatus::Blocked,
-            ]
-            .map(|status| {
-                settings.map_or_else(
-                    || status_style(status, theme).2,
-                    |settings| theme.ink(settings.status_color(status, light)),
-                )
-            }),
+            colors: if crate::ipad_ui::layout() {
+                [
+                    theme.subtext(),
+                    theme.palette[6],
+                    theme.palette[3],
+                    theme.palette[2],
+                    theme.palette[1],
+                ]
+            } else {
+                [
+                    AgentStatus::Unknown,
+                    AgentStatus::Idle,
+                    AgentStatus::Working,
+                    AgentStatus::Done,
+                    AgentStatus::Blocked,
+                ]
+                .map(|status| {
+                    settings.map_or_else(
+                        || status_style(status, theme).2,
+                        |settings| theme.ink(settings.status_color(status, light)),
+                    )
+                })
+            },
             fade: 1f32.to_bits(),
         }
     }
@@ -402,12 +412,10 @@ pub(super) fn status_mark(
     if indicators.icons != StatusIcons::Dots {
         return status_icon(status, font, indicators, color);
     }
-    // Upstream dots: blocked/done filled, idle hollow, unknown a small dot.
-    // Working spins instead, so busy agents read apart from settled ones.
-    let (diameter, filled) = match status {
-        AgentStatus::Unknown => (STATUS_DOT_UNKNOWN, true),
-        AgentStatus::Idle => (STATUS_WIDTH, false),
-        _ => (STATUS_WIDTH, true),
+    let mark = if !bold && color == indicators.color(status) {
+        status_dot(status, STATUS_WIDTH, indicators)
+    } else {
+        draw_dot(status, STATUS_WIDTH, color, bold, indicators.fade())
     };
     div()
         .w(px(indicators.width(font)))
@@ -417,26 +425,42 @@ pub(super) fn status_mark(
         .row()
         .items_center()
         .justify_center()
-        .when(status == AgentStatus::Working, |slot| {
-            slot.child(icon_mark(
-                StatusIcons::Dots,
-                status,
-                STATUS_WIDTH,
-                color,
-                indicators.fade(),
-            ))
-        })
-        .when(status != AgentStatus::Working, |slot| {
-            slot.child(
-                div()
-                    .size(px(if bold { STATUS_WIDTH } else { diameter }))
-                    .rounded_full()
-                    .border_1()
-                    .when(bold, |dot| dot.border_2())
-                    .border_color(rgb(color))
-                    .when(filled, |dot| dot.bg(rgb(color))),
-            )
-        })
+        .child(mark)
+}
+
+/// The inner mark, independent of row spacing and the configured icon set.
+pub(crate) fn status_dot(status: AgentStatus, diameter: f32, indicators: Indicators) -> Div {
+    draw_dot(
+        status,
+        diameter,
+        indicators.color(status),
+        false,
+        indicators.fade(),
+    )
+}
+
+fn draw_dot(status: AgentStatus, diameter: f32, color: u32, bold: bool, fade: f32) -> Div {
+    if status == AgentStatus::Working {
+        return div().size(px(diameter)).child(icon_mark(
+            StatusIcons::Dots,
+            status,
+            diameter,
+            color,
+            fade,
+        ));
+    }
+    let size = if status == AgentStatus::Unknown && !bold {
+        diameter * STATUS_DOT_UNKNOWN / STATUS_WIDTH
+    } else {
+        diameter
+    };
+    div()
+        .size(px(size))
+        .rounded_full()
+        .border_1()
+        .when(bold, |dot| dot.border_2())
+        .border_color(rgb(color))
+        .when(status != AgentStatus::Idle, |dot| dot.bg(rgb(color)))
 }
 
 /// A working dot: a faint ring with a spinning arc, `size` across. Rows draw

@@ -499,6 +499,17 @@ Changing a host or session retires old workers and views before a terminal ID
 from the new core can be used. Core connection indicators come from that
 connection, without manufacturing a Herdr 1 snapshot or agent activity.
 
+## iPad layout and shortcut style
+
+`ipad_ui::layout()` selects iPad geometry and looks (a 300 pt sidebar, 44 pt
+touch rows, theme-derived status dots). It is off in tests unless a test takes
+the `ipad_layout()` guard, so desktop expectations hold. `ipad_ui::active()`
+still gates behavior. The `shortcut_style` setting picks how shortcuts are
+shown: `ipad` prints glyphs such as `⌘⇧P`, `herdr-prefix` prints the resolved
+Herdr prefix keys. The default is `ipad` on iOS and `herdr-prefix` elsewhere.
+Shortcut hints appear only once a hardware keyboard has been seen and no
+software keyboard is covering more than 120 pt of the window.
+
 ## Remaining platform work
 
 The real application builds and renders in the iPad simulator. GPUI's menus
