@@ -470,11 +470,14 @@ impl HerdrWindow {
                 .on_click(cx.listener(|this, _, _, cx| this.trust_host_key(cx))),
             ),
             step => {
-                let ready = matches!(step, Step::Form) && !setup.host_key_code.needs_confirmation();
+                // A host key code waiting for confirmation blocks submission,
+                // but nothing is being checked yet.
+                let form = matches!(step, Step::Form);
+                let ready = form && !setup.host_key_code.needs_confirmation();
                 footer.child(
                     button(
                         "device-setup-submit",
-                        if ready {
+                        if form {
                             fl!("add-device-submit")
                         } else {
                             fl!("add-device-submit-checking")
