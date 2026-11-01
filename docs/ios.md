@@ -501,11 +501,13 @@ connection, without manufacturing a Herdr 1 snapshot or agent activity.
 
 ## Remaining platform work
 
-The real application builds and renders in the iPad simulator. This is still
-the first platform implementation: native `UIMenuBuilder` menus are not wired,
-the text input adapter reports a left-to-right base writing direction, and
-the renderer does not support Core Video surfaces or subpixel sprites. GPUI's
-in-window menus and grayscale text rendering remain available.
+The real application builds and renders in the iPad simulator. GPUI's menus
+appear as native iPadOS menus (`UIMenuBuilder`; holding Command lists them
+with a hardware keyboard), without Quit, Check for Updates, Toggle Full
+Screen, Open Code, Open Px0, Go to Symbol, and Go to File, which cannot work
+on an iPad. The text input takes the shown language's writing direction. The
+renderer does not support Core Video surfaces or subpixel sprites; grayscale
+text rendering remains available.
 
 There is no app lock yet. The app opens without Face ID or the passcode, and
 the device key signs without asking for user presence, so anyone holding the
