@@ -30,8 +30,18 @@ against.
   The tunnel is SSH to the computer, run inside the app ("SSH transport"
   below). An SSH key reaches the user's whole account, so the grant is the
   standard, explicit one: the user adds the iPad's key to `authorized_keys`.
-  `herdr-remote-control` is not used: a socket tunnel there would silently
-  widen every existing phone pairing from chats to full daemon control.
+  `herdr-remote-control` is not used. Its API serves the Herdr Remote apps:
+  chats, and terminal screens sent as styled text runs, with keys and pastes
+  sent back (`docs/ios-app-plan.md`). This client draws Herdr's binary
+  surface protocol and herdr-core's terminal streams, which that API does not
+  carry, and SSH needs nothing on the computer beyond Remote Login and Herdr.
+- **Herdr Remote.** Upstream's SwiftUI app in `ios/` is the companion for
+  iPhone and iPad: it pairs with `herdr-remote-control` on each computer for
+  chats, questions and approvals, terminal tabs, push notifications, and Live
+  Activities, also over Tailscale. This client is the full Herdr UI on an iPad
+  instead: the desktop's sidebar, panes, splits, and terminal rendering, over
+  SSH to a computer the iPad can reach. The two install side by side and
+  share no state.
 
 ## Capabilities on iPad
 
@@ -472,6 +482,13 @@ the first platform implementation: native `UIMenuBuilder` menus are not wired,
 the text input adapter reports a left-to-right base writing direction, and
 the renderer does not support Core Video surfaces or subpixel sprites. GPUI's
 in-window menus and grayscale text rendering remain available.
+
+There is no app lock yet. The app opens without Face ID or the passcode, and
+the device key signs without asking for user presence, so anyone holding the
+unlocked iPad can use every computer that granted its key. Herdr Remote offers
+an optional Face ID lock; an equivalent here is planned. Until then the iPad's
+passcode and Auto-Lock are the only guard, and removing the iPad's line from a
+computer's `authorized_keys` revokes it there.
 
 Secure Enclave key creation, native keyboard/IME composition, trackpad
 behavior, multiple scenes, and narrow multitasking layouts still need checks
