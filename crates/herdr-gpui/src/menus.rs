@@ -1,5 +1,5 @@
-//! Shared definitions for the macOS native and the Linux and Windows
-//! in-window menu bars.
+//! Shared definitions for the native macOS and iPadOS menus and the Linux
+//! and Windows in-window menu bars.
 //! Every item dispatches the same action the palette and the keymap use.
 // i18n: migrated
 
@@ -83,6 +83,10 @@ pub(crate) fn changed(old: &Config, new: &Config) -> bool {
 /// its tab layout under View > Tab Layout, and QA last when
 /// `features.qa_menu` is on.
 pub(crate) fn menus(config: &Config) -> Vec<Menu> {
+    menus_for_platform(config, cfg!(target_os = "ios"))
+}
+
+fn menus_for_platform(config: &Config, ipad: bool) -> Vec<Menu> {
     let mut menus = vec![
         Menu {
             name: fl!("menus-herdr").into(),
@@ -407,7 +411,69 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
     if config.features.qa_menu {
         menus.push(qa_menu());
     }
+    if ipad || !crate::actions::QUIT_AVAILABLE {
+        for menu in &mut menus {
+            retain_available_items(&mut menu.items, ipad);
+        }
+    }
     menus
+}
+
+/// Prune unavailable actions and their empty groups together, so removing
+/// Quit cannot leave a separator at the end of the application menu.
+fn retain_available_items(items: &mut Vec<MenuItem>, ipad: bool) {
+    let mut previous_separator = true;
+    items.retain_mut(|item| {
+        let keep = match item {
+            MenuItem::Action { action, .. } if action.partial_eq(&Quit) => {
+                crate::actions::QUIT_AVAILABLE && !ipad
+            }
+            MenuItem::Action { action, .. } if ipad => {
+                // The iPad launcher installs no system-notification registry.
+                if action.partial_eq(&CheckForUpdates)
+                    || action.partial_eq(&crate::actions::ShowSystemNotificationPreview)
+                {
+                    return false;
+                }
+                #[cfg(target_os = "macos")]
+                if action.partial_eq(&Hide)
+                    || action.partial_eq(&HideOthers)
+                    || action.partial_eq(&ShowAll)
+                    || action.partial_eq(&Minimize)
+                {
+                    return false;
+                }
+                !action
+                    .as_any()
+                    .downcast_ref::<RunCommand>()
+                    .is_some_and(|action| {
+                        matches!(
+                            action.command,
+                            Command::ToggleFullScreen
+                                | Command::OpenCode
+                                | Command::OpenPx0
+                                // Code search indexes local checkouts only;
+                                // iPad endpoints are all remote.
+                                | Command::GoToSymbol
+                                | Command::GoToFile
+                        )
+                    })
+            }
+            MenuItem::Submenu(menu) => {
+                retain_available_items(&mut menu.items, ipad);
+                !menu.items.is_empty()
+            }
+            MenuItem::Separator => !previous_separator,
+            _ => true,
+        };
+        if keep {
+            previous_separator = matches!(item, MenuItem::Separator);
+        }
+        keep
+    });
+    if matches!(items.last(), Some(MenuItem::Separator)) {
+        items.pop();
+    }
 }
 
 /// Previews and test actions for checking the app's surfaces by hand.

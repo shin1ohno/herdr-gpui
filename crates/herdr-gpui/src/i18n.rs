@@ -200,6 +200,19 @@ pub(crate) fn direction() -> Direction {
     current::direction()
 }
 
+/// UIKit cannot infer the direction of text GPUI draws. Both launch and
+/// locale changes run on the UI thread, as the platform setter requires.
+#[cfg(target_os = "ios")]
+pub(crate) fn sync_platform_direction() {
+    let direction = match direction() {
+        Direction::Ltr => herdr_uikit::LayoutDirection::LeftToRight,
+        Direction::Rtl => herdr_uikit::LayoutDirection::RightToLeft,
+    };
+    if let Err(error) = herdr_uikit::set_layout_direction(direction) {
+        tracing::warn!(%error, "Could not update the iPad layout direction");
+    }
+}
+
 /// Shows `locale` on this test's thread with no app, for tests of text and
 /// layout outside a window.
 #[cfg(test)]
@@ -250,6 +263,10 @@ fn switch(state: CurrentLocale, cx: &mut gpui::App) {
         current::replace(&state.locale);
     }
     cx.set_global(state);
+    #[cfg(target_os = "ios")]
+    if changed {
+        sync_platform_direction();
+    }
     if changed || menus {
         // Menus are built in the locale, and the QA menu checks the one shown.
         crate::menus::install(cx);

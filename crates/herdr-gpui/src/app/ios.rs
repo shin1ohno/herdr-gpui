@@ -55,6 +55,7 @@ pub(crate) fn run() -> std::process::ExitCode {
         cx.set_global(appearance.select(light_appearance(cx)));
         let language = cx.global::<InitialAppearance>().config.language.clone();
         crate::i18n::install(&language, cx);
+        crate::i18n::sync_platform_direction();
         crate::caffeine::install(cx);
         crate::endpoint::watch_network();
         // Both launchers retain address/settings state on platforms without
@@ -62,6 +63,7 @@ pub(crate) fn run() -> std::process::ExitCode {
         crate::code_server::Launcher::install(cx);
         crate::px0::Launcher::install(cx);
         bind_keys(cx);
+        crate::menus::install(cx);
         install_actions(cx);
         // Endpoint zero remains the window's empty selection until a saved
         // device connects. It is disabled and never dials a local socket on iOS.
@@ -146,6 +148,8 @@ fn install_actions(cx: &mut App) {
     });
     cx.on_action(|_: &crate::actions::ToggleSlowAnimations, cx| {
         crate::motion::set_slow(!crate::motion::is_slow());
+        // The menu shows the switch checked while it is on.
+        crate::menus::install(cx);
         cx.refresh_windows();
     });
 }

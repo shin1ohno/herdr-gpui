@@ -429,5 +429,6 @@ fn hide_and_minimize_are_macos_only() {
 mod tab_layout;
 
 mod en_xa;
+mod ipad;
 mod pseudo_locales;
 mod slow_animations;
