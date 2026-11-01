@@ -150,7 +150,7 @@ impl HerdrWindow {
             RowData::Agent(AgentRow {
                 key: format!("agent-{id}"),
                 name,
-                icon: crate::icons::AgentIcon::from_identity(agent.agent.as_deref()),
+                icon: crate::icons::of_agent(agent),
                 status: agent.agent_status,
                 place,
                 pane,

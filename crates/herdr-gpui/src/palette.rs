@@ -400,6 +400,7 @@ pub(super) struct Palette {
     project_operation: ProjectOperation,
     configuration: PaletteConfig,
     keymap: crate::keymap::Keymap,
+    shortcut_style: crate::config::ShortcutStyle,
     supports_clear: bool,
     supports_edit_scrollback: bool,
     /// The notes revision the entries were prepared from.
@@ -657,6 +658,7 @@ impl HerdrWindow {
             project_operation: ProjectOperation::Idle,
             configuration: self.config.palette.clone(),
             keymap: self.keymap().clone(),
+            shortcut_style: self.config.shortcut_style,
             supports_clear: self.live.supports_pane_clear,
             supports_edit_scrollback: self.live.supports_edit_scrollback,
             notes_revision: None,
@@ -730,13 +732,27 @@ impl HerdrWindow {
                     // A translated name still answers to its English one.
                     let label = crate::i18n::command(info);
                     let english = crate::i18n::command_english(info);
+                    let primary = self.keymap().primary(info.command);
+                    let ipad = crate::ipad_ui::layout();
+                    let detail = if ipad {
+                        self.shortcut_hint(info.command).unwrap_or_default()
+                    } else {
+                        primary.into()
+                    };
+                    let keywords = if ipad {
+                        format!("{english} {primary}")
+                    } else if english != label {
+                        english
+                    } else {
+                        String::new()
+                    };
                     Entry::with_keywords(
                         label.clone(),
-                        self.keymap().primary(info.command).into(),
+                        detail,
                         fl!("palette-badge-command"),
                         Action::Native(info.command),
                         None,
-                        if english == label { "" } else { &english },
+                        &keywords,
                     )
                 }),
         );
@@ -819,6 +835,7 @@ impl HerdrWindow {
         palette.rebuild_pending(&self.config.palette.project_roots);
         palette.sources = sources;
         palette.keymap = self.keymap().clone();
+        palette.shortcut_style = self.config.shortcut_style;
         palette.supports_clear = self.live.supports_pane_clear;
         palette.supports_edit_scrollback = self.live.supports_edit_scrollback;
         palette.notes_revision = notes.map(crate::worktree_notes::Notes::revision);
@@ -854,6 +871,7 @@ impl HerdrWindow {
         let notes = crate::worktree_notes::Notes::of(cx);
         let changed = palette.notes_revision != notes.map(crate::worktree_notes::Notes::revision)
             || palette.keymap != *self.keymap()
+            || (crate::ipad_ui::layout() && palette.shortcut_style != self.config.shortcut_style)
             || palette.supports_clear != self.live.supports_pane_clear
             || palette.supports_edit_scrollback != self.live.supports_edit_scrollback
             || sources.len() != palette.sources.len()

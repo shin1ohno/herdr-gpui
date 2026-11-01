@@ -8,16 +8,19 @@ use crate::{
 };
 use std::sync::Arc;
 
+// keep-sorted start
 mod backdrop;
 mod close_window;
 mod detach;
 mod en_xa;
 mod en_xa_notices;
+mod keyboard_state;
 mod padding;
 mod report_issue;
 mod rtl;
 mod sound_volume;
 mod visible_viewport;
+// keep-sorted end
 
 fn main_windows(cx: &mut gpui::App) -> Vec<gpui::WindowHandle<HerdrWindow>> {
     cx.windows()

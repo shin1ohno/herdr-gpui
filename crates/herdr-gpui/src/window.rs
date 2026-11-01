@@ -29,6 +29,8 @@ mod function_keys;
 pub(crate) mod image_source;
 mod images;
 mod input;
+mod ipad_state;
+mod keyboard_state;
 mod layout_save;
 mod lifecycle;
 pub(crate) use lifecycle::reasserts;
@@ -46,6 +48,7 @@ mod report_issue;
 mod select_hint;
 mod selection;
 mod server_keys;
+mod shortcut_hint;
 mod sound;
 mod status_bar;
 pub(crate) mod system_notifications;
@@ -103,6 +106,7 @@ pub(crate) struct HerdrWindow {
     pub(crate) _appearance: Subscription,
     pub(crate) _browser_tabs: Subscription,
     pub(crate) _host_theme: Subscription,
+    pub(crate) _keyboard_observer: Subscription,
     /// Another window may mute or unmute what this one shows.
     pub(crate) _notification_mutes: Subscription,
     pub(crate) _poll: Task<()>,
@@ -226,6 +230,7 @@ pub(crate) struct HerdrWindow {
     pub(crate) input_probe: smoke::InputProbe,
     pub(crate) install_warning_shown: bool,
     pub(crate) integrations: crate::integrations::Integrations,
+    pub(crate) ipad: ipad_state::IpadState,
     /// What a key code types in the active layout, to restore a dropped Shift.
     pub(crate) key_layout: fn(u16) -> Option<prefix::KeyChars>,
     /// The key code and Shift of the key being handled, from AppKit's event.

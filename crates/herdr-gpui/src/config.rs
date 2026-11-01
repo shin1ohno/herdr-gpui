@@ -41,6 +41,7 @@ mod option_as_alt;
 mod padding;
 pub(crate) mod preferences;
 pub(crate) use herdr_remote_control::app::config as remote;
+mod shortcut_style;
 pub(crate) mod sidebar;
 mod sidebar_style;
 mod sprites;
@@ -125,6 +126,7 @@ pub use padding::Padding;
 pub(crate) use padding::{Axis, MAX_PADDING, Side, Sides};
 pub use remote::RemoteConfig;
 use serde::Deserialize;
+pub(crate) use shortcut_style::ShortcutStyle;
 pub(crate) use sidebar::{
     AgentLayout, AgentToken, MAX_ROWS as MAX_SIDEBAR_ROWS, Rows, SidebarConfigError, SidebarLayout,
     SidebarScope, SpaceLayout, SpaceToken, TokenStyle,
@@ -262,6 +264,7 @@ pub struct Config {
     /// Whether a linked worktree whose pull request is merged is removed, and
     /// its workspace closed, without asking. The focused workspace still asks.
     pub remove_merged_worktrees: bool,
+    pub(crate) shortcut_style: ShortcutStyle,
     pub show_agents: bool,
     /// The "Agents" title row above the agents list, which also holds the sort
     /// toggle. The sort then follows Herdr's `ui.agent_panel_sort` unless it
@@ -462,6 +465,7 @@ impl Default for Config {
             px0: crate::px0::Config::default(),
             remote: RemoteConfig::default(),
             remove_merged_worktrees: false,
+            shortcut_style: ShortcutStyle::default(),
             show_agents: true,
             show_agents_header: true,
             show_device_icons: true,
@@ -547,6 +551,7 @@ struct Settings {
     px0: crate::px0::Config,
     remote: RemoteConfig,
     remove_merged_worktrees: Option<bool>,
+    shortcut_style: Option<ShortcutStyle>,
     show_agents: Option<bool>,
     show_agents_header: Option<bool>,
     show_device_icons: Option<bool>,
@@ -926,6 +931,7 @@ impl Config {
         config.confirm_close_workspace = settings.confirm_close_workspace.unwrap_or(true);
         config.focus_follows_mouse = settings.focus_follows_mouse.unwrap_or(true);
         config.remove_merged_worktrees = settings.remove_merged_worktrees.unwrap_or(false);
+        config.shortcut_style = settings.shortcut_style.unwrap_or_default();
         config.show_agents = settings.show_agents.unwrap_or(true);
         config.show_agents_header = settings.show_agents_header.unwrap_or(true);
         config.show_device_icons = settings.show_device_icons.unwrap_or(true);

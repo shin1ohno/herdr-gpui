@@ -810,5 +810,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         server_keys: None,
         shift_taps: Default::default(),
         _prefix_interceptor: HerdrWindow::intercept_prefix(window, cx),
+        _keyboard_observer: HerdrWindow::observe_keyboard(window, cx),
+        ipad: Default::default(),
     }
 }

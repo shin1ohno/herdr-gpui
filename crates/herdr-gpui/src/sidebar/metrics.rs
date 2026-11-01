@@ -35,7 +35,11 @@ pub(super) fn line_height(font: &FontConfig) -> f32 {
 pub(super) fn sidebar_width(preferred: Option<f32>, window_width: f32) -> f32 {
     // Keep useful label space and reserve at least 240 logical pixels for the terminal.
     preferred
-        .unwrap_or(SIDEBAR_WIDTH)
+        .unwrap_or(if crate::ipad_ui::layout() {
+            crate::ipad_ui::metrics::SIDEBAR
+        } else {
+            SIDEBAR_WIDTH
+        })
         .clamp(160., 480.)
         .min((window_width - 240.).max(0.))
 }

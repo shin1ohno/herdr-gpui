@@ -127,10 +127,12 @@ impl HerdrWindow {
         &self,
         palette: &Palette,
         index: usize,
+        window: &Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let hit = &palette.filtered[index];
         let entry = &palette.entries[hit.index];
+        let ipad_shortcut = crate::ipad_ui::layout() && matches!(entry.action, Action::Native(_));
         // Ranked results need not keep entry order, so only an empty query nests.
         let depth = if palette.query.trim().is_empty() {
             hit.depth
@@ -153,6 +155,9 @@ impl HerdrWindow {
             .debug_selector(move || format!("palette-row-{index}"))
             .w_full()
             .h(px(self.config.ui.line_height() * 2. + 20.))
+            .when(crate::ipad_ui::layout(), |row| {
+                row.min_h(px(crate::ipad_ui::metrics::TOUCH))
+            })
             .px(px(16.))
             .row()
             .items_center()
@@ -174,12 +179,24 @@ impl HerdrWindow {
                             .truncate()
                             .child(styled(&entry.label, &hit.highlights.label)),
                     )
-                    .child(
-                        div()
-                            .truncate()
-                            .text_color(rgb(self.theme.muted))
-                            .child(styled(&entry.detail, &hit.highlights.detail)),
-                    ),
+                    .when(!ipad_shortcut, |label| {
+                        label.child(
+                            div()
+                                .truncate()
+                                .text_color(rgb(self.theme.muted))
+                                .child(styled(&entry.detail, &hit.highlights.detail)),
+                        )
+                    }),
+            )
+            .when(
+                ipad_shortcut && !entry.detail.is_empty() && self.ipad.keyboard.hardware(window),
+                |row| {
+                    row.child(crate::ipad_ui::kbd(
+                        entry.detail.clone(),
+                        &self.theme,
+                        &self.config.ui,
+                    ))
+                },
             )
             .when(!entry.badge.is_empty(), |row| {
                 row.child(
@@ -391,12 +408,12 @@ impl HerdrWindow {
                             uniform_list(
                                 "palette-results",
                                 palette.filtered.len(),
-                                cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                                cx.processor(|this, range: std::ops::Range<usize>, window, cx| {
                                     let Some(palette) = &this.menu.palette else {
                                         return Vec::new();
                                     };
                                     range
-                                        .map(|index| this.palette_row(palette, index, cx))
+                                        .map(|index| this.palette_row(palette, index, window, cx))
                                         .collect()
                                 }),
                             )

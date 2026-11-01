@@ -97,6 +97,7 @@ impl HerdrWindow {
         let browser_tabs = cx.observe_global::<crate::browser::Store>(|_, cx| cx.notify());
         let worktree_notes = Self::observe_worktree_notes(window, cx);
         let notification_mutes = Self::observe_notification_mutes(cx);
+        let keyboard_observer = Self::observe_keyboard(window, cx);
         let prefix_interceptor = Self::intercept_prefix(window, cx);
         let activation = cx.observe_window_activation(window, |this, window, cx| {
             this.active = window.is_window_active();
@@ -129,6 +130,7 @@ impl HerdrWindow {
             _appearance: appearance_change,
             _browser_tabs: browser_tabs,
             _host_theme: host_theme,
+            _keyboard_observer: keyboard_observer,
             _notification_mutes: notification_mutes,
             _poll: poll,
             _prefix_interceptor: prefix_interceptor,
@@ -205,6 +207,7 @@ impl HerdrWindow {
             input_probe: smoke::InputProbe::default(),
             install_warning_shown: false,
             integrations: Default::default(),
+            ipad: Default::default(),
             key_layout: prefix::current_layout,
             key_press: function_keys::current_press,
             last_input: None,

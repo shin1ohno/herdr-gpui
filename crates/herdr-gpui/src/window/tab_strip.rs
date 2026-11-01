@@ -917,12 +917,12 @@ fn herdr_mark(
     snapshot: &herdr_client::protocol::ClientShellSnapshot,
     tab: &herdr_client::protocol::ClientShellTab,
 ) -> Mark {
-    let agent = snapshot
+    let agent: Option<AgentIcon> = snapshot
         .agents
         .iter()
         .filter(|agent| agent.tab_id == tab.tab_id)
         .max_by_key(|agent| agent.focused)
-        .map(|agent| AgentIcon::from_identity(agent.agent.as_deref()));
+        .map(crate::icons::of_agent);
     Mark::Herdr {
         status: tab.agent_status,
         agent,

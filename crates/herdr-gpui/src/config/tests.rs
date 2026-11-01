@@ -47,6 +47,7 @@ mod preferences;
 mod px0;
 mod remote;
 mod repository_icons;
+mod shortcut_style;
 mod sidebar_scope;
 mod sidebar_search;
 mod sidebar_settings;

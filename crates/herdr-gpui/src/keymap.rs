@@ -10,10 +10,12 @@
 mod custom;
 pub(crate) mod daemon;
 mod error;
+mod glyphs;
 
 pub(crate) use custom::Reach;
 pub(crate) use daemon::DaemonKeys;
 pub(crate) use error::Error;
+pub(crate) use glyphs::glyphs;
 
 use crate::{
     Result,
@@ -321,6 +323,22 @@ impl Keymap {
     /// The shortcut shown beside `command`, or `""` when it is unbound.
     pub fn primary(&self, command: Command) -> &str {
         self.shortcuts(command).next().unwrap_or("")
+    }
+
+    /// The first resolved binding in the requested display style.
+    pub(crate) fn styled(
+        &self,
+        command: Command,
+        style: crate::config::ShortcutStyle,
+    ) -> Option<&str> {
+        let prefixed = style == crate::config::ShortcutStyle::HerdrPrefix;
+        COMMANDS
+            .iter()
+            .position(|info| info.command == command)
+            .and_then(|index| self.shortcuts.get(index))?
+            .iter()
+            .find(|shortcut| shortcut.chord.is_some() == prefixed)
+            .map(|shortcut| shortcut.label.as_str())
     }
 
     /// Each keystroke GPUI binds directly, with the command it runs, in
