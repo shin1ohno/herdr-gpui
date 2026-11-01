@@ -23,11 +23,18 @@ Options:
   --terminate            Terminate the app after the screenshot (default:
                          leave it running to use in the simulator)
   --show                 Open Simulator.app on the device
+  --expect-color RRGGBB  Fail (status 5) unless at least --min of the
+                         screenshot is near this color
+  --min FRACTION         Share --expect-color needs (default: 0.4)
   -h, --help             Show this help
 
-RUST_LOG and RUST_BACKTRACE (default 1) reach the app. It exits with status 4
-when the app is no longer running at the screenshot, or exits before
---terminate stops it; the summary of log paths is printed either way.
+RUST_BACKTRACE (default 1) reaches the app, and RUST_LOG is passed on for
+code that reads it; Herdr UI itself ignores RUST_LOG and logs only to
+Library/Application Support/herdr/gpui/logs/herdr-gpui.jsonl in its
+container. It exits with status 4 when the app is no longer running at the
+screenshot, or exits before --terminate stops it; the summary of log paths is
+printed either way. A running app is not proof that it drew anything: check
+the screenshot (scripts/ios/screenshot-color.py).
 EOF
 }
 
@@ -40,6 +47,8 @@ wait_seconds=5
 out=
 terminate=false
 show=false
+expect_color=
+min_fraction=0.4
 app=
 app_args=()
 
@@ -64,6 +73,14 @@ while (($# > 0)); do
     --show)
       show=true
       shift
+      ;;
+    --expect-color)
+      expect_color=${2:?"--expect-color needs an RRGGBB color"}
+      shift 2
+      ;;
+    --min)
+      min_fraction=${2:?"--min needs a fraction"}
+      shift 2
       ;;
     -h | --help)
       usage
@@ -180,4 +197,9 @@ fi
 if [[ $terminate_failed == true ]]; then
   echo "error: could not terminate $bundle_id (pid $pid)" >&2
   exit 1
+fi
+if [[ -n $expect_color ]] &&
+  ! python3 -I "$root/scripts/ios/screenshot-color.py" "$screenshot" "$expect_color" --min "$min_fraction"; then
+  echo "error: less than $min_fraction of the screenshot is near #$expect_color" >&2
+  exit 5
 fi

@@ -274,7 +274,10 @@ The scripts behind the recipes are in `scripts/ios/`:
 - `sim.sh` boots the simulator when it is shut down, installs and launches the
   app, waits, and takes the screenshot. It never erases, deletes, or shuts
   down a simulator; `--terminate` stops the app it launched after the
-  screenshot.
+  screenshot. A running process proves nothing was drawn, so
+  `--expect-color RRGGBB` (with `--min`, default 0.4) fails the run with
+  status 5 unless that share of the screenshot is near the color: Herdr UI's
+  default dark theme fills about 99% of it with `101419`.
 - `sim-runner.sh` is Cargo's runner for `aarch64-apple-ios-sim`: it starts a
   test binary with `xcrun simctl spawn`, which returns the binary's exit
   status. The binary runs outside an app bundle, so tests cannot start
@@ -285,8 +288,13 @@ The scripts behind the recipes are in `scripts/ios/`:
 
 The simulator is "iPad Pro 13-inch (M5)" by default, the newest runtime's when
 several exist. `HERDR_IOS_SIMULATOR` picks another by name or UDID (`xcrun
-simctl list devices available`). `RUST_LOG` and `RUST_BACKTRACE` reach the
-app; `RUST_*`, `CARGO_*`, and `HERDR_TEST_*` variables reach test binaries.
+simctl list devices available`). `RUST_BACKTRACE` reaches the app;
+`RUST_*`, `CARGO_*`, and `HERDR_TEST_*` variables reach test binaries. The
+app writes no log to stderr and has no environment filter, so `RUST_LOG`
+changes nothing there: its log is the JSON-lines file under the app
+container, `Library/Application Support/herdr/gpui/logs/herdr-gpui.jsonl`
+(`xcrun simctl get_app_container <device> <bundle id> data` prints the
+container).
 
 ## Choosing the remote backend
 
