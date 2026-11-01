@@ -208,8 +208,15 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   simulator and the macOS tests use a software key behind the same signer.
   The Add Device dialog shows the line to add to `~/.ssh/authorized_keys`:
   `restrict ecdsa-sha2-nistp256 AAAA… herdr-ipad-<device>`, since the bridge
-  needs no PTY and no forwarding. Key deletion is implemented in the credentials
-  layer; a confirmed replacement action in Settings remains to be added.
+  needs no PTY and no forwarding. Settings > General > This iPad shows the
+  same line with Copy, and replaces the key after a two-click confirmation.
+  Replacement holds the same lock: the new key is stored under a staging tag
+  and read back, the old one moves to a recovery tag, the new one is promoted
+  (the commit point), and the old item is deleted. Every lookup first
+  recovers an interrupted move, preferring the active, then the old, then a
+  staged key, so a failure before promotion keeps the old identity. Live
+  tunnels stay open on the old key; new connections use the new one, and
+  each computer's `authorized_keys` must be updated by hand.
 - **Configuration** lives in the app container's
   `Library/Application Support/herdr/config-gpui*.toml`, alongside its
   app-owned state. Early builds' `.config/herdr` overrides are read for the
@@ -248,8 +255,25 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   Discovery uses the system DNS-SD API on iOS, including address resolution,
   instead of sending UDP multicast from the app. Permission waits and active
   queries remain cancellable and bounded on the discovery worker.
-- Later: pin the host key out of band, from a QR code the desktop shows,
-  instead of trusting the first key the network offers.
+- **Host key codes** pin a computer's key out of band instead of trusting
+  the first key the network offers. On the desktop, Settings > Remote
+  control > Show this computer's host key reads the public keys in
+  `/etc/ssh` (`%ProgramData%\ssh` on Windows) and shows them as a QR code
+  and as text: `herdr-ipad://host-key?v=1&fp=<algorithm>:SHA256:<digest>`,
+  one `fp` per key type, and an optional `host` hint that never chooses the
+  target. It carries fingerprints only. On the iPad the code arrives through
+  the `herdr-ipad` URL scheme (the Camera app opens a scanned code) or a
+  paste field in Add Device. Any app or web page can open that scheme, so a
+  URL code stays pending until the person confirms its hint and
+  fingerprints; a pasted code is already explicit. An accepted code applies
+  to one Add Device attempt and its exact target, and is dropped when the
+  target changes, the dialog closes, or the attempt ends; it is never saved
+  and never affects reconnects. A scanned key whose type and fingerprint
+  match is saved through the same trust path, with its lock and save-time
+  re-check; a mismatch shows both fingerprints and offers no Trust; an
+  existing pin is never replaced. Codes over 1 KiB, with more than five key
+  types, unknown versions or parameters, or noncanonical digests are
+  refused. The app has no camera of its own.
 
 ## Code rules for the port
 
