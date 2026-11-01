@@ -723,6 +723,7 @@ impl HerdrWindow {
                 .filter(|info| match info.command {
                     Command::ClearPane => self.live.supports_pane_clear,
                     Command::EditScrollback => self.live.supports_edit_scrollback,
+                    Command::Quit => crate::actions::QUIT_AVAILABLE,
                     _ => true,
                 })
                 .map(|info| {

@@ -103,6 +103,10 @@ pub(crate) struct SetBadgePreview {
     pub(crate) enabled: bool,
 }
 
+/// iPadOS ends apps itself and the platform's quit does nothing, so Quit is
+/// neither offered nor bound there rather than appearing to work.
+pub(crate) const QUIT_AVAILABLE: bool = !cfg!(target_os = "ios");
+
 /// Binds the active window's server keymap when its device opted into one,
 /// otherwise the keymap from the last validated config, or the catalog
 /// defaults before any config has loaded.
@@ -117,7 +121,10 @@ pub(crate) fn bind_keys(cx: &mut App) {
         .unwrap_or_default();
     #[cfg(target_os = "macos")]
     crate::browser::bind_page_keys(&keymap);
-    cx.bind_keys(keymap.bindings().map(|(command, keystroke)| {
+    let bindings = keymap
+        .bindings()
+        .filter(|(command, _)| QUIT_AVAILABLE || *command != Command::Quit);
+    cx.bind_keys(bindings.map(|(command, keystroke)| {
         if command == Command::Quit {
             KeyBinding::new(keystroke, Quit, None)
         } else {
