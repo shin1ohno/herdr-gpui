@@ -29,6 +29,7 @@ mod editor;
 mod file_drop;
 mod github;
 mod host_build;
+mod host_key_code;
 mod keymap;
 #[cfg(windows)]
 mod launch_at_login;

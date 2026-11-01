@@ -43,6 +43,9 @@ impl HerdrWindow {
         result: herdr_client::Result<HostKeyScan>,
         cx: &mut Context<Self>,
     ) {
+        if self.withdraw_stale_device_code(cx) {
+            return;
+        }
         let Some(Setup {
             step: Step::FetchingKey(request),
             ..
@@ -54,6 +57,28 @@ impl HerdrWindow {
         let target = request.target();
         let error = match result {
             Ok(HostKeyScan::New(key)) => {
+                match self.device_key_code_matches(target, &key.fingerprints) {
+                    Some(false) => {
+                        let error = self.device_key_code_mismatch(target, &key.fingerprints);
+                        if let Some(form) = &mut self.menu.device_setup {
+                            form.clear_host_key_code(cx);
+                            form.claim = None;
+                            form.step = Step::KeyCodeRefused;
+                            form.error = Some(error);
+                        }
+                        cx.notify();
+                        return;
+                    }
+                    Some(true) => {
+                        if let Some(form) = &mut self.menu.device_setup {
+                            form.step = Step::TrustKey(request, key);
+                        }
+                        self.mark_device_code_matched();
+                        self.trust_host_key(cx);
+                        return;
+                    }
+                    None => {}
+                }
                 if let Some(form) = &mut self.menu.device_setup {
                     form.step = Step::TrustKey(request, key);
                 }
@@ -70,6 +95,9 @@ impl HerdrWindow {
             ),
             // The key check passed, so the probe failed for a reason this
             // dialog cannot tell apart; the terminal shows it.
+            Ok(HostKeyScan::Trusted) if self.has_device_host_key_code(target) => {
+                fl!("host-key-code-already-pinned", target = target)
+            }
             Ok(HostKeyScan::Trusted) => fl!(
                 "add-device-ssh-failed",
                 target = target,
@@ -86,14 +114,24 @@ impl HerdrWindow {
             "Host key not offered for approval"
         );
         self.set_device_error(Some(error));
+        let supplied_code = self.has_device_host_key_code(target);
         if let Some(form) = &mut self.menu.device_setup {
-            form.step = Step::Confirm(request, Offer::Terminal);
+            form.step = if supplied_code {
+                form.clear_host_key_code(cx);
+                form.claim = None;
+                Step::KeyCodeRefused
+            } else {
+                Step::Confirm(request, Offer::Terminal)
+            };
         }
         cx.notify();
     }
 
     /// Save the approved key, then check the host again with it trusted.
     pub(super) fn trust_host_key(&mut self, cx: &mut Context<Self>) {
+        if self.withdraw_stale_device_code(cx) {
+            return;
+        }
         let Some(form) = &mut self.menu.device_setup else {
             return;
         };

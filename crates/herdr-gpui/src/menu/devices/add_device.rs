@@ -6,6 +6,7 @@ use super::{Page, discover::Discovery, setup};
 #[cfg(target_os = "ios")]
 mod device_key;
 mod host_key;
+mod host_key_code;
 mod offer;
 mod probe;
 mod save;
@@ -26,6 +27,8 @@ use herdr_client::{
 pub(super) use offer::Offer;
 
 pub(in crate::menu) struct Setup {
+    /// A code belongs only to this form and the target that accepted it.
+    pub(super) host_key_code: host_key_code::Attempt,
     pub(super) fields: [Entity<SearchInput>; 3],
     pub(super) step: Step,
     /// This process's claim on the host being added, from the first check
@@ -74,6 +77,8 @@ pub(super) enum Step {
     FetchingKey(setup::Request),
     /// The user compares the host key's fingerprint before trusting it.
     TrustKey(setup::Request, NewHostKey),
+    /// A supplied code disagreed with the offered key; approval is forbidden.
+    KeyCodeRefused,
     /// Setup needs prompts, so the user decides whether to run it locally.
     Confirm(setup::Request, Offer),
     /// Checking the catalog on disk again before opening the setup workspace
@@ -139,9 +144,18 @@ impl HerdrWindow {
         // An offer runs for the target that was checked, so changing the
         // target withdraws it: the next submit checks the new target.
         let target_edits = cx.subscribe(&fields[0], |this, field, _: &Changed, cx| {
+            let text = field.read(cx).text().trim().to_owned();
+            if let Some(setup) = &mut this.menu.device_setup
+                && setup.host_key_code.target_changed(&text, cx)
+            {
+                setup.step = Step::Form;
+                setup.claim = None;
+                setup.task = None;
+                setup.error = None;
+            }
             if let Some(setup) = &mut this.menu.device_setup
                 && let Step::Confirm(request, _) = &setup.step
-                && request.target() != field.read(cx).text().trim()
+                && request.target() != text
             {
                 setup.step = Step::Form;
                 setup.claim = None;
@@ -150,6 +164,7 @@ impl HerdrWindow {
             cx.notify();
         });
         self.menu.device_setup = Some(Setup {
+            host_key_code: Default::default(),
             fields,
             step: Step::Form,
             claim: None,
@@ -165,6 +180,7 @@ impl HerdrWindow {
             device_key: Default::default(),
         });
         self.menu.page = Some(Page::AddDevice);
+        self.init_device_code_field(cx);
         self.start_device_discovery(cx);
         #[cfg(target_os = "ios")]
         self.load_device_key(cx);
@@ -195,11 +211,20 @@ impl HerdrWindow {
         {
             return false;
         }
+        if form.host_key_code.is_composing(cx) {
+            return false;
+        }
         let key = event.keystroke.key.as_str();
         let modifiers = event.keystroke.modifiers;
         let in_target = form.fields[0].read(cx).focus.is_focused(window);
         let plain = !(modifiers.shift || modifiers.platform || modifiers.control || modifiers.alt);
         if in_target && plain && self.complete_device_target(key, window, cx) {
+            return true;
+        }
+        if key == "tab" && self.focus_host_key_code_field(modifiers.shift, window, cx) {
+            return true;
+        }
+        if key == "enter" && self.apply_focused_host_key_code(window, cx) {
             return true;
         }
         let Some(form) = &self.menu.device_setup else {
@@ -315,6 +340,9 @@ impl HerdrWindow {
         {
             body = body.child(self.render_device_key(setup, cx));
         }
+        if crate::ipad_ui::active() {
+            body = body.child(self.render_device_host_key_code(setup, cx));
+        }
         if let Some(error) = &setup.error {
             body = body.child(
                 div()
@@ -334,6 +362,7 @@ impl HerdrWindow {
             }
             Step::Saving(request, _) => Some(fl!("add-device-saving", target = request.target())),
             Step::Saved | Step::SavedWarning(_) => None,
+            Step::KeyCodeRefused => None,
             Step::FetchingKey(request) => {
                 Some(fl!("add-device-fetching-key", target = request.target()))
             }
@@ -430,6 +459,7 @@ impl HerdrWindow {
             Step::AwaitingLocalNetwork(_) => footer
                 .children(self.local_network_settings_button("device-setup-settings", cx))
                 .child(cancel),
+            Step::KeyCodeRefused => footer.child(cancel),
             // Enter does not trust a key: only this button does.
             Step::TrustKey(..) => footer.child(cancel).child(
                 button(
@@ -440,7 +470,7 @@ impl HerdrWindow {
                 .on_click(cx.listener(|this, _, _, cx| this.trust_host_key(cx))),
             ),
             step => {
-                let ready = matches!(step, Step::Form);
+                let ready = matches!(step, Step::Form) && !setup.host_key_code.needs_confirmation();
                 footer.child(
                     button(
                         "device-setup-submit",
@@ -505,6 +535,9 @@ impl HerdrWindow {
             Step::Confirm(..) => return self.open_setup_space(cx),
             _ => return,
         }
+        if form.host_key_code.needs_confirmation() {
+            return;
+        }
         let request = setup::Request::new(
             form.fields[0].read(cx).text(),
             form.fields[1].read(cx).text(),
@@ -523,7 +556,11 @@ impl HerdrWindow {
                 return;
             }
         };
-        self.start_device_probe(request, None, cx);
+        if self.has_device_host_key_code(request.target()) {
+            self.start_device_code_scan(request, cx);
+        } else {
+            self.start_device_probe(request, None, cx);
+        }
     }
 
     /// Return to the form when the host is already saved or being added:
@@ -644,6 +681,7 @@ impl HerdrWindow {
     /// another, claims it again.
     pub(super) fn cancel_device_step(&mut self, cx: &mut Context<Self>) {
         if let Some(setup) = &mut self.menu.device_setup {
+            setup.clear_host_key_code(cx);
             setup.step = Step::Form;
             setup.claim = None;
             // Ends a wait for Local Network permission, which holds a claim.

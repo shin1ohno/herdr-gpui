@@ -70,6 +70,7 @@ impl Localize for Error {
             ),
             Self::GitHub(error) => error.localize(),
             Self::GitHubSecretInConfig(key) => fl!("error-github-secret-in-config", key = *key),
+            Self::HostKeyCode(error) => error.localize(),
             Self::ImageAnimationResize => fl!("error-image-animation-resize"),
             Self::ImageDecode(_) => fl!("error-image-decode"),
             Self::ImageDecodeLimit => fl!("error-image-decode-limit"),

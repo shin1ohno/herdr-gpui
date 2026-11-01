@@ -517,6 +517,13 @@ pub(super) const CATALOG: &[Entry] = &[
         "settings-cloud-setup",
         "settings-cloud-setup-description",
     ),
+    #[cfg(not(target_os = "ios"))]
+    entry(
+        Section::RemoteControl,
+        "remote-host-key-code",
+        "host-key-code-settings",
+        "host-key-code-settings-description",
+    ),
     entry(
         Section::RemoteControl,
         "remote-enabled",

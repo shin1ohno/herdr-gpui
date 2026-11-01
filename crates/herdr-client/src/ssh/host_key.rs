@@ -86,6 +86,19 @@ impl NewHostKey {
     pub fn known_hosts(&self) -> &Path {
         &self.known_hosts
     }
+
+    /// A synthetic scan for downstream state-machine tests. Callers must not
+    /// poll a trust operation: the placeholder entry is not a real key.
+    #[cfg(all(feature = "test-support", not(target_os = "ios")))]
+    pub fn fixture_for_tests(known_hosts: PathBuf, fingerprints: Vec<HostKeyFingerprint>) -> Self {
+        Self {
+            fingerprints,
+            entries: "host-key-code.test ssh-ed25519 AAAA\n".into(),
+            checked: vec![known_hosts.clone()],
+            known_hosts,
+            name: "host-key-code.test".into(),
+        }
+    }
 }
 
 /// Connects to `target` without authenticating, only to learn its host key.

@@ -104,6 +104,8 @@ pub enum Error {
         "[github] {0} must not be in the config. Sign in from the app, or use GH_TOKEN / GITHUB_TOKEN."
     )]
     GitHubSecretInConfig(&'static str),
+    #[error(transparent)]
+    HostKeyCode(#[from] crate::host_key_code::Error),
     #[error("Oversized GIF, WebP, and animated PNG images cannot be resized safely.")]
     ImageAnimationResize,
     #[error("Could not decode the oversized image.")]

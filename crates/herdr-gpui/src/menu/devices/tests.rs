@@ -67,6 +67,7 @@ fn only_a_present_herdr_is_saved_without_a_terminal() {
 
 fn open_form(view: &mut HerdrWindow, step: Step, cx: &mut Context<HerdrWindow>) {
     view.menu.device_setup = Some(Setup {
+        host_key_code: Default::default(),
         fields: std::array::from_fn(|_| cx.new(SearchInput::new)),
         step,
         claim: None,

@@ -457,6 +457,18 @@ class BundleTests(unittest.TestCase):
         self.assertTrue(info["NSLocalNetworkUsageDescription"].strip())
         self.assertEqual(info["NSBonjourServices"], ["_ssh._tcp"])
 
+    def test_bundle_declares_host_key_url_scheme(self):
+        result = self.run_bundle("--package", "herdr-gpui", "--bin", "herdr-gpui")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        info = plistlib.loads(
+            (self.executable.parent / "herdr-gpui.app/Info.plist").read_bytes()
+        )
+        self.assertEqual(
+            [scheme for kind in info["CFBundleURLTypes"]
+             for scheme in kind["CFBundleURLSchemes"]],
+            ["herdr-ipad"],
+        )
+
     def test_invalid_target_exits_before_invoking_any_build_tool(self):
         result = self.run_bundle("--bin", "herdr-gpui", "--target", "invalid")
         self.assertEqual(result.returncode, 2)

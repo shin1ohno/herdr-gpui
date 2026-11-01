@@ -35,6 +35,10 @@ pub(crate) fn run() -> std::process::ExitCode {
     let outcome = failed.clone();
     let platform = Rc::new(IosPlatform::new());
     let application = Application::with_platform(platform.clone()).with_assets(icons::Icons);
+    let urls_cx = application.to_async();
+    application.on_open_urls(move |urls| {
+        urls_cx.update(|cx| crate::host_key_code::open_urls(urls, cx));
+    });
     application.run(move |cx| {
         browser_tabs.install(cx);
         group_layouts.install(cx);

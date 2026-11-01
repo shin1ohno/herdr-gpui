@@ -26,6 +26,7 @@ mod enroll;
 mod file_drop;
 mod github;
 mod host_build;
+mod host_key_code;
 mod ipad_messages;
 mod keymap;
 #[cfg(windows)]

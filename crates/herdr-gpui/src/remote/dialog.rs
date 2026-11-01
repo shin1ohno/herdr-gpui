@@ -376,7 +376,7 @@ impl HerdrWindow {
         });
         let countdown = pairing.and_then(|pairing| pairing.countdown(Instant::now()));
         let square = match &showing {
-            Some((_, qr)) => qr_square(qr.clone()).into_any_element(),
+            Some((_, qr)) => qr_square(qr.clone(), QR_SIDE).into_any_element(),
             None => div()
                 .size(px(QR_SIDE))
                 .rounded(px(crate::config::corners::CONTROL))
@@ -677,7 +677,7 @@ pub(crate) fn addresses(origins: &[String]) -> String {
 
 /// The QR painted as quads: dark runs on a light square, whatever the
 /// theme, since scanners need the contrast.
-fn qr_square(qr: Arc<Qr>) -> impl IntoElement {
+pub(crate) fn qr_square(qr: Arc<Qr>, side: f32) -> impl IntoElement {
     let painted = canvas(
         |_, _, _| {},
         move |bounds, _, window, _| {
@@ -711,7 +711,7 @@ fn qr_square(qr: Arc<Qr>) -> impl IntoElement {
     .size_full();
     div()
         .debug_selector(|| "remote-pair-qr".into())
-        .size(px(QR_SIDE))
+        .size(px(side))
         .child(painted)
 }
 

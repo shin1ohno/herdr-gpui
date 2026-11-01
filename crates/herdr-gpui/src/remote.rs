@@ -17,7 +17,7 @@ pub(crate) mod nearby;
 mod revoke;
 pub(crate) mod supervisor;
 
-pub(crate) use dialog::{PairingDialog, addresses};
+pub(crate) use dialog::{PairingDialog, addresses, qr_square};
 pub use herdr_remote_control::app::Error;
 pub(crate) use herdr_remote_control::app::{Result, pairing, qr, service};
 use herdr_remote_control::control::Device;

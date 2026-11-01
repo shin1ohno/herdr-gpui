@@ -265,6 +265,7 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .child(self.remote_pair_card(enabled, cx))
+            .children(self.host_key_code_row(cx))
             .child(ui::section(
                 theme,
                 &fl!("settings-remote-section-service"),
@@ -675,6 +676,37 @@ impl SettingsWindow {
                     .description(summary),
             )
             .children(rows)
+    }
+
+    /// SSH host-key codes work independently of the remote-control daemon.
+    fn host_key_code_row(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+        #[cfg(not(target_os = "ios"))]
+        {
+            Some(
+                ui::row(
+                    &self.theme,
+                    "remote-host-key-code",
+                    fl!("host-key-code-settings"),
+                )
+                .description(fl!("host-key-code-settings-description"))
+                .control(
+                    ui::button(
+                        &self.theme,
+                        "remote-host-key-code-show",
+                        fl!("host-key-code-settings-button"),
+                        true,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        crate::host_key_code::open(this.config.clone(), this.theme.clone(), cx);
+                    })),
+                ),
+            )
+        }
+        #[cfg(target_os = "ios")]
+        {
+            let _ = cx;
+            None::<Div>
+        }
     }
 
     /// Opens the pairing dialog in the window these settings came from.
