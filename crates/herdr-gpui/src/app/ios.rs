@@ -66,7 +66,8 @@ pub(crate) fn run() -> std::process::ExitCode {
                 let _ = window.update(cx, |view, _, _| view.use_sound(sound));
             }
             Err(error) => {
-                tracing::error!(%error, "Unable to open the iPad window");
+                // The alternate form keeps anyhow's cause chain in the log.
+                tracing::error!(error = %format_args!("{error:#}"), "Unable to open the iPad window");
                 outcome.set(true);
                 cx.quit();
             }
