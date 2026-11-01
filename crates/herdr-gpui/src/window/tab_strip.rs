@@ -9,6 +9,7 @@ mod launcher;
 
 use super::{HerdrWindow, tab_drag::StripDrag};
 use crate::i18n::fl;
+use crate::menu::{ContextMenuEvent, context_menu};
 #[cfg(test)]
 use crate::tab_layout::{DOT_GAP, ZOOM_ICON};
 use crate::{
@@ -281,21 +282,23 @@ impl HerdrWindow {
                     layout
                         .tab(base, face, self.tab_state(selected, slot.id), &faces)
                         .map(|tab| self.grow_tab(tab, slot.id, &Pick::Herdr(id.clone())))
-                        .on_mouse_down(
-                            MouseButton::Right,
-                            cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                this.open_tab_menu(
-                                    &context_id,
-                                    Some(slot.id),
-                                    event.position,
-                                    window,
-                                    cx,
-                                );
-                                this.menu.opening_right_click =
-                                    this.menu.page == Some(crate::menu::Page::Tab);
-                            }),
-                        )
+                        .map(|row| {
+                            context_menu(
+                                row,
+                                cx.listener(move |this, event: &ContextMenuEvent, window, cx| {
+                                    cx.stop_propagation();
+                                    this.open_tab_menu(
+                                        &context_id,
+                                        Some(slot.id),
+                                        event.position,
+                                        window,
+                                        cx,
+                                    );
+                                    this.menu.opening_right_click = event.mouse.is_some()
+                                        && this.menu.page == Some(crate::menu::Page::Tab);
+                                }),
+                            )
+                        })
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.choose_herdr_tab(slot.id, &id, window, cx);
                         })),

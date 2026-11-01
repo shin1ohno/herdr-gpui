@@ -17,6 +17,7 @@ use super::{
 };
 use crate::direction::Logical;
 use crate::i18n::fl;
+use crate::menu::{ContextMenuEvent, context_menu};
 use crate::{
     Command, HerdrWindow, NavigationTarget, avatars::Checkout, config::AgentsPlacement,
     fonts::StyledFont,
@@ -444,21 +445,23 @@ impl HerdrWindow {
                     (false, false) => RowLift::Resting,
                 })
                 .row()
-                .on_mouse_down(
-                    MouseButton::Right,
-                    cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                        cx.stop_propagation();
-                        if this.navigate_endpoint(
-                            &context_endpoint,
-                            NavigationTarget::Workspace(&context_id),
-                            cx,
-                        ) {
-                            this.open_workspace_menu(&context_id, event.position, window, cx);
-                            this.menu.opening_right_click =
-                                this.menu.page == Some(crate::menu::Page::Workspace);
-                        }
-                    }),
-                )
+                .map(|row| {
+                    context_menu(
+                        row,
+                        cx.listener(move |this, event: &ContextMenuEvent, window, cx| {
+                            cx.stop_propagation();
+                            if this.navigate_endpoint(
+                                &context_endpoint,
+                                NavigationTarget::Workspace(&context_id),
+                                cx,
+                            ) {
+                                this.open_workspace_menu(&context_id, event.position, window, cx);
+                                this.menu.opening_right_click = event.mouse.is_some()
+                                    && this.menu.page == Some(crate::menu::Page::Workspace);
+                            }
+                        }),
+                    )
+                })
                 .when(
                     self.menu.page == Some(crate::menu::Page::Workspace),
                     |row| {

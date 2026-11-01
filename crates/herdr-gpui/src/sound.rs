@@ -24,6 +24,7 @@ use std::{
 pub(crate) const MAX_PENDING: usize = 32;
 
 /// Whether this process plays no sound at all, as `HERDR_DISABLE_SOUND` asks.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn muted() -> bool {
     playback::muted()
 }
@@ -173,6 +174,7 @@ enum PlaybackRequest {
     },
     Preview,
     /// One sound now, from the file Herdr's settings name for it.
+    #[cfg(any(test, not(target_os = "ios")))]
     Play(herdr_client::protocol::SemanticNotificationSound),
 }
 
@@ -312,6 +314,7 @@ impl Service {
                         PlaybackRequest::Preview => {
                             (herdr_client::protocol::SemanticNotificationSound::Done, None)
                         }
+                        #[cfg(any(test, not(target_os = "ios")))]
                         PlaybackRequest::Play(sound) => (sound, current.path_for(sound)),
                     };
                     if let Err(error) = play(
@@ -341,6 +344,7 @@ impl Service {
     /// or the built-in one, whatever the notification settings say. Muted
     /// like every sound when `HERDR_DISABLE_SOUND` is set. False when the
     /// worker is not running or already has sounds queued.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn play(&self, sound: herdr_client::protocol::SemanticNotificationSound) -> bool {
         self.request(PlaybackRequest::Play(sound))
     }

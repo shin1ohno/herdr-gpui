@@ -22,6 +22,7 @@ struct Scripted {
     /// Updates for the terminal to hand out, one batch per `next`.
     updates: Arc<Mutex<Vec<Vec<SurfaceUpdate>>>>,
     fail_attach: bool,
+    on_input: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 struct ScriptedTerminal(Scripted);
@@ -79,6 +80,9 @@ impl Terminal for ScriptedTerminal {
             .lock()
             .unwrap()
             .push(Command::Input(input.clone()));
+        if let Some(on_input) = &self.0.on_input {
+            on_input();
+        }
         Ok(())
     }
 
@@ -104,6 +108,8 @@ impl Terminal for ScriptedTerminal {
         Ok(batch.unwrap_or_default())
     }
 }
+
+mod cancellation;
 
 fn until<T>(mut ready: impl FnMut() -> Option<T>) -> T {
     let deadline = Instant::now() + Duration::from_secs(5);

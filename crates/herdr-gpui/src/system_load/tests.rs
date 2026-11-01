@@ -218,7 +218,7 @@ fn this_machine_answers_with_memory_then_cpu() {
     assert!(second.cpu.is_some_and(|cpu| (0.0..=100.).contains(&cpu)));
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_remote_shell_is_sampled_with_the_host_command() {
     // A local `sh` stands in for SSH, as the usage shell tests do.
@@ -245,5 +245,5 @@ fn a_remote_shell_is_sampled_with_the_host_command() {
 
 mod disk_uptime;
 mod gpu;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod gpu_tool;

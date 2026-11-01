@@ -18,7 +18,7 @@ fn settle(hub: &mut Hub) {
 static UPGRADE_CALLS: Mutex<Vec<Start>> = Mutex::new(Vec::new());
 static UPGRADE_GATE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 
-fn upgrade_join(start: Start) -> Result<CoreBackend, Error> {
+fn upgrade_join(_target: &ConnectTarget, start: Start) -> Result<CoreBackend, Error> {
     UPGRADE_CALLS.lock().unwrap().push(start);
     if start == Start::Join {
         let (open, wake) = &UPGRADE_GATE;
@@ -27,7 +27,7 @@ fn upgrade_join(start: Start) -> Result<CoreBackend, Error> {
             open = wake.wait(open).unwrap();
         }
     }
-    Err(Error::NotBundled)
+    Err(Error::Namespace)
 }
 
 #[test]
@@ -48,15 +48,15 @@ fn a_start_asked_for_during_a_join_runs_when_the_join_fails() {
     );
     assert!(matches!(
         hub.state(),
-        State::Unavailable(error) if matches!(**error, Error::NotBundled)
+        State::Unavailable(error) if matches!(**error, Error::Namespace)
     ));
 }
 
 static RETRY_CALLS: Mutex<Vec<Start>> = Mutex::new(Vec::new());
 
-fn retry_join(start: Start) -> Result<CoreBackend, Error> {
+fn retry_join(_target: &ConnectTarget, start: Start) -> Result<CoreBackend, Error> {
     RETRY_CALLS.lock().unwrap().push(start);
-    Err(Error::NotBundled)
+    Err(Error::Namespace)
 }
 
 #[test]
@@ -77,3 +77,7 @@ fn a_failed_join_waits_before_joining_again_but_a_start_does_not() {
         [Start::Join, Start::IfMissing]
     );
 }
+
+mod fencing;
+#[cfg(unix)]
+mod presentation;

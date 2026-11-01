@@ -34,6 +34,7 @@ devices-row-detail = { $place } · { $state }
 devices-add = Add Device…
 devices-sessions-row = Sessions…
 devices-sessions-detail = Switch, add, or delete this device's sessions
+devices-remote-sessions-detail = Switch, add, or delete sessions on the selected device
 # The heading over cloud machines still being created.
 devices-adding = ADDING
 

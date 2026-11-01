@@ -1,16 +1,23 @@
 //! `[ssh]`: SSH hosts the user chose to connect to without verifying their
 //! host keys, by the target saved with the device. The app pushes the list to
 //! `herdr-client`, whose `ssh` children then accept any key those hosts offer.
+#[cfg(not(target_os = "ios"))]
 use super::{Config, LOCAL_CONFIG, write_config};
 use crate::Result;
-use herdr_client::{HostKeys, MAX_UNVERIFIED_HOSTS};
+#[cfg(not(target_os = "ios"))]
+use herdr_client::HostKeys;
+use herdr_client::MAX_UNVERIFIED_HOSTS;
 use serde::Deserialize;
-use std::{collections::BTreeSet, fs, io::ErrorKind, path::Path};
+use std::collections::BTreeSet;
+#[cfg(not(target_os = "ios"))]
+use std::{fs, io::ErrorKind, path::Path};
 
 mod error;
 pub use error::Error;
 
+#[cfg(not(target_os = "ios"))]
 const TABLE: &str = "ssh";
+#[cfg(not(target_os = "ios"))]
 const KEY: &str = "skip_host_key_verification";
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -45,6 +52,7 @@ fn valid_target(target: &str) -> bool {
         && !target.chars().any(|c| c.is_whitespace() || c.is_control())
 }
 
+#[cfg(not(target_os = "ios"))]
 impl Config {
     /// Save whether `target`'s host keys are verified, keeping the rest of the
     /// local file, and apply it to this process's connections at once.
@@ -57,6 +65,7 @@ impl Config {
     }
 }
 
+#[cfg(not(target_os = "ios"))]
 pub(super) fn save_host_keys_path(target: &str, keys: HostKeys, path: &Path) -> Result<()> {
     if !valid_target(target) {
         return Err(Error::InvalidTarget(target.to_owned()).into());
@@ -119,11 +128,13 @@ pub(super) fn save_host_keys_path(target: &str, keys: HostKeys, path: &Path) -> 
 
 /// Keeps `herdr-client`'s list in step with the settings: now, from what the
 /// app loaded at startup, and after every edit of the settings files.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn install(startup: &SshConfig, cx: &mut gpui::App) {
     apply(cx, startup.clone());
     super::watch::follow(cx, "ssh", |config| config.ssh, apply).detach();
 }
 
+#[cfg(not(target_os = "ios"))]
 fn apply(_: &mut gpui::App, ssh: SshConfig) {
     herdr_client::set_unverified_hosts(ssh.skip_host_key_verification);
 }

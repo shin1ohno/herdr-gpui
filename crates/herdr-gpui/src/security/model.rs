@@ -69,6 +69,7 @@ pub(crate) struct Alert {
 
 impl Alert {
     /// The advisory's public page, when its identifier has GHSA's shape.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn advisory_url(&self) -> Option<String> {
         ghsa(&self.advisory).then(|| format!("https://github.com/advisories/{}", self.advisory))
     }

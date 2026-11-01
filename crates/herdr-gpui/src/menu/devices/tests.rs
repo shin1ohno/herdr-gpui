@@ -13,17 +13,23 @@ mod add_provider;
 mod boat_rail;
 #[cfg(feature = "cloud")]
 mod cloud_providers;
+mod core_generation_picker;
 mod en_xa;
 mod host_key;
+#[cfg(not(target_os = "ios"))]
 mod host_key_choice;
+mod ipad;
+mod ipad_picker;
+#[cfg(not(target_os = "ios"))]
 mod key_login;
 mod local_network;
+mod picker_projection;
 #[cfg(feature = "cloud")]
 mod rail;
 mod scope;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod setup_activation;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod setup_workspace;
 mod version_warning;
 
@@ -70,6 +76,8 @@ fn open_form(view: &mut HerdrWindow, step: Step, cx: &mut Context<HerdrWindow>) 
         suggestion_scroll: gpui::ScrollHandle::new(),
         error: None,
         host_keys: herdr_client::HostKeys::Verify,
+        #[cfg(target_os = "ios")]
+        device_key: Default::default(),
     });
     view.menu.page = Some(Page::AddDevice);
 }

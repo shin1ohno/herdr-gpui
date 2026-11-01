@@ -76,6 +76,8 @@ impl HerdrWindow {
             let endpoints = &self.endpoints;
             avatars.keep_links(|id| endpoints.iter().any(|endpoint| endpoint.id == id));
         }
+        #[cfg(target_os = "ios")]
+        self.apply_catalog_generations(cx);
         for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
             let updated = endpoint.poll(Instant::now());
             // Nothing to keep current, or to silence, while nothing is muted.
@@ -157,6 +159,7 @@ impl HerdrWindow {
                 }
             }
             if endpoint.enabled
+                && endpoint.backend == herdr_backend::Generation::Herdr1
                 && !endpoint.detached
                 && !endpoint.suspended()
                 && endpoint.connection.handle.is_none()
@@ -263,7 +266,9 @@ impl HerdrWindow {
         }
         // Held input precedes any deferred navigation.
         self.flush_pending_input(cx);
-        if self.navigation_ready() {
+        if self.core_workspace_key().is_some() {
+            self.activation_deadline = None;
+        } else if self.navigation_ready() {
             self.activation_deadline = None;
             if let Some(id) = self.pending_toast {
                 self.navigate_toast(id, cx);
@@ -318,7 +323,7 @@ impl HerdrWindow {
             }
             return;
         }
-        let mut changed = self.sessions.poll(development, open, now);
+        let mut changed = !cfg!(target_os = "ios") && self.sessions.poll(development, open, now);
         if self.sessions.devices.poll(&targets, open, now) {
             changed = true;
         }
@@ -335,6 +340,11 @@ impl HerdrWindow {
             .iter()
             .skip(1)
             .filter(|endpoint| endpoint.enabled)
+            .filter(|endpoint| {
+                !cfg!(target_os = "ios")
+                    || (endpoint.id == self.endpoints[self.selected_endpoint].id
+                        && endpoint.backend_generation() == herdr_backend::Generation::Herdr1)
+            })
             .filter_map(|endpoint| {
                 Some((
                     endpoint.id.clone(),

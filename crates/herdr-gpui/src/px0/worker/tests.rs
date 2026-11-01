@@ -1,11 +1,14 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
+#[cfg(not(target_os = "ios"))]
 use crate::px0::tests::HttpServer;
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod fixture;
+#[cfg(not(target_os = "ios"))]
 mod replacement;
 
+#[cfg(not(target_os = "ios"))]
 #[test]
 fn attached_workbench_is_never_owned_or_stopped() {
     let server = HttpServer::new(200, r#"{"workbench":true,"version":"1"}"#);
@@ -25,6 +28,7 @@ fn attached_workbench_is_never_owned_or_stopped() {
     server::probe(&server.url).unwrap();
 }
 
+#[cfg(not(target_os = "ios"))]
 #[test]
 fn replacing_an_attached_worker_keeps_the_external_server() {
     let first = HttpServer::new(200, r#"{"workbench":true,"version":"1"}"#);
@@ -73,7 +77,7 @@ fn cancellation_prevents_start_even_with_a_ready_discovery_record() {
     assert!(owned.lock().unwrap().child.is_none());
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn owned_launch_uses_its_published_ephemeral_port_and_is_reaped() {
     use std::os::unix::fs::PermissionsExt;

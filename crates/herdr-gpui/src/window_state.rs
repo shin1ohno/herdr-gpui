@@ -140,6 +140,7 @@ impl WindowState {
         }
     }
 
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn count(&self) -> usize {
         self.restored.len().max(1)
     }

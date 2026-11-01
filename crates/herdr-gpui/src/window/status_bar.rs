@@ -28,10 +28,11 @@ impl HerdrWindow {
     }
 
     pub(super) fn render_status_bar(&self, cx: &mut Context<Self>) -> Stateful<Div> {
-        let status = (!matches!(self.live.status, ConnectionStatus::Connected)
+        let connection = self.displayed_connection_status(&self.endpoints[self.selected_endpoint]);
+        let status = (!matches!(connection, ConnectionStatus::Connected)
             || self.local_error.is_some()
             || self.live.error.is_some())
-        .then(|| self.live.status_text(self.local_error.as_deref()));
+        .then(|| self.selected_connection_text());
         let items = self.config.status_bar;
         let height = px(self.status_bar_height());
         let usage = self.render_usage(cx);
@@ -93,7 +94,7 @@ impl HerdrWindow {
                         .child(fl!("status-bar-resize-keys")),
                 )
             })
-            .when(!self.live.status.is_connected(), |bar| {
+            .when(!connection.is_connected(), |bar| {
                 bar.child(self.connection_dot())
             })
             .child(
@@ -266,7 +267,10 @@ impl HerdrWindow {
     }
 
     fn connection_dot(&self) -> AnyElement {
-        if matches!(self.live.status, ConnectionStatus::StartingDaemon) {
+        if matches!(
+            self.displayed_connection_status(&self.endpoints[self.selected_endpoint]),
+            ConnectionStatus::StartingDaemon
+        ) {
             div()
                 .size(px(8.))
                 .flex_none()
@@ -321,6 +325,8 @@ impl HerdrWindow {
     fn caffeine_button(&self, shown: bool, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         use crate::caffeine::{Cup, Mode};
         let cup = crate::caffeine::cup(cx);
+        let scope = crate::caffeine::scope(cx);
+        let unsupported = cfg!(target_os = "ios") && scope == AwakeScope::System;
         if !shown && cup == Cup::Off {
             return None;
         }
@@ -336,9 +342,12 @@ impl HerdrWindow {
             .map(|control| {
                 self.chrome_stop(crate::window::chrome_focus::Region::StatusBar, control)
             })
-            .aria_label(match crate::caffeine::scope(cx) {
+            .aria_label(match scope {
                 AwakeScope::Display => fl!("status-bar-awake-display"),
                 AwakeScope::System => fl!("status-bar-awake-system"),
+            })
+            .when(unsupported, |button| {
+                button.aria_description(fl!("status-bar-awake-system-unavailable"))
             })
             .aria_toggled(match cup {
                 Cup::On(_) => Toggled::True,
@@ -374,24 +383,28 @@ impl HerdrWindow {
                     )
                 },
             ))
-            .tooltip(self.hint(match (cup, crate::caffeine::scope(cx)) {
-                (Cup::On(Mode::UntilAgentsFinish), AwakeScope::Display) => {
-                    fl!("status-bar-awake-display-until-agents")
-                }
-                (Cup::On(Mode::UntilAgentsFinish), AwakeScope::System) => {
-                    fl!("status-bar-awake-system-until-agents")
-                }
-                (Cup::On(Mode::Indefinite), AwakeScope::Display) => {
-                    fl!("status-bar-awake-display-on")
-                }
-                (Cup::On(Mode::Indefinite), AwakeScope::System) => {
-                    fl!("status-bar-awake-system-on")
-                }
-                (Cup::Off | Cup::Pending, AwakeScope::Display) => {
-                    fl!("status-bar-awake-display-off")
-                }
-                (Cup::Off | Cup::Pending, AwakeScope::System) => {
-                    fl!("status-bar-awake-system-off")
+            .tooltip(self.hint(if unsupported {
+                fl!("status-bar-awake-system-unavailable")
+            } else {
+                match (cup, scope) {
+                    (Cup::On(Mode::UntilAgentsFinish), AwakeScope::Display) => {
+                        fl!("status-bar-awake-display-until-agents")
+                    }
+                    (Cup::On(Mode::UntilAgentsFinish), AwakeScope::System) => {
+                        fl!("status-bar-awake-system-until-agents")
+                    }
+                    (Cup::On(Mode::Indefinite), AwakeScope::Display) => {
+                        fl!("status-bar-awake-display-on")
+                    }
+                    (Cup::On(Mode::Indefinite), AwakeScope::System) => {
+                        fl!("status-bar-awake-system-on")
+                    }
+                    (Cup::Off | Cup::Pending, AwakeScope::Display) => {
+                        fl!("status-bar-awake-display-off")
+                    }
+                    (Cup::Off | Cup::Pending, AwakeScope::System) => {
+                        fl!("status-bar-awake-system-off")
+                    }
                 }
             }))
             .on_click(cx.listener(|_, _, _, cx| {

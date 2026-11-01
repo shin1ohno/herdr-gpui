@@ -183,7 +183,7 @@ fn process_text_is_bounded_and_has_no_control_characters() {
 }
 
 /// Exactly the child this test started, and only it, is signalled.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn kill_signals_only_the_exact_process_chosen() {
     use std::os::unix::process::ExitStatusExt;

@@ -154,12 +154,14 @@ fn nothing_is_asked_while_remote_control_is_off(cx: &mut TestAppContext) {
     });
 }
 
+#[cfg(not(target_os = "ios"))]
 static CHANGES: AtomicUsize = AtomicUsize::new(0);
 
 fn silent_daemon(_: &Path, _: &Request) -> Result<Response, control::Error> {
     Err(control::Error::NoAnswer)
 }
 
+#[cfg(not(target_os = "ios"))]
 #[gpui::test]
 fn the_service_changes_once_per_settings_change(cx: &mut TestAppContext) {
     cx.update(|cx| {
@@ -187,6 +189,7 @@ fn the_service_changes_once_per_settings_change(cx: &mut TestAppContext) {
     assert_eq!(CHANGES.load(Ordering::SeqCst), 1);
 }
 
+#[cfg(not(target_os = "ios"))]
 #[gpui::test]
 fn a_failed_change_waits_for_retry(cx: &mut TestAppContext) {
     cx.update(|cx| {
@@ -213,5 +216,6 @@ fn a_failed_change_waits_for_retry(cx: &mut TestAppContext) {
     cx.update(|cx| assert!(Supervisor::failure(cx).is_none()));
 }
 
+#[cfg(not(target_os = "ios"))]
 mod indicators;
 mod restart;

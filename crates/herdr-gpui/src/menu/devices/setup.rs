@@ -5,21 +5,30 @@
 use super::Error;
 use crate::Result;
 use herdr_client::{Destination, HostKeys, HostProbe, SavedHost};
+use std::sync::Mutex;
+#[cfg(not(target_os = "ios"))]
 use std::{
     io::Read,
     process::{Command, ExitStatus, Stdio},
-    sync::Mutex,
     time::{Duration, Instant},
 };
 
+#[cfg(target_os = "ios")]
+mod ipad;
+#[cfg(target_os = "ios")]
+pub(super) use ipad::{remove, rename, save, save_core};
+
 /// `machine add` connects, starts the remote server, and verifies it.
+#[cfg(not(target_os = "ios"))]
 const SAVE_TIMEOUT: Duration = Duration::from_secs(120);
 /// Enough for the CLI's final error line without retaining remote output.
+#[cfg(not(target_os = "ios"))]
 const SAVE_STDERR_LIMIT: u64 = 8 * 1024;
 /// `machine remove` and `machine rename` edit one local file.
+#[cfg(not(target_os = "ios"))]
 const REMOVE_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long a terminal setup may run, prompts included, before it is hung up.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 const SETUP_LIMIT: Duration = Duration::from_secs(15 * 60);
 
 /// Hosts that some window of this process is adding. Herdr's `machine add`
@@ -124,10 +133,12 @@ pub(super) fn claim_saved(target: &str, session: &str) -> Result<Claim> {
 /// Forget a saved device with `herdr machine remove`. The CLI only edits the
 /// local catalog; it never connects, so the host's own Herdr keeps running.
 /// Blocks on a process: call it from the background executor.
+#[cfg(not(target_os = "ios"))]
 pub(super) fn remove(id: &str) -> Result<()> {
     remove_with(crate::daemon::executable().as_os_str(), id)
 }
 
+#[cfg(not(target_os = "ios"))]
 fn remove_with(executable: &std::ffi::OsStr, id: &str) -> Result<()> {
     if !herdr_client::valid_profile_id(id) {
         tracing::warn!(category = "device_remove", "Invalid profile ID");
@@ -146,10 +157,12 @@ fn remove_with(executable: &std::ffi::OsStr, id: &str) -> Result<()> {
 
 /// Rename a saved device with `herdr machine rename`, which edits only the
 /// local catalog. Blocks on a process: call it from the background executor.
+#[cfg(not(target_os = "ios"))]
 pub(super) fn rename(id: &str, label: &str) -> Result<()> {
     rename_with(crate::daemon::executable().as_os_str(), id, label)
 }
 
+#[cfg(not(target_os = "ios"))]
 fn rename_with(executable: &std::ffi::OsStr, id: &str, label: &str) -> Result<()> {
     if !herdr_client::valid_profile_id(id) {
         return Err(Error::NoProfile.into());
@@ -330,6 +343,7 @@ impl Request {
     /// Save the form's host key choice for the target, before the device is
     /// saved, so the device's first connection already follows it. A target
     /// that was never skipped leaves the settings untouched.
+    #[cfg(not(target_os = "ios"))]
     fn remember_host_keys(&self) -> Result<()> {
         if self.host_keys == HostKeys::Verify && HostKeys::of(&self.target) == HostKeys::Verify {
             return Ok(());
@@ -337,6 +351,7 @@ impl Request {
         crate::config::Config::save_host_keys(&self.target, self.host_keys)
     }
 
+    #[cfg(not(target_os = "ios"))]
     fn arguments(&self) -> [&str; 7] {
         [
             "machine",
@@ -352,13 +367,14 @@ impl Request {
 
 // The relay's command line is typed into a terminal shell. Single-quote
 // each word so a path never becomes shell syntax.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 /// The variables that choose where Herdr keeps its device catalog. Every CLI
 /// run for a device gets this process's values, so it edits the same catalog.
+#[cfg(not(target_os = "ios"))]
 const CATALOG_ROOTS: [&str; 3] = ["HERDR_CONFIG_PATH", "XDG_STATE_HOME", "XDG_CONFIG_HOME"];
 
 /// The environment of every Herdr CLI run for a device: the user's `PATH`
@@ -366,6 +382,7 @@ const CATALOG_ROOTS: [&str; 3] = ["HERDR_CONFIG_PATH", "XDG_STATE_HOME", "XDG_CO
 /// user's own `ssh`, and the Tailscale CLI finds the Mac app's daemon with
 /// `/usr/sbin/lsof`; and this window's catalog. Blocks the first time the
 /// login environment is read: call it off the UI thread.
+#[cfg(not(target_os = "ios"))]
 fn cli_environment(command: &mut Command) {
     crate::login_env::apply(command);
     for key in CATALOG_ROOTS {
@@ -378,13 +395,13 @@ fn cli_environment(command: &mut Command) {
 
 /// Run by `sh -c` before `machine add` when the user's key is to be
 /// installed first: `$1` is the target, and the rest is the save command.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 const INSTALL_KEY_THEN: &str = "target=$1; shift; ssh-copy-id \"$target\" && exec \"$@\"";
 
 /// What the setup terminal runs, as a child of `app` (this executable): the
 /// session helper, then `machine add`, after `ssh-copy-id` for `install_key`.
 /// Arguments stay separate words; no shell parses the target or label.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn setup_command(
     app: &std::ffi::OsStr,
     herdr: &std::ffi::OsStr,
@@ -401,15 +418,15 @@ fn setup_command(
 }
 
 /// The pane's end of a terminal setup that this app runs, while it waits.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 pub(super) type Relay = crate::setup_relay::Listening<Claim>;
 
 /// Windows has no terminal setup, so there is never a relay.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "ios"))]
 #[derive(Debug)]
 pub(super) enum Relay {}
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "ios"))]
 impl Relay {
     pub(super) fn keep(&mut self, _: Claim) {
         match *self {}
@@ -430,6 +447,7 @@ pub(super) struct TerminalSetup {
 /// compatible Herdr: the CLI starts a stopped server itself. Blocks on SSH, so
 /// call it from the background executor. Stdin is closed, so any approval the
 /// CLI would need fails instead of waiting for input nobody can see.
+#[cfg(not(target_os = "ios"))]
 pub(super) fn save(request: &Request, claim: &Claim) -> Result<SaveOutcome> {
     request.remember_host_keys()?;
     let result = save_with(
@@ -460,9 +478,13 @@ pub(super) fn save(request: &Request, claim: &Claim) -> Result<SaveOutcome> {
     )
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(target_os = "ios"), derive(Copy))]
 pub(super) enum SaveOutcome {
     // keep-sorted start
+    #[cfg(target_os = "ios")]
+    CoreAvailable(String),
+    #[cfg(any(test, not(target_os = "ios")))]
     ExistingServer,
     Ready,
     // keep-sorted end
@@ -470,14 +492,18 @@ pub(super) enum SaveOutcome {
 
 impl SaveOutcome {
     /// The message the dialog shows once the device is saved, if any.
-    pub(super) fn warning(self) -> Option<&'static str> {
+    pub(super) fn warning(&self) -> Option<&'static str> {
         match self {
+            #[cfg(target_os = "ios")]
+            Self::CoreAvailable(_) => Some("devices-setup-core-available"),
             Self::Ready => None,
+            #[cfg(any(test, not(target_os = "ios")))]
             Self::ExistingServer => Some("devices-setup-existing-server"),
         }
     }
 }
 
+#[cfg(not(target_os = "ios"))]
 fn finish_save(
     result: Result<()>,
     probe: impl FnOnce() -> Result<HostProbe>,
@@ -508,6 +534,7 @@ fn finish_save(
 /// because the CLI takes no lock; if so, the profile saved second is removed.
 /// Every client applies that same rule, so exactly one profile survives even
 /// when both notice the duplicate.
+#[cfg(not(target_os = "ios"))]
 fn save_with(
     executable: impl AsRef<std::ffi::OsStr>,
     request: &Request,
@@ -553,10 +580,12 @@ fn save_with(
 }
 
 /// How `machine add` ends when the running server must be restarted first.
+#[cfg(not(target_os = "ios"))]
 // i18n: data
 const RESTART_REFUSAL: &str = "remote server is not ready for saved machines";
 
 /// The profile ID from `Saved SSH machine <id>. Remote server is ready.`
+#[cfg(not(target_os = "ios"))]
 fn saved_id(stdout: &[u8]) -> Option<String> {
     String::from_utf8_lossy(stdout).lines().find_map(|line| {
         // The CLI's own output, in English.
@@ -568,6 +597,7 @@ fn saved_id(stdout: &[u8]) -> Option<String> {
 
 /// Runs the CLI with closed stdin and a deadline, keeping bounded stdout and
 /// stderr.
+#[cfg(not(target_os = "ios"))]
 fn run_cli(
     executable: &std::ffi::OsStr,
     args: &[&str],
@@ -581,6 +611,7 @@ fn run_cli(
 /// program never blocks on a full one. A missed deadline kills the program and
 /// returns `Error::SetupTimeout`. Blocks, also on the first login-environment
 /// lookup: call it from the background executor.
+#[cfg(not(target_os = "ios"))]
 pub(super) fn run_bounded(
     executable: &std::ffi::OsStr,
     args: &[&str],
@@ -611,6 +642,7 @@ pub(super) fn run_bounded(
     result
 }
 
+#[cfg(not(target_os = "ios"))]
 fn run_bounded_untraced(
     executable: &std::ffi::OsStr,
     args: &[&str],
@@ -667,6 +699,7 @@ fn run_bounded_untraced(
 }
 
 /// The CLI ends with its most specific error; earlier lines are progress.
+#[cfg(not(target_os = "ios"))]
 pub(super) fn last_line(output: &[u8]) -> String {
     String::from_utf8_lossy(output)
         .lines()
@@ -679,7 +712,7 @@ pub(super) fn last_line(output: &[u8]) -> String {
         .collect()
 }
 
-#[cfg(all(test, unix))]
+#[cfg(all(test, unix, not(target_os = "ios")))]
 impl TerminalSetup {
     pub(super) fn fixture(command: &str) -> Self {
         Self {
@@ -693,7 +726,7 @@ impl TerminalSetup {
 /// `ssh-copy-id` for `install_key`, once the workspace's relay connects. The
 /// relay takes the host's claim and releases it when the setup ends. Blocks on the login environment and
 /// the file system: call it off the UI thread.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 pub(super) fn terminal_setup(request: &Request, install_key: bool) -> Result<TerminalSetup> {
     request.remember_host_keys()?;
     let app = std::env::current_exe()?;
@@ -712,7 +745,7 @@ pub(super) fn terminal_setup(request: &Request, install_key: bool) -> Result<Ter
 
 /// The line the workspace's shell runs: this executable relaying `socket`.
 /// It carries no environment, so its length depends only on the two paths.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn relay_line(app: &std::path::Path, socket: &std::path::Path) -> Result<String> {
     let word = |path: &std::path::Path| path.to_str().map(quote).ok_or(Error::NonUtf8SetupPath);
     Ok(format!(
@@ -725,10 +758,10 @@ fn relay_line(app: &std::path::Path, socket: &std::path::Path) -> Result<String>
 
 /// Windows has no relay for a terminal setup yet; the dialog asks the user to
 /// run `herdr machine add` in a terminal instead and never calls this.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "ios"))]
 pub(super) fn terminal_setup(_: &Request, _: bool) -> Result<TerminalSetup> {
     Err(Error::TerminalSetupUnavailable.into())
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 mod tests;

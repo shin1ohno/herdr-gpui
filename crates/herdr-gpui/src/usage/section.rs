@@ -5,6 +5,7 @@
 
 use super::{Host, render::ago, ui::Ui};
 use crate::HerdrWindow;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use std::time::{Instant, SystemTime};
 
@@ -33,41 +34,51 @@ impl HerdrWindow {
                     .child("Usage"),
             )
             .child(div().flex_1())
-            .when(self.config.usage.show, |header| {
-                header.child(
-                    div()
-                        .id("usage-section-refresh")
-                        .debug_selector(|| "usage-section-refresh".into())
-                        .px(px(10.))
-                        .h(px(24.))
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .rounded(px(crate::config::corners::CONTROL))
-                        .border_1()
-                        .border_color(rgb(theme.active))
-                        .cursor_pointer()
-                        .hover(|style| style.bg(rgb(theme.active)))
-                        .text_size(small)
-                        .child(
-                            svg()
-                                .path("icons/refresh.svg")
-                                .size(px(12.))
-                                .text_color(rgb(theme.subtext())),
-                        )
-                        .child(if self.usage.busy() {
-                            "Updating…"
-                        } else {
-                            "Refresh"
-                        })
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.usage.refresh(Instant::now());
-                            cx.notify();
-                        })),
-                )
-            });
+            .when(
+                self.config.usage.show && !cfg!(target_os = "ios"),
+                |header| {
+                    header.child(
+                        div()
+                            .id("usage-section-refresh")
+                            .debug_selector(|| "usage-section-refresh".into())
+                            .px(px(10.))
+                            .h(px(24.))
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .rounded(px(crate::config::corners::CONTROL))
+                            .border_1()
+                            .border_color(rgb(theme.active))
+                            .cursor_pointer()
+                            .hover(|style| style.bg(rgb(theme.active)))
+                            .text_size(small)
+                            .child(
+                                svg()
+                                    .path("icons/refresh.svg")
+                                    .size(px(12.))
+                                    .text_color(rgb(theme.subtext())),
+                            )
+                            .child(if self.usage.busy() {
+                                "Updating…"
+                            } else {
+                                "Refresh"
+                            })
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.usage.refresh(Instant::now());
+                                cx.notify();
+                            })),
+                    )
+                },
+            );
         let mut body = div().p_5().flex().flex_col().gap_5();
-        if !self.config.usage.show {
+        if cfg!(target_os = "ios") {
+            body = body.child(
+                div()
+                    .debug_selector(|| "usage-section-unavailable".into())
+                    .text_color(rgb(theme.muted))
+                    .child(fl!("platform-usage-unavailable")),
+            );
+        } else if !self.config.usage.show {
             body = body.child(
                 div()
                     .debug_selector(|| "usage-section-off".into())
@@ -87,7 +98,7 @@ impl HerdrWindow {
             else {
                 continue;
             };
-            if !self.config.usage.show {
+            if cfg!(target_os = "ios") || !self.config.usage.show {
                 break;
             }
             body = body.child(self.usage_host(index, &endpoint.label, &host, &ui));

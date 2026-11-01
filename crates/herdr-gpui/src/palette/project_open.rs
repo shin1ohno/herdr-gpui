@@ -6,7 +6,9 @@ use crate::{HerdrWindow, NavigationTarget, Result};
 use gpui::{Context, Window};
 use herdr_client::{Method, protocol::ClientShellSnapshot};
 use serde_json::{Value, json};
-use std::{path::PathBuf, sync::Arc};
+#[cfg(not(target_os = "ios"))]
+use std::path::PathBuf;
+use std::sync::Arc;
 
 impl HerdrWindow {
     /// `herdr-gpui open DIR`: opens the palette on its projects and opens
@@ -14,6 +16,7 @@ impl HerdrWindow {
     /// focused, or created, exactly as Open Project does. Refused, with the
     /// palette closed again, while the window has no local Herdr to open it
     /// on; the folder is validated off this thread as for any project.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn open_project_at(
         &mut self,
         path: PathBuf,

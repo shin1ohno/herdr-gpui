@@ -17,6 +17,9 @@ Options:
   --target TRIPLE  aarch64-apple-ios-sim, the simulator on Apple silicon
                    (default), or aarch64-apple-ios, a device
   --release        Build with the release profile (default: dev)
+  --no-default-features
+                   Disable the package's default Cargo features
+  --features LIST  Enable the comma-separated Cargo features
   --bundle-id ID   CFBundleIdentifier (default: so.pen.herdr-gpui, with
                    .example.NAME appended for an example)
   -h, --help       Show this help
@@ -32,6 +35,7 @@ EOF
 package=herdr-uikit
 target=aarch64-apple-ios-sim
 profile_args=()
+feature_args=()
 bundle_id=
 kind=
 name=
@@ -58,6 +62,14 @@ while (($# > 0)); do
     --release)
       profile_args=(--release)
       shift
+      ;;
+    --no-default-features)
+      feature_args+=(--no-default-features)
+      shift
+      ;;
+    --features)
+      feature_args+=(--features "${2:?"--features needs a feature list"}")
+      shift 2
       ;;
     --bundle-id)
       bundle_id=${2:?"--bundle-id needs an identifier"}
@@ -112,9 +124,30 @@ fi
 
 # Cargo reports the built executable's path in its JSON messages, which
 # follows CARGO_TARGET_DIR and profile settings this script need not know.
-messages=$(cargo build --locked --package "$package" --target "$target" \
+cargo_subcommand=build
+link_args=()
+if [[ $platform == iPhoneSimulator ]]; then
+  # Simulator Security.framework reads this Mach-O section. A codesign-only
+  # entitlement cannot grant Keychain access to an ad-hoc simulator binary.
+  # Link only the final executable so dependencies retain their build cache.
+  entitlements_dir=$(mktemp -d /tmp/herdr-ios-entitlements.XXXXXX)
+  trap 'rm -rf -- "$entitlements_dir"' EXIT
+  entitlements=$entitlements_dir/simulator.plist
+  cat >"$entitlements" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>application-identifier</key><string>HERDRSIM.$bundle_id</string>
+<key>keychain-access-groups</key><array><string>HERDRSIM.$bundle_id</string></array>
+</dict></plist>
+EOF
+  cargo_subcommand=rustc
+  link_args=(-- -C "link-arg=-Wl,-sectcreate,__TEXT,__entitlements,$entitlements")
+fi
+messages=$(cargo "$cargo_subcommand" --locked --package "$package" --target "$target" \
   "--$kind" "$name" ${profile_args[@]+"${profile_args[@]}"} \
-  --message-format=json-render-diagnostics)
+  ${feature_args[@]+"${feature_args[@]}"} --message-format=json-render-diagnostics \
+  ${link_args[@]+"${link_args[@]}"})
 artifact=$(python3 -I -c '
 import json, sys
 

@@ -271,6 +271,7 @@ impl Tunnels {
     /// The local port of a live tunnel to `key`, leaving a dead one for
     /// [`Tunnels::local`] or [`Tunnels::retain`] to drop. Only the control
     /// server, which is Unix-only, reads it.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn live(&self, key: &Key) -> Option<u16> {
         self.open
             .get(key)
@@ -364,12 +365,12 @@ impl Tunnels {
         self.used.clear();
     }
 
-    #[cfg(all(test, unix))]
+    #[cfg(all(test, unix, not(target_os = "ios")))]
     pub(crate) fn insert(&mut self, key: Key, tunnel: Tunnel) {
         self.open.insert(key, tunnel);
     }
 
-    #[cfg(all(test, unix))]
+    #[cfg(all(test, unix, not(target_os = "ios")))]
     pub(crate) fn len(&self) -> usize {
         self.open.len()
     }
@@ -382,7 +383,7 @@ impl Drop for Tunnels {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(all(test, unix, not(target_os = "ios")))]
 impl Tunnel {
     /// A tunnel around any child, standing in for `ssh` in tests.
     pub(crate) fn around(child: Child, local: u16) -> Self {

@@ -3,7 +3,15 @@
 
 use super::{Page, discover::Discovery, setup};
 
+#[cfg(target_os = "ios")]
+mod device_key;
+mod host_key;
 mod offer;
+mod probe;
+mod save;
+
+#[cfg(test)]
+mod tests;
 
 use crate::i18n::fl;
 use crate::{
@@ -42,6 +50,9 @@ pub(in crate::menu) struct Setup {
     pub(super) suggestion_scroll: ScrollHandle,
     /// Whether the host's key is checked; see `host_key_choice`.
     pub(super) host_keys: HostKeys,
+    /// The line a computer needs to let this iPad's key in.
+    #[cfg(target_os = "ios")]
+    pub(super) device_key: device_key::DeviceKey,
 }
 
 /// Where adding a device stands. Each step after `Form` belongs to the request
@@ -100,7 +111,16 @@ impl HerdrWindow {
             input.update(cx, |input, cx| {
                 input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
                 match index {
-                    0 => input.set_placeholder_with(|| fl!("add-device-target-placeholder"), cx),
+                    0 => input.set_placeholder_with(
+                        || {
+                            if cfg!(target_os = "ios") {
+                                fl!("add-device-ipad-target-placeholder")
+                            } else {
+                                fl!("add-device-target-placeholder")
+                            }
+                        },
+                        cx,
+                    ),
                     1 => input.set_placeholder_with(|| fl!("add-device-label-placeholder"), cx),
                     // Herdr's default session's name.
                     _ => input.set_placeholder("default", cx), // i18n: data
@@ -141,9 +161,13 @@ impl HerdrWindow {
             suggestion_scroll: ScrollHandle::new(),
             error: None,
             host_keys: HostKeys::Verify,
+            #[cfg(target_os = "ios")]
+            device_key: Default::default(),
         });
         self.menu.page = Some(Page::AddDevice);
         self.start_device_discovery(cx);
+        #[cfg(target_os = "ios")]
+        self.load_device_key(cx);
     }
 
     /// Route a key to the Add Device form. Returns `false` when the key is
@@ -212,6 +236,12 @@ impl HerdrWindow {
                 pane,
                 cx,
             )
+            // On iPad the overlay caps the panel to the visible viewport,
+            // including keyboard insets, and only the body may overflow that
+            // allocation. The desktop dialog keeps its own sizing.
+            .when(crate::ipad_ui::active(), |frame| {
+                frame.max_h_full().overflow_hidden()
+            })
         };
         let Some(setup) = &self.menu.device_setup else {
             return frame(div(), cx);
@@ -231,17 +261,24 @@ impl HerdrWindow {
             .debug_selector(|| "device-setup-body".into())
             .flex_1()
             .min_h_0()
+            // The body takes the pane's width and wraps its prose. A zero
+            // minimum width would also make taffy measure every truncated row
+            // at its min-content first, shaping device names cut to a letter.
+            .when(crate::ipad_ui::active(), |body| {
+                body.w_full().whitespace_normal()
+            })
             .overflow_y_scroll()
             .p(px(16.))
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child(
-                div()
-                    .flex_none()
-                    .text_color(rgb(theme.subtext()))
-                    .child(fl!("add-device-intro")),
-            );
+            .child(div().flex_none().text_color(rgb(theme.subtext())).child(
+                if cfg!(target_os = "ios") {
+                    fl!("add-device-ipad-intro")
+                } else {
+                    fl!("add-device-intro")
+                },
+            ));
         for (index, (label, field)) in [
             fl!("add-device-target"),
             fl!("add-device-label"),
@@ -269,7 +306,15 @@ impl HerdrWindow {
                 body = body.child(self.render_device_suggestions(setup, discovery, cx));
             }
         }
-        body = body.child(self.render_host_key_choice(setup, cx));
+        // iPadOS verifies every host key, and its own key must be on the host.
+        #[cfg(not(target_os = "ios"))]
+        {
+            body = body.child(self.render_host_key_choice(setup, cx));
+        }
+        #[cfg(target_os = "ios")]
+        {
+            body = body.child(self.render_device_key(setup, cx));
+        }
         if let Some(error) = &setup.error {
             body = body.child(
                 div()
@@ -293,7 +338,11 @@ impl HerdrWindow {
                 Some(fl!("add-device-fetching-key", target = request.target()))
             }
             Step::TrustKey(request, key) => {
-                body = body.child(self.render_host_key(request.target(), key));
+                body = if cfg!(target_os = "ios") {
+                    body.child(self.render_ipad_host_key(request.target(), &key.fingerprints))
+                } else {
+                    body.child(self.render_host_key(request.target(), key))
+                };
                 None
             }
             Step::Confirm(request, offer) => Some(offer.question(
@@ -336,12 +385,44 @@ impl HerdrWindow {
             .border_t_1()
             .border_color(rgb(theme.active))
             .flex()
+            .when(crate::ipad_ui::active(), |footer| footer.flex_wrap())
             .justify_end()
             .gap(px(8.));
         let cancel = button("device-setup-cancel", fl!("add-device-cancel").into(), true)
             .on_click(cx.listener(|this, _, _, cx| this.cancel_device_step(cx)));
         footer = match &setup.step {
-            Step::Confirm(..) if cfg!(windows) => footer.child(cancel),
+            #[cfg(target_os = "ios")]
+            Step::Confirm(_, Offer::CoreAvailable | Offer::OutdatedCoreAvailable) => footer
+                .child(cancel)
+                .child(
+                    button(
+                        "device-setup-check-again",
+                        fl!("add-device-check-again").into(),
+                        true,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| this.recheck_device(cx))),
+                )
+                .child(
+                    button(
+                        "device-setup-add-core",
+                        fl!("add-device-core-add").into(),
+                        true,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| this.confirm_core_device(cx))),
+                ),
+            Step::Confirm(..) if cfg!(any(windows, target_os = "ios")) => {
+                let footer = footer.child(cancel);
+                #[cfg(target_os = "ios")]
+                let footer = footer.child(
+                    button(
+                        "device-setup-check-again",
+                        fl!("add-device-check-again").into(),
+                        true,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| this.recheck_device(cx))),
+                );
+                footer
+            }
             Step::Confirm(_, offer) => footer.child(cancel).child(
                 button("device-setup-submit", offer.action().into(), true)
                     .on_click(cx.listener(|this, _, _, cx| this.open_setup_space(cx))),
@@ -379,6 +460,9 @@ impl HerdrWindow {
             div()
                 .flex_1()
                 .min_h_0()
+                .when(crate::ipad_ui::active(), |pane| {
+                    pane.max_h_full().overflow_hidden()
+                })
                 .flex()
                 .flex_col()
                 .child(body)
@@ -408,8 +492,16 @@ impl HerdrWindow {
         };
         match &form.step {
             Step::Form => {}
+            #[cfg(target_os = "ios")]
+            Step::Confirm(_, Offer::CoreAvailable | Offer::OutdatedCoreAvailable) => {
+                return self.confirm_core_device(cx);
+            }
             // Windows offers no terminal setup; the question says what to run.
-            Step::Confirm(..) if cfg!(windows) => return,
+            Step::Confirm(..) if cfg!(any(windows, target_os = "ios")) => {
+                #[cfg(target_os = "ios")]
+                self.recheck_device(cx);
+                return;
+            }
             Step::Confirm(..) => return self.open_setup_space(cx),
             _ => return,
         }
@@ -431,23 +523,7 @@ impl HerdrWindow {
                 return;
             }
         };
-        let Some(form) = &mut self.menu.device_setup else {
-            return;
-        };
-        tracing::info!(category = "device_setup", "Checking device");
-        form.step = Step::Checking(request.clone());
-        form.error = None;
-        // Claim before probing: a second add of this host, from any window of
-        // this process, is refused from here on rather than after a slow probe.
-        let background = cx.background_executor().spawn(async move {
-            let claim = setup::claim(&request)?;
-            Ok::<_, crate::Error>((claim, request.probe()))
-        });
-        form.task = Some(cx.spawn(async move |this, cx| {
-            let result = background.await;
-            let _ = this.update(cx, |this, cx| this.device_probed(result, cx));
-        }));
-        cx.notify();
+        self.start_device_probe(request, None, cx);
     }
 
     /// Return to the form when the host is already saved or being added:
@@ -561,63 +637,6 @@ impl HerdrWindow {
             form.step = Step::Confirm(request, offer);
             form.claim = Some(claim);
         }
-        cx.notify();
-    }
-
-    fn save_device(
-        &mut self,
-        request: setup::Request,
-        probe: HostProbe,
-        claim: setup::Claim,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(form) = &mut self.menu.device_setup else {
-            return;
-        };
-        form.step = Step::Saving(request.clone(), probe);
-        // The claim travels with the save and comes back, so a failure that
-        // offers a terminal still holds the host.
-        let background = cx.background_executor().spawn(async move {
-            let result = setup::save(&request, &claim);
-            (result, claim)
-        });
-        form.task = Some(cx.spawn(async move |this, cx| {
-            let (result, claim) = background.await;
-            let _ = this.update(cx, |this, cx| {
-                let Some(Setup {
-                    step: Step::Saving(request, _),
-                    ..
-                }) = &this.menu.device_setup
-                else {
-                    return;
-                };
-                let request = request.clone();
-                match &result {
-                    Ok(_) => tracing::info!(category = "device_setup", "Device saved"),
-                    Err(_) => tracing::warn!(category = "device_setup", "Device save failed"),
-                }
-                let error = match result {
-                    Ok(outcome) => {
-                        this.device_save_succeeded(outcome, cx);
-                        return;
-                    }
-                    Err(error) => error,
-                };
-                if this.refuse_duplicate(&error, cx) {
-                    return;
-                }
-                this.set_device_error(Some(error.to_string()));
-                let offer = match error {
-                    crate::Error::Devices(super::Error::ServerRestart) => Offer::Restart,
-                    _ => Offer::Terminal,
-                };
-                if let Some(form) = &mut this.menu.device_setup {
-                    form.step = Step::Confirm(request, offer);
-                    form.claim = Some(claim);
-                }
-                cx.notify();
-            });
-        }));
         cx.notify();
     }
 

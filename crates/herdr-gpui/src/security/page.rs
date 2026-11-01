@@ -39,6 +39,7 @@ impl Item {
 
     /// An item a command names: an alert by its number, a report by its
     /// GHSA ID, of a checked `owner/name`.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn named(repo: &str, item: &str) -> Option<Self> {
         if !super::model::valid_name(repo) {
             return None;

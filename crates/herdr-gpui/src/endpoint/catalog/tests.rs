@@ -4,6 +4,16 @@ use crate::endpoint::tests::host;
 #[cfg(feature = "coder")]
 use std::sync::Arc;
 
+impl Catalog {
+    pub(crate) fn fixture_generation(
+        &mut self,
+        profile: &str,
+        generation: herdr_backend::Generation,
+    ) {
+        self.generations.insert(profile.into(), generation);
+    }
+}
+
 #[test]
 fn explicit_socket_never_reads_shared_catalog() {
     let mut catalog = Catalog::new(&ConnectTarget::Socket("/unused.sock".into()));
@@ -49,6 +59,7 @@ fn selection_writes_are_serialized_and_failure_keeps_the_ui_choice() {
 #[test]
 fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() {
     let update = |enabled, selection| CatalogUpdate {
+        generations: Generations::new(),
         hosts: vec![host("a", enabled)],
         wsl: Vec::new(),
         selection,
@@ -79,6 +90,7 @@ fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() 
     assert_eq!(clicked.queued_write, Some(None));
     second.choose("ssh:a");
     second.accept(&CatalogUpdate {
+        generations: Generations::new(),
         hosts: vec![],
         wsl: Vec::new(),
         selection: None,
@@ -135,5 +147,6 @@ fn cloud_devices_follow_ssh_hosts_and_survive_an_unreadable_list(cx: &mut gpui::
     });
 }
 
+mod generations;
 mod storage_warning;
 mod wsl;

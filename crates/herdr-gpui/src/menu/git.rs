@@ -90,7 +90,8 @@ impl HerdrWindow {
     /// Local, owned daemon sockets only: the same trust boundary the PR lookup
     /// uses, because both run Git against the user's own checkouts.
     fn local_git_endpoint(&self) -> bool {
-        self.selected_endpoint == 0
+        !cfg!(target_os = "ios")
+            && self.selected_endpoint == 0
             && self.live.local_daemon_peer
             && self.live.status.is_connected()
     }
@@ -126,6 +127,13 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if cfg!(target_os = "ios") {
+            self.show_flash(
+                crate::window::Flash::warning(fl!("platform-git-unavailable")),
+                cx,
+            );
+            return;
+        }
         if self.menu.page.is_some() {
             self.dismiss_menu(window, cx);
             return;

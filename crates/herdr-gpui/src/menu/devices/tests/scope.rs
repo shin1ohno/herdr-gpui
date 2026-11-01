@@ -76,9 +76,7 @@ fn navigation_keeps_a_scope_that_lists_the_device() {
 #[test]
 fn only_named_devices_are_picked() {
     assert!(!DeviceScope::All.picks("local"));
-    assert_eq!(DeviceScope::All.picked().count(), 0);
     let scope = only(["local", "ssh:a"]);
     assert!(scope.picks("ssh:a"));
     assert!(!scope.picks("ssh:b"));
-    assert_eq!(scope.picked().collect::<Vec<_>>(), ["local", "ssh:a"]);
 }

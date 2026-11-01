@@ -13,6 +13,17 @@ impl HerdrWindow {
     pub(crate) fn render_automations_section(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = &self.theme;
         let font = &self.config.ui;
+        if cfg!(target_os = "ios") {
+            return div()
+                .id("automations-section-unavailable")
+                .debug_selector(|| "automations-section-unavailable".into())
+                .size_full()
+                .p_5()
+                .bg(rgb(theme.background))
+                .text_color(rgb(theme.muted))
+                .child(crate::i18n::fl!("platform-automations-unavailable"))
+                .into_any_element();
+        }
         let body = match self.automations.opened.clone() {
             Some(opened) => div()
                 .flex_1()

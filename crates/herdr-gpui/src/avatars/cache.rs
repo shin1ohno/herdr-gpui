@@ -35,7 +35,21 @@ const TTL: Duration = Duration::from_secs(24 * 60 * 60);
 #[cfg(any(unix, windows))]
 const SLOTS: u8 = 128;
 
-#[cfg(unix)]
+/// On iPadOS the cache lives in the app container's `Library/Caches`, which
+/// the system may purge; an outside `XDG_CACHE_HOME` is never used there.
+#[cfg(target_os = "ios")]
+pub(super) fn root() -> Option<PathBuf> {
+    ios_root(std::env::var_os("HOME"))
+}
+
+#[cfg(any(test, target_os = "ios"))]
+pub(super) fn ios_root(home: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    let home = PathBuf::from(home.filter(|home| !home.is_empty())?);
+    home.is_absolute()
+        .then(|| home.join("Library/Caches/herdr-gpui/avatars-v1"))
+}
+
+#[cfg(all(unix, not(target_os = "ios")))]
 pub(super) fn root() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .filter(|p| !p.is_empty())

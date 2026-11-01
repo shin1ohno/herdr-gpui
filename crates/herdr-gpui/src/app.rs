@@ -2,11 +2,15 @@
 //! run before GPUI starts, so an invalid option or `--build-info` exits without
 //! ever creating a window.
 
+#[cfg(not(target_os = "ios"))]
 use crate::{
-    APP_VERSION, HerdrWindow, Hide, HideOthers, Quit, ShowAll, ShowLogs, WINDOW_TITLE, app_icon,
-    bind_keys, cli,
+    APP_VERSION, Hide, HideOthers, Quit, ShowAll, ShowLogs, app_icon, bind_keys, cli, diagnostics,
+    icons, log_window, menus,
+};
+use crate::{
+    HerdrWindow, WINDOW_TITLE,
     config::{Config, Theme},
-    diagnostics, icons, log_window, menus, titlebar, updater,
+    titlebar, updater,
 };
 #[cfg(feature = "integration-test")]
 use crate::{performance, smoke};
@@ -27,11 +31,23 @@ impl Global for InitialAppearance {}
 
 impl InitialAppearance {
     fn load(load: impl FnOnce() -> crate::Result<Config>, light: bool) -> Self {
-        match load().and_then(|config| Ok((config.theme(light)?, config))) {
-            Ok((theme, config)) => Self {
-                config,
-                theme,
-                error: None,
+        match load() {
+            Ok(config) => match config.theme(light) {
+                Ok(theme) => Self {
+                    config,
+                    theme,
+                    error: None,
+                },
+                Err(error) => {
+                    // Appearance failure must not erase connection or credential
+                    // policy from an otherwise valid configuration.
+                    let theme = Theme::default().styled_for(&config);
+                    Self {
+                        config,
+                        theme,
+                        error: Some(format!("Load GUI theme: {error}")),
+                    }
+                }
             },
             Err(error) => Self {
                 error: Some(format!("Load GUI config: {error}")),
@@ -206,6 +222,12 @@ pub(crate) fn open_additional_window_then(
     });
 }
 
+#[cfg(target_os = "ios")]
+mod ios;
+#[cfg(target_os = "ios")]
+pub(crate) use ios::run;
+
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn run() -> std::process::ExitCode {
     use cli::{LaunchMode, LaunchOptions};
     let mut args: Vec<_> = std::env::args_os().skip(1).collect();
@@ -578,7 +600,7 @@ pub(crate) fn run() -> std::process::ExitCode {
 /// status once it has. `None` starts the app: none answers, or the one that
 /// does could not come forward (another version, or a hung window), and a
 /// second app beats leaving the click with nothing to show.
-#[cfg(any(windows, test))]
+#[cfg(all(any(windows, test), not(target_os = "ios")))]
 fn focus_running(
     mode: &cli::LaunchMode,
     target: &ConnectTarget,
@@ -599,6 +621,8 @@ fn focus_running(
 
 #[cfg(test)]
 mod tests {
+    mod theme_failure;
+
     use super::{Config, InitialAppearance, StartupAppearance, Theme};
     #[cfg(feature = "integration-test")]
     use super::{ConnectTarget, HerdrWindow};
@@ -646,6 +670,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(target_os = "ios"))]
     #[test]
     fn only_a_plain_launch_hands_off_to_the_running_app() {
         use super::{ConnectTarget, focus_running};

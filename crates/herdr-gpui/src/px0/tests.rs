@@ -161,6 +161,7 @@ fn workspace_paths_are_encoded_and_proxy_prefix_is_preserved() {
     );
 }
 
+#[cfg(not(target_os = "ios"))]
 #[gpui::test]
 fn installing_a_launcher_does_not_start_px0(cx: &mut gpui::TestAppContext) {
     cx.update(|cx| {
@@ -172,6 +173,7 @@ fn installing_a_launcher_does_not_start_px0(cx: &mut gpui::TestAppContext) {
     });
 }
 
+#[cfg(not(target_os = "ios"))]
 #[gpui::test]
 fn a_changed_address_retires_the_previous_result(cx: &mut gpui::TestAppContext) {
     cx.update(|cx| {

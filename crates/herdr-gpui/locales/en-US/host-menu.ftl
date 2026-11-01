@@ -86,3 +86,17 @@ host-menu-theme-same-as-app = Same as app
 host-menu-theme-current = Current
 host-menu-theme-hover-hint = Only this device's terminal changes. Hover to preview; Enter or click to save.
 host-menu-theme-select-hint = Only this device's terminal changes; select the device to preview it.
+
+# Reviewing an SSH host key on iPad. Forgetting and trusting are separate confirmations.
+host-menu-forget-host-key = Review host key…
+host-menu-host-key-checking = Checking the host’s key…
+host-menu-host-key-saving = Saving the host key choice…
+host-menu-host-key-trusted = The host key is trusted.
+host-menu-host-key-failed = Could not update the host key: { $error }
+host-menu-host-key-changed = The host key changed. Check these fingerprints on the computer before removing the trusted key.
+host-menu-host-key-pinned = Trusted fingerprints
+host-menu-host-key-offered = Fingerprints offered now
+host-menu-host-key-forget = Forget trusted key
+host-menu-host-key-unpinned = No key is trusted for this host. Trust this fingerprint only after checking it on the computer.
+host-menu-host-key-trust = Trust this key
+host-menu-new-core-terminal = New Herdr 2 terminal

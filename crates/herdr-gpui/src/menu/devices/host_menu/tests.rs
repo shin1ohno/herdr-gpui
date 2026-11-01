@@ -8,10 +8,12 @@ mod azure_destroy;
 mod cloud;
 mod device_theme;
 mod en_xa;
+#[cfg(not(target_os = "ios"))]
 mod forwards;
 mod menu_width;
 #[cfg(feature = "azure")]
 mod unsynced;
+mod visible_viewport;
 
 // Endpoint IDs carry the `ssh:` prefix; the profile ID is the rest.
 const HOST: &str = "ssh:0123456789abcdef0123456789abcdef";

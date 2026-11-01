@@ -69,6 +69,7 @@ pub(crate) struct Feedback {
 impl Global for Feedback {}
 
 impl Feedback {
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn waiting(&self) -> &[FeedbackKey] {
         &self.waiting
     }
@@ -78,6 +79,7 @@ impl Feedback {
     }
 
     /// Records which panes are waiting.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn set_waiting(&mut self, panes: Vec<FeedbackKey>) {
         self.waiting = panes;
     }
@@ -97,6 +99,7 @@ impl Feedback {
     /// Keeps again, first in line, a batch that was taken but never reached
     /// its agent, so it still goes before every newer one. It is no new
     /// batch, so it raises no new event.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn keep_again(&mut self, batch: Batch) {
         let batch = Batch {
             text: fit(batch.text, TAKE_BUDGET),
@@ -126,6 +129,7 @@ impl Feedback {
     /// What is kept for this daemon and pane, oldest first, joined into one
     /// text of at most [`TAKE_BUDGET`] (always at least one batch); the rest
     /// stays for the next take.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn take(&mut self, target: &FeedbackKey) -> Option<String> {
         let mut used = 0;
         let mut taken = Vec::new();
@@ -159,12 +163,14 @@ impl Feedback {
     /// Whom the kept batches are for, oldest first, each with its number:
     /// numbers only grow, so a reader tells new batches from old ones even
     /// once the oldest are dropped.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn kept(&self) -> impl Iterator<Item = (u64, &FeedbackKey)> {
         self.kept
             .iter()
             .map(|(batch, _, added)| (*added, &batch.target))
     }
 
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn has(&self, target: &FeedbackKey) -> bool {
         self.kept.iter().any(|(batch, ..)| &batch.target == target)
     }

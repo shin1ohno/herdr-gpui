@@ -19,13 +19,25 @@ impl HerdrWindow {
     /// once the hub is connected, and drops the views of closed tabs and
     /// panes.
     pub(super) fn sync_core_views(&mut self, cx: &mut Context<Self>) {
+        self.select_core_target(cx);
+        if !self.core_target_supported() {
+            self.core_terminals.views.clear();
+            self.core_terminals.tabs.clear();
+            return;
+        }
         let Some(store) = cx.try_global::<Store>() else {
             self.core_terminals.views.clear();
             self.core_terminals.tabs.clear();
             return;
         };
         let terminals = &mut self.core_terminals;
-        terminals.tabs.retain(|id, _| store.get(*id).is_some());
+        terminals.tabs.retain(|id, _| {
+            store.get(*id).is_some_and(|tab| {
+                terminals.scope.as_ref() == Some(&tab.scope)
+                    && matches!(&tab.location, Some(Location::CoreTerminal { remote, .. })
+                        if super::Remote::matches_target(remote.as_ref(), terminals.hub.target()))
+            })
+        });
         let tabs = &terminals.tabs;
         terminals.views.retain(|(tab, terminal), _| {
             tabs.get(tab)
@@ -36,9 +48,17 @@ impl HerdrWindow {
         };
         let mut missing: Vec<(TabId, TerminalId, Role)> = Vec::new();
         for tab in store.in_workspace(&scope, &workspace) {
-            let Some(Location::CoreTerminal { panes, observe }) = &tab.location else {
+            let Some(Location::CoreTerminal {
+                panes,
+                observe,
+                remote,
+            }) = &tab.location
+            else {
                 continue;
             };
+            if !super::Remote::matches_target(remote.as_ref(), self.core_terminals.hub.target()) {
+                continue;
+            }
             let shown = self
                 .core_terminals
                 .tabs
@@ -251,9 +271,17 @@ impl HerdrWindow {
             .iter_mut()
             .filter_map(|(tab, shown)| {
                 std::mem::take(&mut shown.unsaved).then(|| {
+                    let remote = cx
+                        .try_global::<Store>()
+                        .and_then(|store| store.get(*tab))
+                        .and_then(|tab| match &tab.location {
+                            Some(Location::CoreTerminal { remote, .. }) => remote.clone(),
+                            _ => None,
+                        });
                     let location = Location::CoreTerminal {
                         panes: shown.panes.clone(),
                         observe: shown.observe,
+                        remote,
                     };
                     (*tab, location)
                 })

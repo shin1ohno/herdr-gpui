@@ -18,11 +18,16 @@ mod freedesktop;
 mod toast;
 
 use super::HerdrWindow;
-use crate::{notifications::SystemPost, state::LiveState};
-use gpui::{App, Context, Global, SharedString, SystemNotification, Window, WindowHandle};
+use crate::notifications::SystemPost;
+#[cfg(any(test, not(target_os = "ios")))]
+use crate::state::LiveState;
+#[cfg(any(test, not(target_os = "ios")))]
+use gpui::App;
+use gpui::{Context, Global, SharedString, SystemNotification, Window, WindowHandle};
+#[cfg(any(test, not(target_os = "ios")))]
+use std::sync::{Mutex, Weak};
 use std::{
     collections::VecDeque,
-    sync::{Mutex, Weak},
     time::{Duration, Instant},
 };
 
@@ -37,9 +42,13 @@ const PREVIEW_DELAY: Duration = Duration::from_secs(3);
 struct Posted {
     tag: SharedString,
     window: WindowHandle<HerdrWindow>,
+    #[cfg(any(test, not(target_os = "ios")))]
     endpoint: String,
+    #[cfg(any(test, not(target_os = "ios")))]
     generation: u64,
+    #[cfg(any(test, not(target_os = "ios")))]
     inbox: Weak<Mutex<LiveState>>,
+    #[cfg(any(test, not(target_os = "ios")))]
     id: u64,
     at: Instant,
     /// The notification daemon's id, once its reply arrives.
@@ -88,6 +97,7 @@ impl Registry {
         self.posted.push_back(posted);
     }
 
+    #[cfg(any(test, not(target_os = "ios")))]
     fn find(&self, tag: &str) -> Option<&Posted> {
         self.posted.iter().rev().find(|posted| posted.tag == tag)
     }
@@ -112,6 +122,7 @@ impl Registry {
 
 /// Only the user's own app posts. Fixtures and tests leave this uninstalled,
 /// so they never reach the notification center or prompt for permission.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn install(cx: &mut App) {
     install_registry(cx);
     #[cfg(target_os = "linux")]
@@ -119,6 +130,7 @@ pub(crate) fn install(cx: &mut App) {
 }
 
 /// Everything but the Linux session bus, which tests must not reach.
+#[cfg(any(test, not(target_os = "ios")))]
 pub(crate) fn install_registry(cx: &mut App) {
     cx.set_global(Registry::default());
     #[cfg(windows)]
@@ -138,6 +150,7 @@ pub(crate) fn install_registry(cx: &mut App) {
 
 /// Brings forward the window that posted `tag` and opens its target, as a
 /// click on the notification does; whether this app posted it recently.
+#[cfg(any(test, not(target_os = "ios")))]
 pub(crate) fn open(tag: &str, cx: &mut App) -> bool {
     let Some((window, endpoint, generation, inbox, id)) =
         cx.try_global::<Registry>().and_then(|registry| {
@@ -206,12 +219,14 @@ impl HerdrWindow {
         now: Instant,
         cx: &mut Context<Self>,
     ) {
+        #[cfg(any(test, not(target_os = "ios")))]
+        let id = post.id;
         let SystemPost {
             endpoint,
-            id,
             tag,
             title,
             body: text,
+            ..
         } = post;
         let Some(source) = self.endpoints.get(endpoint) else {
             return;
@@ -237,9 +252,13 @@ impl HerdrWindow {
         cx.global_mut::<Registry>().record(Posted {
             tag,
             window: handle,
+            #[cfg(any(test, not(target_os = "ios")))]
             endpoint: source.id.clone(),
+            #[cfg(any(test, not(target_os = "ios")))]
             generation: source.generation,
+            #[cfg(any(test, not(target_os = "ios")))]
             inbox: std::sync::Arc::downgrade(&source.connection.inbox),
+            #[cfg(any(test, not(target_os = "ios")))]
             id,
             at: now,
             #[cfg(target_os = "linux")]
@@ -338,6 +357,7 @@ impl HerdrWindow {
 
     /// A click brings this window forward, then navigates like a toast click
     /// when the posting connection is still the current one.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn open_system_notification(
         &mut self,
         endpoint_id: &str,
@@ -366,54 +386,4 @@ impl HerdrWindow {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{PREVIEW_DELAY, body};
-    use gpui::TestAppContext;
-
-    #[gpui::test]
-    #[allow(clippy::unwrap_used)]
-    fn qa_preview_posts_for_the_focused_pane_after_the_delay(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
-        cx.update(|_, cx| super::install_registry(cx));
-        cx.update(|window, cx| {
-            view.update(cx, |view, cx| window.focus(&view.focus, cx));
-            window.draw(cx).clear(cx);
-            window.dispatch_action(Box::new(crate::actions::ShowSystemNotificationPreview), cx);
-        });
-        cx.run_until_parked();
-        // Delivery is off in the fixture: the preview ignores it, but waits.
-        assert!(cx.shown_system_notifications().is_empty());
-        cx.executor().advance_clock(PREVIEW_DELAY);
-        cx.run_until_parked();
-        let shown = cx.shown_system_notifications();
-        let [shown] = shown.as_slice() else {
-            panic!("expected one notification: {shown:?}");
-        };
-        assert_eq!(shown.tag, "herdr-preview:local");
-        assert_eq!(shown.title, "Needs attention");
-        assert!(shown.body.starts_with("QA preview"));
-        view.read_with(cx, |view, _| {
-            let (_, notice) = view.endpoints[0].toasts.entries.back().unwrap();
-            assert!(notice.posted && !notice.visible);
-            assert_eq!(
-                notice.pane_id,
-                view.live.snapshot.as_ref().unwrap().focused_pane_id
-            );
-        });
-    }
-
-    #[test]
-    fn host_label_leads_the_place_line_only_when_given() {
-        assert_eq!(body(None, None), "");
-        assert_eq!(body(None, Some("Review")), "Review");
-        assert_eq!(body(Some("build box"), None), "build box");
-        assert_eq!(
-            body(Some("build box"), Some("Review")),
-            "build box · Review"
-        );
-        assert_eq!(
-            body(Some("build box"), Some("Fix login\nherdr · tests")),
-            "Fix login\nbuild box · herdr · tests"
-        );
-    }
-}
+mod tests;

@@ -1,29 +1,25 @@
-//! Keeps the machine awake on request, and by default the display too, like
-//! the Caffeine menu-bar app. `keep_awake_scope = "system"` lets the display
-//! sleep.
-//!
-//! The hold is a `keepawake` guard: IOKit power assertions on macOS, the
-//! thread execution state on Windows, and ScreenSaver plus logind inhibitors
-//! over D-Bus on Linux. The unsafe FFI stays inside that crate. Each platform
-//! drops the hold when the process exits, so a crash or quit releases it
-//! without cleanup here. The state is app-wide, so every window's status bar
-//! shows the same cup.
-//!
-//! One dedicated thread owns the guard. Windows ties the execution state to
-//! the thread that set it and restores it on drop from that same thread, and
-//! Linux makes blocking D-Bus calls that must stay off the UI thread.
+//! App-wide keep-awake state. Desktop power assertions live on a worker
+//! thread; iPad display holds use UIKit's idle timer on the UI thread.
+//! Every window observes the same hold and the daemon's agent activity.
 
 use crate::{Result, config::status_bar::AwakeScope};
 use gpui::{App, Global, WindowId};
-use std::{
-    collections::HashSet,
-    sync::mpsc::{Receiver, SyncSender},
-};
+use std::collections::HashSet;
 
+#[cfg(not(target_os = "ios"))]
+mod desktop;
 mod error;
+#[cfg(target_os = "ios")]
+mod ios;
 mod work;
 
+#[cfg(not(target_os = "ios"))]
+use desktop as platform;
+#[cfg(target_os = "ios")]
+use ios as platform;
+
 pub(crate) use error::Error;
+pub(crate) use platform::{toggle, toggle_until_agents_finish};
 pub(crate) use work::Work;
 
 /// How long a hold lasts.
@@ -45,49 +41,19 @@ pub(crate) enum Cup {
     On(Mode),
 }
 
-/// What the worker thread does; the mode is the app's business, not its.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Command {
-    Hold,
-    Release,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Change {
-    Hold(Mode),
-    Release,
-}
-
-impl From<Change> for Command {
-    fn from(change: Change) -> Self {
-        match change {
-            Change::Hold(_) => Self::Hold,
-            Change::Release => Self::Release,
-        }
-    }
-}
-
-struct Request {
-    command: Command,
-    /// What a hold keeps awake, as the config said when it was asked for.
-    scope: AwakeScope,
-    reply: SyncSender<keepawake::Result<()>>,
-}
-
 #[derive(Default)]
 struct Caffeine {
-    cup: Cup,
-    /// What the active hold keeps awake: the scope it started with, which a
-    /// later config change does not alter until the cup is turned off and on.
-    held: AwakeScope,
-    /// What the next hold keeps awake, as the config last said.
-    scope: AwakeScope,
-    /// Counts settled holds and releases, so a timer set after one can tell
-    /// whether anyone changed the state since.
+    /// Settled holds and releases fence timers that belong to older state.
     changes: u64,
-    /// Dropping it ends the worker, which releases any hold on its own thread.
-    worker: Option<SyncSender<Request>>,
-    /// Windows whose agents were last seen working.
+    cup: Cup,
+    /// The scope the active hold started with, until it is released.
+    held: AwakeScope,
+    #[cfg(target_os = "ios")]
+    previous_idle_timer_disabled: Option<bool>,
+    /// A config change affects the next hold rather than the current one.
+    scope: AwakeScope,
+    #[cfg(not(target_os = "ios"))]
+    worker: Option<std::sync::mpsc::SyncSender<desktop::Request>>,
     working: HashSet<WindowId>,
 }
 
@@ -115,6 +81,7 @@ pub(crate) fn scope(cx: &App) -> AwakeScope {
 }
 
 /// How many holds and releases have settled so far.
+#[cfg(any(test, not(target_os = "ios")))]
 pub(crate) fn changes(cx: &App) -> u64 {
     cx.try_global::<Caffeine>()
         .map_or(0, |caffeine| caffeine.changes)
@@ -138,25 +105,9 @@ pub(crate) fn install(cx: &mut App) {
     .detach();
 }
 
-/// Starts keeping the machine awake until the cup is clicked again, or stops
-/// any hold, and redraws every window. Failures arrive later through
-/// `report`, never during this call.
-pub(crate) fn toggle(cx: &mut App, report: impl FnOnce(crate::Error, &mut App) + 'static) {
-    toggle_with(cx, hold, report);
-}
-
-/// Starts keeping the machine awake until every agent finishes, turns an
-/// indefinite hold into one, or stops one. With no agent working there is
-/// nothing to wait for, which `report` hears about.
-pub(crate) fn toggle_until_agents_finish(
-    cx: &mut App,
-    report: impl FnOnce(crate::Error, &mut App) + 'static,
-) {
-    toggle_until_agents_finish_with(cx, hold, report);
-}
-
 /// Turns a hold until agents finish into one until turned off, as asking
 /// for caffeine "on" means; whether it did. The hold itself stays.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn hold_indefinitely(cx: &mut App) -> bool {
     let caffeine = cx.default_global::<Caffeine>();
     if caffeine.cup != Cup::On(Mode::UntilAgentsFinish) {
@@ -190,192 +141,10 @@ pub(crate) fn observe(
     }
 }
 
-/// `start` makes the hold on the worker thread; it is used only when that
-/// thread is first spawned, so tests can stand in for the real power APIs.
-fn toggle_with<G>(
-    cx: &mut App,
-    start: impl FnMut(AwakeScope) -> keepawake::Result<G> + Send + 'static,
-    report: impl FnOnce(crate::Error, &mut App) + 'static,
-) {
-    match cup(cx) {
-        Cup::Pending => {}
-        Cup::Off => hold_with(cx, Mode::Indefinite, start, report),
-        Cup::On(_) => release(cx, report),
-    }
-}
-
-fn toggle_until_agents_finish_with<G>(
-    cx: &mut App,
-    start: impl FnMut(AwakeScope) -> keepawake::Result<G> + Send + 'static,
-    report: impl FnOnce(crate::Error, &mut App) + 'static,
-) {
-    let caffeine = cx.default_global::<Caffeine>();
-    let idle = caffeine.working.is_empty();
-    match caffeine.cup {
-        Cup::Pending => {}
-        Cup::On(Mode::UntilAgentsFinish) => release(cx, report),
-        _ if idle => cx.defer(move |cx| report(Error::NoWorkingAgents.into(), cx)),
-        Cup::On(Mode::Indefinite) => {
-            caffeine.cup = Cup::On(Mode::UntilAgentsFinish);
-            cx.refresh_windows();
-        }
-        Cup::Off => hold_with(cx, Mode::UntilAgentsFinish, start, report),
-    }
-}
-
-fn hold_with<G>(
-    cx: &mut App,
-    mode: Mode,
-    start: impl FnMut(AwakeScope) -> keepawake::Result<G> + Send + 'static,
-    report: impl FnOnce(crate::Error, &mut App) + 'static,
-) {
-    let worker = match cx.default_global::<Caffeine>().worker.take() {
-        Some(worker) => Ok(worker),
-        None => spawn(start),
-    };
-    send(cx, Change::Hold(mode), worker, report);
-}
-
-fn release(cx: &mut App, report: impl FnOnce(crate::Error, &mut App) + 'static) {
-    let caffeine = cx.default_global::<Caffeine>();
-    let Some(worker) = caffeine.worker.take() else {
-        // No worker holds nothing.
-        caffeine.cup = Cup::Off;
-        cx.refresh_windows();
-        return;
-    };
-    send(cx, Change::Release, Ok(worker), report);
-}
-
 /// Ends an `UntilAgentsFinish` hold when no window has a working agent.
 fn settle(cx: &mut App, report: impl FnOnce(crate::Error, &mut App) + 'static) {
     let caffeine = cx.default_global::<Caffeine>();
     if caffeine.cup == Cup::On(Mode::UntilAgentsFinish) && caffeine.working.is_empty() {
-        release(cx, report);
+        platform::release(cx, report);
     }
 }
-
-fn send(
-    cx: &mut App,
-    change: Change,
-    worker: Result<SyncSender<Request>>,
-    report: impl FnOnce(crate::Error, &mut App) + 'static,
-) {
-    let (reply, replies) = std::sync::mpsc::sync_channel(1);
-    let scope = cx.default_global::<Caffeine>().scope;
-    let sent = worker.and_then(|worker| {
-        // Never blocks: `Pending` keeps at most one request in the slot.
-        worker
-            .send(Request {
-                command: change.into(),
-                scope,
-                reply,
-            })
-            .map(|()| worker)
-            .map_err(|_| crate::Error::from(Error::WorkerStopped))
-    });
-    let caffeine = cx.default_global::<Caffeine>();
-    match sent {
-        Ok(worker) => caffeine.worker = Some(worker),
-        Err(error) => {
-            cx.defer(move |cx| report(error, cx));
-            return;
-        }
-    }
-    caffeine.cup = Cup::Pending;
-    if matches!(change, Change::Hold(_)) {
-        caffeine.held = scope;
-    }
-    cx.refresh_windows();
-    let wait = cx
-        .background_executor()
-        .spawn(async move { replies.recv() });
-    cx.spawn(async move |cx| {
-        // A dropped reply means the worker died, e.g. a panicking release.
-        let result = match wait.await {
-            Ok(result) => result.map_err(|error| Error::Hold(error).into()),
-            Err(_) => Err(Error::WorkerStopped.into()),
-        };
-        cx.update(|cx| finish(cx, change, result, report));
-    })
-    .detach();
-}
-
-fn finish(
-    cx: &mut App,
-    change: Change,
-    result: Result<()>,
-    report: impl FnOnce(crate::Error, &mut App) + 'static,
-) {
-    let caffeine = cx.default_global::<Caffeine>();
-    caffeine.cup = match (change, &result) {
-        (Change::Hold(mode), Ok(())) => Cup::On(mode),
-        // A failed hold holds nothing, and a worker that died mid-release
-        // took its guard with it.
-        (Change::Hold(_), Err(_)) | (Change::Release, _) => Cup::Off,
-    };
-    {
-        caffeine.changes = caffeine.changes.wrapping_add(1);
-    }
-    if matches!(result, Err(crate::Error::Caffeine(Error::WorkerStopped))) {
-        caffeine.worker = None;
-    }
-    cx.refresh_windows();
-    match result {
-        Err(error) => report(error, cx),
-        // The agents may have finished while the hold was being made.
-        Ok(()) => settle(cx, report),
-    }
-}
-
-fn spawn<G>(
-    start: impl FnMut(AwakeScope) -> keepawake::Result<G> + Send + 'static,
-) -> Result<SyncSender<Request>> {
-    let (worker, requests) = std::sync::mpsc::sync_channel(1);
-    std::thread::Builder::new()
-        .name("herdr-keepawake".into())
-        .spawn(move || run(&requests, start))
-        .map_err(Error::Thread)?;
-    Ok(worker)
-}
-
-/// Serves requests until the app drops its sender, then drops any hold here.
-fn run<G>(requests: &Receiver<Request>, mut start: impl FnMut(AwakeScope) -> keepawake::Result<G>) {
-    let mut guard = None;
-    for Request {
-        command,
-        scope,
-        reply,
-    } in requests
-    {
-        let result = match command {
-            Command::Hold if guard.is_some() => Ok(()),
-            Command::Hold => start(scope).map(|held| guard = Some(held)),
-            Command::Release => {
-                guard = None;
-                Ok(())
-            }
-        };
-        // The waiting task outlives the request unless the app is quitting.
-        let _ = reply.send(result);
-    }
-}
-
-fn hold(scope: AwakeScope) -> keepawake::Result<keepawake::KeepAwake> {
-    // Idle, not `sleep`: that one needs AC power and does nothing under
-    // Windows Modern Standby, and the lid closing should still sleep. The
-    // display is held too unless the scope lets it sleep and lock.
-    keepawake::Builder::default()
-        .display(scope == AwakeScope::Display)
-        .idle(true)
-        .reason(match scope {
-            AwakeScope::Display => "Herdr keeps the display awake",
-            AwakeScope::System => "Herdr keeps the system awake",
-        })
-        .app_name("Herdr")
-        .app_reverse_domain(crate::constants::APP_ID)
-        .create()
-}
-
-#[cfg(test)]
-mod tests;

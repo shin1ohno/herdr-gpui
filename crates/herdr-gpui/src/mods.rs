@@ -232,6 +232,7 @@ impl Mods {
     }
 
     /// Reads a mod's files again now rather than at its next check.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn reload(&self, name: &str) -> Result<(), Error> {
         let entry = self
             .entries
@@ -251,6 +252,7 @@ impl Mods {
         self.entries.get(name)
     }
 
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn dir(&self) -> Option<&std::path::Path> {
         self.dir.as_deref()
     }

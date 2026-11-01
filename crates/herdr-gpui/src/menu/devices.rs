@@ -15,6 +15,7 @@ mod host_key;
 mod host_key_choice;
 mod host_menu;
 mod local_network;
+mod picker;
 pub(super) mod rail;
 mod saved_warning;
 mod scope;
@@ -252,7 +253,44 @@ impl HerdrWindow {
         self.config
             .sidebar_style
             .device_footer
-            .shown(self.endpoints.len(), self.cloud_jobs_pending())
+            .shown(self.picker_endpoints().count(), self.cloud_jobs_pending())
+    }
+
+    /// The local endpoint remains an internal sentinel on iPad; it is never a
+    /// device a person can select. Painting and navigation use this same list.
+    fn picker_endpoints(&self) -> impl Iterator<Item = &crate::endpoint::Endpoint> {
+        self.endpoints
+            .iter()
+            .filter(|endpoint| !cfg!(target_os = "ios") || endpoint.id != crate::endpoint::LOCAL)
+    }
+
+    pub(in crate::menu) fn sessions_available(&self) -> bool {
+        !cfg!(target_os = "ios")
+            || self
+                .endpoints
+                .get(self.selected_endpoint)
+                .is_some_and(|endpoint| {
+                    endpoint.enabled
+                        && matches!(endpoint.connection.target, ConnectTarget::Ssh { .. })
+                        && endpoint.backend_generation() == herdr_backend::Generation::Herdr1
+                })
+    }
+
+    fn picker_connection_text(&self, endpoint: &crate::endpoint::Endpoint) -> String {
+        if cfg!(target_os = "ios")
+            && endpoint.enabled
+            && endpoint.backend_generation() == herdr_backend::Generation::Herdr2
+        {
+            self.displayed_connection_status(endpoint).label()
+        } else {
+            endpoint.status().to_owned()
+        }
+    }
+
+    fn connected_picker_devices(&self) -> usize {
+        self.picker_endpoints()
+            .filter(|endpoint| self.displayed_connection_status(endpoint).is_connected())
+            .count()
     }
 
     /// Where the Sessions list opens while the footer is hidden: the sidebar's
@@ -288,23 +326,24 @@ impl HerdrWindow {
             .into();
         let foreground = self.theme.foreground;
         let surface = self.theme.surface;
-        let picked = self.device_filter.picked().count();
-        let label = match self.device_filter.picked().next() {
-            Some(id) if picked == 1 => self
-                .endpoints
-                .iter()
-                .find(|endpoint| endpoint.id == id)
-                .map_or_else(|| fl!("devices-all"), |e| e.label.clone()),
+        let mut picked_devices = self
+            .picker_endpoints()
+            .filter(|endpoint| self.device_filter.picks(&endpoint.id));
+        let first = picked_devices.next();
+        let picked = usize::from(first.is_some()) + picked_devices.count();
+        let label = match first {
+            Some(endpoint) if picked == 1 => endpoint.label.clone(),
             Some(_) => fl!("devices-picked", count = picked),
             None => fl!("devices-all"),
         };
-        let connected = self.endpoints.iter().any(|endpoint| {
-            self.device_visible(&endpoint.id) && endpoint.live.status.is_connected()
+        let connected = self.picker_endpoints().any(|endpoint| {
+            self.device_visible(&endpoint.id)
+                && self.displayed_connection_status(endpoint).is_connected()
         });
         // Beside the activity bar, which carries Settings, the picker leads
         // with the device's initials and says how many hosts there are.
         let bar = self.activity_bar_shown();
-        let hosts = self.endpoints.len();
+        let hosts = self.picker_endpoints().count();
         let initials: String = label
             .split_whitespace()
             .filter_map(|word| word.chars().next())
@@ -445,53 +484,55 @@ impl HerdrWindow {
                         }
                     })),
             )
-            .child(
-                div()
-                    .id("device-sessions")
-                    .role(Role::Button)
-                    .aria_label(fl!("devices-sessions"))
-                    .map(|button| {
-                        self.chrome_stop(crate::window::chrome_focus::Region::Sidebar, button)
-                    })
-                    .relative()
-                    .debug_selector(|| "device-sessions".into())
-                    .size(px(28.))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .cursor_pointer()
-                    .tooltip(move |_, cx| {
-                        cx.new(|_| SettingsHint {
-                            text: fl!("devices-sessions").into(),
-                            foreground,
-                            surface,
+            .when(self.sessions_available(), |footer| {
+                footer.child(
+                    div()
+                        .id("device-sessions")
+                        .role(Role::Button)
+                        .aria_label(fl!("devices-sessions"))
+                        .map(|button| {
+                            self.chrome_stop(crate::window::chrome_focus::Region::Sidebar, button)
                         })
-                        .into()
-                    })
-                    .hover(|s| s.bg(rgb(self.theme.active)))
-                    .child(
-                        svg()
-                            .path("icons/sessions.svg")
-                            .size(px(18.))
-                            .text_color(rgb(self.theme.foreground)),
-                    )
-                    .child(
-                        canvas(
-                            |_, _, _| (),
-                            move |bounds, _, _, _| {
-                                painted_sessions.set(bounds.origin);
-                            },
+                        .relative()
+                        .debug_selector(|| "device-sessions".into())
+                        .size(px(28.))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(crate::config::corners::CONTROL))
+                        .cursor_pointer()
+                        .tooltip(move |_, cx| {
+                            cx.new(|_| SettingsHint {
+                                text: fl!("devices-sessions").into(),
+                                foreground,
+                                surface,
+                            })
+                            .into()
+                        })
+                        .hover(|s| s.bg(rgb(self.theme.active)))
+                        .child(
+                            svg()
+                                .path("icons/sessions.svg")
+                                .size(px(18.))
+                                .text_color(rgb(self.theme.foreground)),
                         )
-                        .absolute()
-                        .inset_0()
-                        .size_full(),
-                    )
-                    .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
-                        this.open_sessions(this.sessions_anchor.get(), window, cx);
-                    })),
-            )
+                        .child(
+                            canvas(
+                                |_, _, _| (),
+                                move |bounds, _, _, _| {
+                                    painted_sessions.set(bounds.origin);
+                                },
+                            )
+                            .absolute()
+                            .inset_0()
+                            .size_full(),
+                        )
+                        .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                            this.open_sessions(this.sessions_anchor.get(), window, cx);
+                        })),
+                )
+            })
             .when(!bar, |footer| {
                 footer.child(
                     div()
@@ -526,272 +567,6 @@ impl HerdrWindow {
             })
     }
 
-    pub(super) fn render_devices(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let connected = self
-            .endpoints
-            .iter()
-            .filter(|e| e.live.status.is_connected())
-            .count();
-        let count = self.endpoints.len();
-        let mut rows = vec![(
-            fl!("devices-all"),
-            fl!("devices-all-detail", count = count, connected = connected),
-            self.device_filter == DeviceScope::All,
-            true,
-        )];
-        rows.extend(self.endpoints.iter().map(|endpoint| {
-            let detail = match &endpoint.connection.target {
-                // Names: the host, machine, or distribution, and the session.
-                // i18n: data
-                ConnectTarget::Ssh { target, session } => format!("{target} · {session}"),
-                #[cfg(feature = "cloud")]
-                ConnectTarget::Cloud {
-                    provider,
-                    machine,
-                    session,
-                    ..
-                } => format!("{} {machine} · {session}", crate::cloud::name(*provider)),
-                // i18n: data
-                ConnectTarget::Wsl { distro, session } => format!("WSL {distro} · {session}"),
-                ConnectTarget::Socket(path) => path.display().to_string(),
-                ConnectTarget::Session { name, .. } => {
-                    fl!("devices-this-device-session", session = name.as_str())
-                }
-                ConnectTarget::Local => fl!("devices-this-device"),
-            };
-            (
-                endpoint.label.clone(),
-                fl!(
-                    "devices-row-detail",
-                    place = detail,
-                    state = endpoint.status()
-                ),
-                self.device_filter.picks(&endpoint.id),
-                endpoint.enabled,
-            )
-        }));
-        rows.push((
-            fl!("devices-add"),
-            self.device_setup_unavailable().map_or_else(
-                || add_device_offer(self.cloud_offered()),
-                SetupUnavailable::text,
-            ),
-            false,
-            self.device_setup_unavailable().is_none(),
-        ));
-        // The footer's Sessions button is an icon with no label, so the
-        // picker, whose Local row already names the session, offers it too.
-        rows.push((
-            fl!("devices-sessions-row"),
-            fl!("devices-sessions-detail"),
-            false,
-            true,
-        ));
-        let mut view = div()
-            .id("devices-list")
-            .max_h(device_list_height(self.menu.anchor.y))
-            .overflow_y_scroll()
-            .track_scroll(&self.menu.devices_scroll)
-            .flex()
-            .flex_col()
-            .gap(px(4.))
-            .child(
-                div()
-                    .p(px(8.))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(8.))
-                    .text_color(rgb(self.theme.muted))
-                    .child(div().flex_none().child(fl!("devices-heading")))
-                    .child(
-                        // Wraps rather than cutting a longer language short.
-                        div()
-                            .min_w_0()
-                            .text_size(px(self.config.ui.size * 0.85))
-                            .child(multi_select_hint()),
-                    ),
-            );
-        for (index, (label, detail, checked, enabled)) in rows.into_iter().enumerate() {
-            let endpoint = index.checked_sub(1).and_then(|i| self.endpoints.get(i));
-            view = view.child(
-                div()
-                    .id(("device-row", index))
-                    .debug_selector(move || format!("device-row-{index}"))
-                    .p(px(8.))
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .when(self.menu.selected == Some(index), |s| {
-                        s.bg(rgb(self.theme.active))
-                    })
-                    // The current scope is highlighted as the session list marks
-                    // its current session, rather than with a trailing check.
-                    .when(checked, |s| s.bg(rgb(self.theme.primary_wash())))
-                    .when(enabled, |s| s.cursor_pointer())
-                    .text_color(rgb(if enabled {
-                        self.theme.foreground
-                    } else {
-                        self.theme.muted
-                    }))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap(px(8.))
-                                    .when(index == 0, |row| {
-                                        row.child(
-                                            svg()
-                                                .path("icons/devices.svg")
-                                                .size(px(16.))
-                                                .flex_none()
-                                                .text_color(rgb(self.theme.foreground)),
-                                        )
-                                    })
-                                    .when(index == self.session_list_row(), |row| {
-                                        row.child(
-                                            svg()
-                                                .path("icons/sessions.svg")
-                                                .size(px(16.))
-                                                .flex_none()
-                                                .text_color(rgb(self.theme.foreground)),
-                                        )
-                                    })
-                                    .when(index == self.add_device_row(), |row| {
-                                        row.child(
-                                            svg()
-                                                .path("icons/plus.svg")
-                                                .size(px(16.))
-                                                .flex_none()
-                                                .text_color(rgb(if enabled {
-                                                    self.theme.foreground
-                                                } else {
-                                                    self.theme.muted
-                                                })),
-                                        )
-                                    })
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .truncate()
-                                            .when(checked, |label| {
-                                                label
-                                                    .debug_selector(move || {
-                                                        format!("device-current-{index}")
-                                                    })
-                                                    .font_weight(FontWeight::SEMIBOLD)
-                                            })
-                                            .child(label),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(self.config.ui.size * 0.85))
-                                    .text_color(rgb(self.theme.muted))
-                                    .child(detail),
-                            ),
-                    )
-                    .when_some(endpoint, |row, endpoint| {
-                        row.child(
-                            div()
-                                .debug_selector(move || format!("device-dot-{index}"))
-                                .size(px(7.))
-                                .flex_none()
-                                .rounded_full()
-                                .bg(rgb(if endpoint.live.status.is_connected() {
-                                    colors::online(&self.theme)
-                                } else {
-                                    self.theme.muted
-                                })),
-                        )
-                    })
-                    .on_hover(cx.listener(move |this, hovered, _, cx| {
-                        if *hovered {
-                            this.menu.selected = Some(index);
-                            cx.notify();
-                        }
-                    }))
-                    .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                        if event.modifiers().secondary() {
-                            this.toggle_listed_device(index, window, cx);
-                        } else {
-                            this.choose_device(index, window, cx);
-                        }
-                    })),
-            );
-        }
-        // Workspaces still being added: progress only, not selectable rows,
-        // so keyboard navigation keeps its indices.
-        #[cfg(feature = "cloud")]
-        {
-            view = self.cloud_job_rows(view);
-        }
-        // The card stays put above the list, which scrolls on its own.
-        div()
-            .flex()
-            .flex_col()
-            .child(self.render_activity_card(cx))
-            .child(view)
-    }
-
-    /// Machines still being added: progress only, not selectable rows, so
-    /// keyboard navigation keeps its indices.
-    #[cfg(feature = "cloud")]
-    fn cloud_job_rows(&self, mut view: Stateful<Div>) -> Stateful<Div> {
-        if !self.cloud_jobs.is_empty() {
-            view = view.child(
-                div()
-                    .p(px(8.))
-                    .text_color(rgb(self.theme.muted))
-                    .child(fl!("devices-adding")),
-            );
-        }
-        for (index, provision) in self.cloud_jobs.iter().enumerate() {
-            view = view.child(
-                div()
-                    .debug_selector(move || format!("device-adding-{index}"))
-                    .p(px(8.))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(div().truncate().child(provision.name.clone()))
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(px(self.config.ui.size * 0.85))
-                                    .text_color(rgb(self.theme.muted))
-                                    .child(format!(
-                                        "{} · {}",
-                                        crate::cloud::name(provision.provider),
-                                        provision.status
-                                    )),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .size(px(7.))
-                            .flex_none()
-                            .rounded_full()
-                            .bg(colors::accent(&self.theme)),
-                    ),
-            );
-        }
-        view
-    }
-
     /// Shared by the picker and overview, including isolated-window guards.
     pub(crate) fn open_device_setup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(reason) = self.device_setup_unavailable() {
@@ -822,15 +597,15 @@ impl HerdrWindow {
 
     /// The picker's rows after the devices: Add Device, then Sessions.
     fn add_device_row(&self) -> usize {
-        self.endpoints.len() + 1
+        self.picker_endpoints().count() + 1
     }
 
     fn session_list_row(&self) -> usize {
-        self.endpoints.len() + 2
+        self.add_device_row() + 1
     }
 
     fn choose_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if index == self.session_list_row() {
+        if index == self.session_list_row() && self.sessions_available() {
             // Where the picker opened, so the list replaces it in place.
             self.open_sessions(self.menu.anchor, window, cx);
         } else if index > self.add_device_row() {
@@ -841,7 +616,8 @@ impl HerdrWindow {
             let id = if index == 0 {
                 None
             } else {
-                let Some(endpoint) = self.endpoints.get(index - 1).filter(|e| e.enabled) else {
+                let Some(endpoint) = self.picker_endpoints().nth(index - 1).filter(|e| e.enabled)
+                else {
                     return;
                 };
                 Some(endpoint.id.clone())
@@ -865,7 +641,7 @@ impl HerdrWindow {
         // All Devices, Add Device, and Sessions have nothing to add.
         let Some(endpoint) = index
             .checked_sub(1)
-            .and_then(|index| self.endpoints.get(index))
+            .and_then(|index| self.picker_endpoints().nth(index))
         else {
             return self.choose_device(index, window, cx);
         };
@@ -873,8 +649,7 @@ impl HerdrWindow {
             return;
         }
         let enabled = self
-            .endpoints
-            .iter()
+            .picker_endpoints()
             .filter(|endpoint| endpoint.enabled)
             .map(|endpoint| endpoint.id.as_str());
         let Some(scope) = self.device_filter.toggled(
@@ -913,7 +688,7 @@ impl HerdrWindow {
             }
         } else {
             let key = event.keystroke.key.as_str();
-            let count = self.session_list_row() + 1;
+            let count = self.add_device_row() + 1 + usize::from(self.sessions_available());
             match key {
                 "up" | "down" => {
                     let index = self.menu.selected.unwrap_or(0).min(count - 1);

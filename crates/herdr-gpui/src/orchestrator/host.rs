@@ -65,10 +65,7 @@ impl HerdrWindow {
 
     /// Whether the shown host can run the orchestrator's scripts.
     pub(crate) fn orchestrator_host(&self) -> bool {
-        !matches!(
-            self.endpoints[self.selected_endpoint].connection.target,
-            ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. }
-        )
+        scripts_run_on(&self.endpoints[self.selected_endpoint].connection.target)
     }
 
     /// The folder new tabs of workspace `id` start in.
@@ -641,7 +638,8 @@ impl HerdrWindow {
 /// Whether the orchestrator's scripts run on `target`: the local session or
 /// an SSH host, not a bare socket or WSL.
 pub(super) fn scripts_run_on(target: &ConnectTarget) -> bool {
-    !matches!(target, ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. })
+    !cfg!(target_os = "ios")
+        && !matches!(target, ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. })
 }
 
 /// How the view tells repositories apart: the endpoint, then the Git common

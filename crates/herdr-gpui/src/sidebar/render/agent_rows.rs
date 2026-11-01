@@ -1,6 +1,7 @@
 //! The agents list: every listed host's agents in the panel's one order, so a
 //! blocked agent on one host can sit above an idle one on another.
 
+use crate::menu::{ContextMenuEvent, context_menu};
 use crate::{
     HerdrWindow, NavigationTarget,
     sidebar::{
@@ -175,13 +176,16 @@ impl HerdrWindow {
         .when(multi, |row| {
             row.debug_selector(|| format!("agent-{endpoint_id}-{id}"))
         })
-        .on_mouse_down(
-            MouseButton::Right,
-            cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                cx.stop_propagation();
-                this.open_agent_menu(&menu_endpoint, &menu_pane, event.position, window, cx);
-            }),
-        )
+        .map(|row| {
+            context_menu(
+                row,
+                cx.listener(move |this, event: &ContextMenuEvent, window, cx| {
+                    cx.stop_propagation();
+                    this.open_agent_menu(&menu_endpoint, &menu_pane, event.position, window, cx);
+                    this.menu.opening_right_click &= event.mouse.is_some();
+                }),
+            )
+        })
         .on_click(cx.listener(move |this, _, window, cx| {
             this.navigate_endpoint(&navigate_endpoint, NavigationTarget::Pane(&id), cx);
             window.focus(&this.focus, cx);

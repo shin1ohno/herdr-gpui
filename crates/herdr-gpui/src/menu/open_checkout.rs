@@ -4,14 +4,17 @@
 //! nothing opens unless they say so. A checkout already open is focused
 //! without asking (see `link::follow`).
 
+#[cfg(not(target_os = "ios"))]
 use super::Page;
 use crate::{HerdrWindow, endpoint::LOCAL, fonts::StyledFont};
 use gpui::{prelude::*, *};
 use herdr_client::Method;
+#[cfg(not(target_os = "ios"))]
 use std::path::PathBuf;
 
 impl HerdrWindow {
     /// Shows the question for `path`, unless another page holds the window.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn ask_to_open_checkout(
         &mut self,
         path: PathBuf,

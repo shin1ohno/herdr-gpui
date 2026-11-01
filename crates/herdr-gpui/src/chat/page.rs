@@ -268,15 +268,16 @@ fn write_page(html: &[u8]) -> std::io::Result<PathBuf> {
 
 /// The per-user folder for chat files of one `kind`, such as pages. A local
 /// page may not be served from a folder with a hidden name in its path, so
-/// on macOS and Windows it is the user's own temporary folder.
-#[cfg(any(target_os = "macos", windows))]
+/// on macOS and Windows it is the user's own temporary folder, and on
+/// iPadOS the app container's own `tmp`, which no other app shares.
+#[cfg(any(target_os = "macos", target_os = "ios", windows))]
 pub(super) fn private_folder(kind: &str) -> Option<PathBuf> {
     Some(std::env::temp_dir().join(format!("herdr-chat-{kind}")))
 }
 
 /// Elsewhere `/tmp` is shared with other users, so the page goes in the
 /// user's runtime or cache folder.
-#[cfg(not(any(target_os = "macos", windows)))]
+#[cfg(not(any(target_os = "macos", target_os = "ios", windows)))]
 pub(super) fn private_folder(kind: &str) -> Option<PathBuf> {
     let base = std::env::var_os("XDG_RUNTIME_DIR")
         .or_else(|| std::env::var_os("XDG_CACHE_HOME"))

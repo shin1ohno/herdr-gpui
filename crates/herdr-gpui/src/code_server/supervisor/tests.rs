@@ -20,7 +20,7 @@ fn the_address_prints_its_port_alone() {
     assert!(!printed.contains("secret"), "{printed}");
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod process {
     use super::*;
     use crate::code_server::Error;

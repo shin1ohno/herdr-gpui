@@ -26,6 +26,8 @@ pub(crate) enum KeybindingSource {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub(crate) struct DeviceSettings {
+    /// An explicitly chosen backend. Unset preserves ordinary Herdr 1 discovery.
+    pub(crate) generation: Option<herdr_backend::Generation>,
     pub(crate) keybindings: KeybindingSource,
     /// The terminal's colors while this device is selected, as any top-level
     /// `theme` value. The sidebar, titlebar, and menus keep the app theme, so
@@ -54,6 +56,40 @@ impl DeviceSettings {
 }
 
 impl Config {
+    #[cfg(test)]
+    pub(crate) fn device_generation(&self, endpoint_id: &str) -> Option<herdr_backend::Generation> {
+        self.device(endpoint_id)
+            .and_then(|device| device.generation)
+    }
+
+    /// Record a user's backend choice without changing Herdr's saved-host schema.
+    #[cfg(target_os = "ios")]
+    pub(crate) fn save_device_generation(
+        profile: &str,
+        generation: herdr_backend::Generation,
+    ) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_device_generation_path(profile, generation, &local)
+    }
+
+    #[cfg(any(test, target_os = "ios"))]
+    pub(super) fn save_device_generation_path(
+        profile: &str,
+        generation: herdr_backend::Generation,
+        path: &Path,
+    ) -> Result<()> {
+        let generation = match generation {
+            herdr_backend::Generation::Herdr1 => "herdr1",
+            herdr_backend::Generation::Herdr2 => "herdr2",
+        };
+        set_device_key(
+            profile,
+            "generation",
+            Some(toml_edit::value(generation)),
+            path,
+        )
+    }
+
     /// The saved device an endpoint is, if any. Local and explicit sockets
     /// are not saved devices, so they always use the app's settings.
     fn device(&self, endpoint_id: &str) -> Option<&DeviceSettings> {

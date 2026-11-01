@@ -9,10 +9,7 @@ impl HerdrWindow {
     /// Plan usage follows the selected host: a remote host reports its own
     /// agents' sign-ins, never this machine's.
     pub(super) fn update_usage(&mut self, cx: &mut Context<Self>) -> bool {
-        let host = self
-            .config
-            .usage
-            .show
+        let host = (!cfg!(target_os = "ios") && self.config.usage.show)
             .then(|| self.endpoints.get(self.selected_endpoint))
             .flatten()
             .and_then(|endpoint| crate::usage::Host::of(&endpoint.connection.target));
@@ -80,6 +77,11 @@ impl HerdrWindow {
         &self,
         host: fn(&herdr_client::ConnectTarget) -> Option<crate::usage::Host>,
     ) -> Vec<crate::usage::Host> {
+        // These monitors use a persistent process-backed shell, unlike the
+        // in-process SSH channel that carries the daemon's terminal protocol.
+        if cfg!(target_os = "ios") {
+            return Vec::new();
+        }
         self.endpoints
             .iter()
             .enumerate()
@@ -169,6 +171,9 @@ impl HerdrWindow {
 
     /// The machine the selected endpoint runs on, for its load.
     pub(crate) fn selected_host(&self) -> Option<crate::usage::Host> {
+        if cfg!(target_os = "ios") {
+            return None;
+        }
         self.endpoints
             .get(self.selected_endpoint)
             .and_then(|endpoint| crate::usage::Host::load_of(&endpoint.connection.target))

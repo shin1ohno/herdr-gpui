@@ -49,6 +49,28 @@ pub(crate) enum Dial {
     /// A child whose stdin and stdout carry the connection, such as `ssh`
     /// running `herdr-acp connect` on the program's host.
     Process(Command),
+    /// The device's pinned SSH transport, opened on the reader thread.
+    #[cfg(target_os = "ios")]
+    Ssh { target: String, command: String },
+}
+
+impl Dial {
+    pub(super) fn ssh(target: &str, script: &str) -> Result<Self> {
+        #[cfg(target_os = "ios")]
+        {
+            herdr_client::resolve_destination(target).map_err(Error::Remote)?;
+            Ok(Self::Ssh {
+                target: target.to_owned(),
+                command: format!("/bin/sh -c {}", herdr_client::shell_quote(script)),
+            })
+        }
+        #[cfg(not(target_os = "ios"))]
+        {
+            herdr_client::script_command(target, script)
+                .map(Self::Process)
+                .map_err(Error::Remote)
+        }
+    }
 }
 
 impl From<PathBuf> for Dial {
@@ -62,19 +84,51 @@ impl From<PathBuf> for Dial {
 enum Closer {
     Socket(herdr_client::private_endpoint::Closer),
     Process(Arc<Mutex<Child>>),
+    #[cfg(target_os = "ios")]
+    Ssh(Arc<SshConnection>),
+}
+
+#[cfg(target_os = "ios")]
+struct SshConnection {
+    socket: herdr_client::Stream,
+    tunnel: Mutex<Option<herdr_ssh::Tunnel>>,
+}
+
+#[cfg(target_os = "ios")]
+impl SshConnection {
+    fn close(&self) {
+        let _ = self.socket.shutdown(std::net::Shutdown::Both);
+        if let Ok(mut tunnel) = self.tunnel.try_lock() {
+            // Dropping the guard signals cancellation; no network wait or join.
+            drop(tunnel.take());
+        }
+    }
 }
 
 impl Closer {
+    #[cfg(target_os = "ios")]
+    fn ssh_failure(&self) -> Option<Error> {
+        let Self::Ssh(connection) = self else {
+            return None;
+        };
+        let tunnel = connection.tunnel.try_lock().ok()?;
+        ssh_exit_failure(tunnel.as_ref()?.wait_exit(Duration::ZERO))
+    }
+
     fn try_clone(&self) -> std::io::Result<Self> {
         Ok(match self {
             Self::Socket(closer) => Self::Socket(closer.try_clone()?),
             Self::Process(child) => Self::Process(child.clone()),
+            #[cfg(target_os = "ios")]
+            Self::Ssh(connection) => Self::Ssh(connection.clone()),
         })
     }
 
     fn close(&self) {
         match self {
             Self::Socket(closer) => closer.close(),
+            #[cfg(target_os = "ios")]
+            Self::Ssh(connection) => connection.close(),
             // Held only while the reader reaps a child already killed.
             Self::Process(child) => {
                 if let Ok(mut child) = child.try_lock() {
@@ -82,6 +136,17 @@ impl Closer {
                 }
             }
         }
+    }
+
+    fn finish_writer(&self) {
+        #[cfg(target_os = "ios")]
+        if let Self::Ssh(connection) = self {
+            // Wake the reader without discarding a concurrently recorded SSH
+            // failure. The reader owns classification and final cancellation.
+            let _ = connection.socket.shutdown(std::net::Shutdown::Both);
+            return;
+        }
+        self.close();
     }
 
     /// Reaps a killed child; called only from the reader thread.
@@ -94,13 +159,23 @@ impl Closer {
     }
 }
 
+#[cfg(target_os = "ios")]
+fn ssh_exit_failure(exit: Option<herdr_ssh::TunnelExit>) -> Option<Error> {
+    match exit {
+        Some(herdr_ssh::TunnelExit::Ssh(failure)) => Some(Error::Ssh(failure)),
+        _ => None,
+    }
+}
+
 type Parts = (Box<dyn Read + Send>, Box<dyn Write + Send>, Closer);
 
 /// Connects as `dial` says, into a reader, a writer, and their closer.
-fn open(dial: Dial) -> std::io::Result<Parts> {
+fn open(dial: Dial) -> Result<Parts> {
     match dial {
         Dial::Socket(path) => {
-            let (reader, writer, closer) = Connection::connect(&path, CONNECT_TIMEOUT)?.split()?;
+            let (reader, writer, closer) = Connection::connect(&path, CONNECT_TIMEOUT)
+                .and_then(Connection::split)
+                .map_err(Error::Connect)?;
             Ok((Box::new(reader), Box::new(writer), Closer::Socket(closer)))
         }
         Dial::Process(mut command) => {
@@ -108,15 +183,28 @@ fn open(dial: Dial) -> std::io::Result<Parts> {
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
-                .spawn()?;
+                .spawn()
+                .map_err(Error::Connect)?;
             let streams = child.stdout.take().zip(child.stdin.take());
             let closer = Closer::Process(Arc::new(Mutex::new(child)));
             let Some((stdout, stdin)) = streams else {
                 closer.close();
                 closer.reap();
-                return Err(std::io::ErrorKind::BrokenPipe.into());
+                return Err(Error::Connect(std::io::ErrorKind::BrokenPipe.into()));
             };
             Ok((Box::new(stdout), Box::new(stdin), closer))
+        }
+        #[cfg(target_os = "ios")]
+        Dial::Ssh { target, command } => {
+            let (stream, tunnel) =
+                herdr_client::exec_ssh_stream(&target, &command).map_err(Error::Remote)?;
+            let writer = stream.try_clone().map_err(Error::Connect)?;
+            let socket = stream.try_clone().map_err(Error::Connect)?;
+            let closer = Closer::Ssh(Arc::new(SshConnection {
+                socket,
+                tunnel: Mutex::new(Some(tunnel)),
+            }));
+            Ok((Box::new(stream), Box::new(writer), closer))
         }
     }
 }
@@ -245,12 +333,12 @@ fn run(
     socket: &Socket,
 ) -> Error {
     let parts = open(dial).and_then(|(reader, writer, closer)| {
-        let writer_closer = closer.try_clone()?;
+        let writer_closer = closer.try_clone().map_err(Error::Connect)?;
         Ok((reader, writer, closer, writer_closer))
     });
     let (reader, writer, closer, writer_closer) = match parts {
         Ok(parts) => parts,
-        Err(error) => return Error::Connect(error),
+        Err(error) => return error,
     };
     socket.attach(&closer);
     let hello = ClientMessage::Hello {
@@ -278,6 +366,10 @@ fn run(
             Err(error) => break Error::Read(error),
         }
     };
+    // The transport records its typed failure before EOF. Read it before
+    // cancellation drops the guard; remote stderr never supplies a class.
+    #[cfg(target_os = "ios")]
+    let end = closer.ssh_failure().unwrap_or(end);
     closer.close();
     closer.reap();
     end
@@ -299,5 +391,8 @@ fn write(
             }
         }
     }
-    closer.close();
+    closer.finish_writer();
 }
+
+#[cfg(all(test, target_os = "ios"))]
+mod tests;

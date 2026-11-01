@@ -24,6 +24,7 @@ mod host;
 mod session;
 
 pub(crate) use error::Error;
+#[cfg(not(target_os = "ios"))]
 pub(crate) use host::{Listening, listen};
 
 use std::{ffi::OsString, path::Path, process::ExitCode};

@@ -43,6 +43,8 @@ add-device-unexpected-response = Unexpected daemon response
 
 # macOS's Local Network permission, which an SSH check can be refused.
 add-device-local-network-settings = Open Local Network Settings
+add-device-ipad-local-network-settings = Open Herdr Settings
+add-device-ipad-local-network-waiting = iPadOS refused Herdr's connection to { $target } on your local network. In Settings, allow Local Network for Herdr, then try again.
 add-device-local-network-waiting = macOS refused Herdr's connection to { $target } on your local network. Allow Herdr when macOS asks, or turn it on in System Settings › Privacy & Security › Local Network. Herdr checks again by itself.
 
 # Approving an SSH host's key. $known_hosts is the file the key is saved to,
@@ -51,6 +53,7 @@ add-device-key-changed = The host key of { $target } differs from the one you tr
 add-device-key-fetch-failed = Fetch the host key of { $target }: { $error }
 add-device-key-unknown = { $target } is not a known host yet. Trust it only if this fingerprint matches the host's own key:
 add-device-key-check = On the host, ssh-keygen -lf { $host_file } prints it. Trusting adds the key to { $known_hosts }.
+add-device-ipad-key-check = On the host, ssh-keygen -lf { $host_file } prints it. Trusting saves this key in the app.
 
 # What setup offers when the host check finds Herdr missing, old, or SSH
 # needing the user.
@@ -75,3 +78,21 @@ add-device-terminal-input = Setting up { $target } needs a terminal: SSH needs y
 add-device-terminal-restart = Setting up { $target } needs a terminal: its Herdr server has to restart. Run `herdr machine add { $target }` in a terminal, then add the device again.
 add-device-terminal-key-user = Setting up { $target } needs a terminal: it accepted none of your SSH keys for the user { $user } (use { $example } to log in as someone else). Run `herdr machine add { $target }` in a terminal, then add the device again.
 add-device-terminal-key = Setting up { $target } needs a terminal: it accepted none of your SSH keys. Run `herdr machine add { $target }` in a terminal, then add the device again.
+
+# The iPad signs SSH logins with its own device key. Only the public line is copied.
+add-device-ipad-key = Enable Remote Login and install Herdr on the computer, then add this line to its ~/.ssh/authorized_keys:
+add-device-ipad-key-loading = Loading this iPad’s public key…
+add-device-ipad-key-failed = Could not load this iPad’s public key: { $error }
+add-device-ipad-key-copy = Copy public key
+add-device-ipad-key-copied = Public key copied
+add-device-ipad-target-placeholder = user@hostname or user@[address]:port
+add-device-ipad-intro = Connect to a computer over SSH. This iPad verifies its host key and signs in with its own public key.
+add-device-ipad-install = Install or update Herdr on { $target } from that computer, then check the device again here.
+add-device-ipad-authorize = { $target } refused this iPad’s public key. Add the public key shown above to the computer’s ~/.ssh/authorized_keys, then check the device again.
+add-device-ipad-check-host = Check Remote Login and Herdr on { $target } from that computer, then try again. This iPad cannot open a local setup terminal.
+add-device-skip-host-key = Skip host key verification (dangerous)
+add-device-skip-host-key-warning = Herdr will accept any key this host offers, now and on every connection. Anyone who can intercept the connection can impersonate the host and read your terminals. Use it only for hosts that keep no key, such as Coder workspaces.
+add-device-core-available = Herdr 2 is installed on { $target }. Add it as a Herdr 2 host? Starting a terminal remains a separate action.
+add-device-outdated-core-available = Herdr 1 on { $target } is too old for this app, and Herdr 2 is installed. Add it as a Herdr 2 host, or update Herdr 1 from that computer and choose Check again. Starting a terminal remains a separate action.
+add-device-core-add = Add Herdr 2 host
+add-device-check-again = Check again

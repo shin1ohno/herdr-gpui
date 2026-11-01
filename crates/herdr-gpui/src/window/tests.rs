@@ -16,6 +16,7 @@ mod padding;
 mod report_issue;
 mod rtl;
 mod sound_volume;
+mod visible_viewport;
 
 fn main_windows(cx: &mut gpui::App) -> Vec<gpui::WindowHandle<HerdrWindow>> {
     cx.windows()

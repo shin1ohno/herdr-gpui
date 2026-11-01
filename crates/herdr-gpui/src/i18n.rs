@@ -146,18 +146,22 @@ impl Default for CurrentLocale {
 impl gpui::Global for CurrentLocale {}
 
 impl CurrentLocale {
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn configured(&self) -> &Language {
         &self.configured
     }
 
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn pseudo(&self) -> Option<Pseudo> {
         self.pseudo
     }
 
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn locale(&self) -> &Locale {
         &self.locale
     }
 
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn direction(&self) -> Direction {
         self.locale.direction()
     }

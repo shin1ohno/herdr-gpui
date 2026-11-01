@@ -52,6 +52,22 @@ fn discard_platform_composition(cx: &mut Context<HerdrWindow>) {
 fn discard_platform_composition(_: &mut Context<HerdrWindow>) {}
 
 impl HerdrWindow {
+    /// A fresh user gesture may reopen a dismissed keyboard even when focus
+    /// never changed. Copy mode keeps its navigation keys without opening it.
+    pub(crate) fn request_terminal_keyboard(&self, window: &mut Window) {
+        if self.terminal_accepts_text_input(window) {
+            window.request_virtual_keyboard();
+        }
+    }
+
+    fn terminal_accepts_text_input(&self, window: &Window) -> bool {
+        self.menu.page.is_none()
+            && self.focus.is_focused(window)
+            && !self.copy_mode_active()
+            && self.input_ready()
+            && self.focused_input_target().is_some()
+    }
+
     /// Drops the terminal's composition, here and in the platform's input
     /// method, when its pane or connection changes under it. Otherwise the
     /// next keystroke would carry on the dropped text into the new pane.
@@ -69,6 +85,26 @@ impl HerdrWindow {
     }
 }
 
+/// Whether text focus survives while the focused pane waits for the daemon to
+/// resize its surface. Only iPadOS resizes the pane when the software keyboard
+/// appears; resigning there would hide the keyboard and resize it back. Tests
+/// build this policy on every platform.
+const RETAIN_TEXT_FOCUS_DURING_RESIZE: bool = cfg!(any(target_os = "ios", test));
+
+/// Whether a focused terminal takes text: copy mode always does, a pane ready
+/// for input does, and with `retain_during_resize` a pane still waiting on the
+/// same target after a keyboard resize does. Sending keeps `send`'s readiness
+/// checks either way, and a fresh summon still requires `input_ready`.
+pub(crate) fn terminal_text_focus(
+    retain_during_resize: bool,
+    focused: bool,
+    copy_mode: bool,
+    waiting_on_same_target: bool,
+    accepts_input: bool,
+) -> bool {
+    (focused && (copy_mode || (retain_during_resize && waiting_on_same_target))) || accepts_input
+}
+
 /// Elsewhere Alt has no sides that matter: it always reaches the pane.
 #[cfg(not(target_os = "macos"))]
 pub(crate) fn held_option_keys() -> crate::config::OptionKeys {
@@ -76,6 +112,19 @@ pub(crate) fn held_option_keys() -> crate::config::OptionKeys {
 }
 
 impl EntityInputHandler for HerdrWindow {
+    fn accepts_text_input(&self, window: &mut Window, _: &mut Context<Self>) -> bool {
+        if self.menu.page.is_some() {
+            return self.menu.input.is_some() && self.menu.focus.is_focused(window);
+        }
+        terminal_text_focus(
+            RETAIN_TEXT_FOCUS_DURING_RESIZE,
+            self.focus.is_focused(window),
+            self.copy_mode_active(),
+            self.pending_input_keeps_text_focus(),
+            self.terminal_accepts_text_input(window),
+        )
+    }
+
     fn text_for_range(
         &mut self,
         range: Range<usize>,
@@ -180,7 +229,11 @@ impl EntityInputHandler for HerdrWindow {
             return;
         }
         // Copy mode has no composition: a key it does not know types nothing.
-        if !self.input_ready() || self.copy_mode_active() {
+        // While the focused pane waits out a keyboard resize, composition stays
+        // local (marked text is never sent), so the input method keeps it.
+        let composing = self.input_ready()
+            || (RETAIN_TEXT_FOCUS_DURING_RESIZE && self.pending_input_keeps_text_focus());
+        if !composing || self.copy_mode_active() {
             return;
         }
         self.marked = text.into();
@@ -246,6 +299,14 @@ impl<V: EntityInputHandler> TerminalInputHandler<V> {
 }
 
 impl<V: EntityInputHandler> InputHandler for TerminalInputHandler<V> {
+    fn accepts_text_input(&mut self, window: &mut Window, cx: &mut App) -> bool {
+        self.inner.accepts_text_input(window, cx)
+    }
+
+    fn prefers_ime_for_printable_keys(&mut self, window: &mut Window, cx: &mut App) -> bool {
+        self.inner.prefers_ime_for_printable_keys(window, cx)
+    }
+
     fn selected_text_range(
         &mut self,
         ignore_disabled_input: bool,
@@ -317,3 +378,6 @@ impl<V: EntityInputHandler> InputHandler for TerminalInputHandler<V> {
         self.press_and_hold
     }
 }
+
+#[cfg(test)]
+mod tests;

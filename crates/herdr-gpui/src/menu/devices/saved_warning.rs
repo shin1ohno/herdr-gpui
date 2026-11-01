@@ -7,6 +7,14 @@ use gpui::{prelude::*, *};
 
 impl HerdrWindow {
     pub(super) fn device_save_succeeded(&mut self, outcome: SaveOutcome, cx: &mut Context<Self>) {
+        #[cfg(target_os = "ios")]
+        if let SaveOutcome::CoreAvailable(profile) = &outcome {
+            self.config
+                .devices
+                .entry(profile.clone())
+                .or_default()
+                .generation = Some(herdr_backend::Generation::Herdr2);
+        }
         // Saving is already complete. Keep recovery advice in the scrollable
         // dialog until dismissed, rather than timing out a truncated flash.
         if let Some(form) = &mut self.menu.device_setup {

@@ -22,6 +22,7 @@ mod caffeine;
 mod caption;
 mod caret;
 mod chat;
+#[cfg(not(target_os = "ios"))]
 mod cli;
 mod close_modal;
 // `cloud` is the machinery every provider shares; alone it offers nothing to add.
@@ -76,12 +77,14 @@ mod icon_font_notice;
 mod icons;
 mod input;
 mod integrations;
+mod ipad_ui;
 #[cfg(windows)]
 mod jump_list;
 mod keymap;
 #[cfg(windows)]
 mod launch_at_login;
 mod lenient;
+#[cfg(not(target_os = "ios"))]
 mod link;
 mod links;
 mod listening_ports;
@@ -91,7 +94,7 @@ mod mark_layer;
 mod menu;
 mod menus;
 mod merged_cleanup;
-#[cfg(feature = "mockup")]
+#[cfg(all(feature = "mockup", not(target_os = "ios")))]
 mod mockup;
 mod mods;
 mod motion;
@@ -120,6 +123,7 @@ mod remote;
 mod remote_browser;
 mod reorder;
 mod repo_items;
+#[cfg(not(target_os = "ios"))]
 mod restart_manager;
 mod review;
 mod scrollback;
@@ -128,7 +132,7 @@ mod security;
 mod sessions;
 mod settings_panel;
 mod settings_window;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod setup_relay;
 mod sidebar;
 mod smooth_scroll;
@@ -159,11 +163,11 @@ mod worktree_identity;
 mod worktree_notes;
 mod worktree_scripts;
 
-#[cfg(feature = "integration-test")]
+#[cfg(all(feature = "integration-test", not(target_os = "ios")))]
 mod performance;
-#[cfg(feature = "integration-test")]
+#[cfg(all(feature = "integration-test", not(target_os = "ios")))]
 mod smoke;
-#[cfg(all(test, unix))]
+#[cfg(all(test, unix, not(target_os = "ios")))]
 #[path = "../../test-support/executable.rs"]
 mod test_executable;
 
@@ -207,19 +211,23 @@ use herdr_remote::sprites;
 
 pub(crate) use {
     actions::{
-        CheckForUpdates, Hide, HideOthers, Minimize, PlaySound, Quit, RunCommand, ShowAll,
-        ShowHerdrNotDetected, ShowLogs, ShowUpdatePreview, ZoomWindow, bind_keys,
+        CheckForUpdates, Minimize, PlaySound, Quit, RunCommand, ShowHerdrNotDetected, ShowLogs,
+        ShowUpdatePreview, ZoomWindow, bind_keys,
     },
     app::open_additional_window,
     constants::{APP_VERSION, RELEASE_BUILD, TAB_HEIGHT, TAB_WIDTH, WINDOW_TITLE},
-    menus::menus,
     navigation::{NavigationTarget, OwnedNavigationTarget},
     window::HerdrWindow,
 };
 
+#[cfg(not(target_os = "ios"))]
+pub(crate) use actions::{Hide, HideOthers, ShowAll};
+#[cfg(any(test, not(target_os = "ios")))]
+pub(crate) use menus::menus;
+
 // Re-exported at the root because they are referenced crate-wide; the domain
 // modules below are where they are defined and changed.
-#[cfg(feature = "integration-test")]
+#[cfg(all(feature = "integration-test", not(target_os = "ios")))]
 pub(crate) use app::open_window;
 // Only the macOS smoke checks drive the connection status from the root.
 #[cfg(all(feature = "integration-test", target_os = "macos"))]
@@ -232,10 +240,10 @@ fn main() -> std::process::ExitCode {
     if exit != std::process::ExitCode::SUCCESS {
         return exit;
     }
-    #[cfg(feature = "integration-test")]
+    #[cfg(all(feature = "integration-test", not(target_os = "ios")))]
     return std::process::ExitCode::from(
         smoke::EXIT_CODE.load(std::sync::atomic::Ordering::SeqCst),
     );
-    #[cfg(not(feature = "integration-test"))]
+    #[cfg(any(not(feature = "integration-test"), target_os = "ios"))]
     std::process::ExitCode::SUCCESS
 }

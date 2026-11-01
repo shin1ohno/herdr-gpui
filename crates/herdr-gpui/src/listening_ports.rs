@@ -24,7 +24,7 @@ use crate::{
 };
 use herdr_client::ConnectTarget;
 pub(crate) use render::{chips, close_button};
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 pub(crate) use scan::{Bind, Owner};
 pub(crate) use scan::{Link, Origin, Port, Ports, parse};
 use std::{
@@ -34,7 +34,7 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-#[cfg(all(test, unix))]
+#[cfg(all(test, unix, not(target_os = "ios")))]
 pub(crate) use tunnel::Tunnel;
 pub(crate) use tunnel::{Key, Tunnels};
 

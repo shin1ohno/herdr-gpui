@@ -142,6 +142,9 @@ impl HerdrWindow {
             .endpoints
             .iter()
             .enumerate()
+            .filter(|(_, endpoint)| {
+                !cfg!(target_os = "ios") || endpoint.id != crate::endpoint::LOCAL
+            })
             .filter_map(|(index, endpoint)| {
                 let live = if index == selected {
                     &self.live
@@ -228,7 +231,12 @@ impl HerdrWindow {
                 } else {
                     &endpoint.live
                 };
-                Device::new(index, endpoint, live)
+                Device::new(
+                    index,
+                    endpoint,
+                    live,
+                    self.displayed_connection_status(endpoint),
+                )
             })
             .collect()
     }

@@ -261,7 +261,7 @@ mod closed_elsewhere;
 mod en_xa;
 mod new_tabs;
 mod orchestrator;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod tunnels;
 
 /// Showing and hiding VS Code from the menu, in place of a title bar button.

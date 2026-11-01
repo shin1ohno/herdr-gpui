@@ -158,6 +158,7 @@ fn a_new_folder_opens_at_its_resolved_path() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_os = "ios"))]
 #[test]
 fn a_failed_clone_leaves_neither_the_project_nor_its_staging_folder() -> anyhow::Result<()> {
     let root = tempfile::tempdir()?;
@@ -171,6 +172,7 @@ fn a_failed_clone_leaves_neither_the_project_nor_its_staging_folder() -> anyhow:
     Ok(())
 }
 
+#[cfg(not(target_os = "ios"))]
 #[test]
 fn a_clone_is_published_only_once_it_finishes() -> anyhow::Result<()> {
     let root = tempfile::tempdir()?;

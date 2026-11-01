@@ -321,6 +321,9 @@ impl HerdrWindow {
                     cx.stop_propagation();
                     // Another field of the same dialog may hold focus.
                     window.focus(&this.menu.focus, cx);
+                    if this.menu.input.is_some() {
+                        window.request_virtual_keyboard();
+                    }
                     if let Some(input) = this.menu.input.as_mut()
                         && input.marked.is_none()
                         && let Some(index) = input.index_at(event.position)

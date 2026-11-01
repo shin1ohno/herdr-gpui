@@ -16,6 +16,9 @@ use herdr_backend::TerminalId;
 impl HerdrWindow {
     /// The Herdr 2 rows, or nothing when the workspace has no herdr-core tab.
     pub(crate) fn core_sidebar_rows(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.core_target_supported() {
+            return None;
+        }
         let store = cx.try_global::<Store>()?;
         let (scope, workspace) = self.browser_key()?;
         let panes: Vec<(TabId, TerminalId)> = store
@@ -24,7 +27,14 @@ impl HerdrWindow {
                 Some(Location::CoreTerminal {
                     panes,
                     observe: false,
-                }) => Some((tab.id, panes.terminals())),
+                    remote,
+                }) if super::Remote::matches_target(
+                    remote.as_ref(),
+                    self.core_terminals.hub.target(),
+                ) =>
+                {
+                    Some((tab.id, panes.terminals()))
+                }
                 _ => None,
             })
             .flat_map(|(tab, terminals)| {
@@ -105,6 +115,14 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let reconnect = cx
+            .try_global::<Store>()
+            .and_then(|store| store.get(tab))
+            .is_some_and(|tab| self.core_tab_can_reconnect(tab));
+        if reconnect {
+            self.reconnect_core_connection(cx);
+            self.sync_core_views(cx);
+        }
         if let Some(shown) = self.core_terminals.tabs.get_mut(&tab) {
             if shown.zoom.is_open() && shown.zoomed.as_ref() != Some(terminal) {
                 shown.set_zoom(None);

@@ -275,14 +275,22 @@ impl SettingsWindow {
                     "general-browser-skill",
                     fl!("settings-general-browser-skill"),
                 )
-                .description(if installed {
+                .description(if cfg!(target_os = "ios") {
+                    fl!("settings-general-browser-skill-ipad")
+                } else if installed {
                     fl!("settings-general-browser-skill-description")
                 } else {
                     fl!("settings-general-browser-skill-missing")
                 })
                 .control(
-                    ui::button(theme, skill_id, skill_label, true)
-                        .on_click(cx.listener(move |this, _, _, cx| this.save_skill(choice, cx))),
+                    ui::button(theme, skill_id, skill_label, !cfg!(target_os = "ios")).when(
+                        !cfg!(target_os = "ios"),
+                        |button| {
+                            button.on_click(
+                                cx.listener(move |this, _, _, cx| this.save_skill(choice, cx)),
+                            )
+                        },
+                    ),
                 ),
             )
             .children(self.startup_rows(cx))

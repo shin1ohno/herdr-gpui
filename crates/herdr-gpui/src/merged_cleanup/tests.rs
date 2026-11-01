@@ -174,6 +174,7 @@ fn the_ledger_is_bounded() {
     assert_eq!(ledger.entries[0].0.number, 10);
 }
 
+#[cfg(not(target_os = "ios"))]
 #[test]
 fn the_probe_reads_a_linked_checkouts_head_status_and_archive_script() {
     let directory = tempfile::tempdir().unwrap();

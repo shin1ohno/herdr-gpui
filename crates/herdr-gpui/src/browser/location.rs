@@ -83,6 +83,9 @@ pub(crate) enum Location {
         /// types into it.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         observe: bool,
+        /// A remote core namespace; absent on tabs saved by desktop builds.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote: Option<crate::core_terminals::Remote>,
     },
 }
 
@@ -348,6 +351,7 @@ impl LocalFile {
     /// The file at `path`, served from its folder. `path` must already be
     /// absolute and resolved; the caller's own process does that, so the UI
     /// never touches the disk here.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn new(path: &Path, home: Option<&Path>) -> crate::Result<Self> {
         let (Some(root), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str()))
         else {

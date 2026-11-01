@@ -1,5 +1,7 @@
+#[cfg(not(target_os = "ios"))]
 use super::*;
 
+#[cfg(not(target_os = "ios"))]
 #[test]
 fn displayed_repair_command_targets_the_exact_path() -> anyhow::Result<()> {
     use std::os::unix::fs::PermissionsExt;

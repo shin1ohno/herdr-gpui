@@ -17,11 +17,13 @@ use herdr_client::ConnectTarget;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Action {
+    #[cfg(target_os = "ios")]
+    NewCoreTerminal,
     Rename,
     /// Toggles `[devices.<id>] keybindings` between local and server.
     ServerKeybindings,
     /// Forwards one of the host's listening ports to this computer.
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "ios")))]
     ForwardPort,
     /// Picks `[devices.<id>] theme`, the terminal's colors on this device.
     Theme,
@@ -36,10 +38,12 @@ enum Action {
 
 /// Each row's action and the message naming it.
 const SSH_ACTIONS: &[(Action, &str)] = &[
+    #[cfg(target_os = "ios")]
+    (Action::NewCoreTerminal, "host-menu-new-core-terminal"),
     (Action::Rename, "host-menu-rename"),
     (Action::ServerKeybindings, "host-menu-server-keybindings"),
     // Port forwards need an `ssh` control master, which Windows OpenSSH lacks.
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "ios")))]
     (Action::ForwardPort, "host-menu-forward-port"),
     (Action::Theme, "host-menu-theme"),
     (Action::Remove, "host-menu-remove"),
@@ -97,6 +101,9 @@ pub(crate) struct HostMenu {
     error: Option<String>,
     /// The terminal theme picker, while it is the page shown.
     theme: Option<theme::DeviceThemePicker>,
+    /// Forget Host Key, once the user started it for a refused key.
+    #[cfg(target_os = "ios")]
+    host_key: Option<host_key::HostKeyReview>,
 }
 
 impl HostMenu {
@@ -226,6 +233,8 @@ impl HerdrWindow {
             renaming: false,
             error: None,
             theme: None,
+            #[cfg(target_os = "ios")]
+            host_key: None,
         };
         if !self.open_menu(window, cx) {
             tracing::info!(
@@ -246,80 +255,6 @@ impl HerdrWindow {
             .github_hosts
             .get(id)
             .is_some_and(|auth| auth.can_sign_out())
-    }
-
-    fn activate_host_menu(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
-        tracing::info!(
-            category = "device_remove",
-            ?action,
-            id = self.menu.host.as_ref().map(|host| host.id.as_str()),
-            "Host menu action"
-        );
-        match action {
-            Action::Rename => {
-                let Some(host) = &self.menu.host else {
-                    return;
-                };
-                let (label, target) = (host.label.clone(), host.target.clone());
-                let input = cx.new(SearchInput::new);
-                input.update(cx, |input, cx| {
-                    input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
-                    // An empty name falls back to the target, as when adding.
-                    input.set_placeholder(&target, cx);
-                    input.set_text_selected(&label, cx);
-                    window.focus(&input.focus, cx);
-                });
-                if let Some(host) = &mut self.menu.host {
-                    host.input = Some(input);
-                    host.error = None;
-                }
-                self.menu.page = Some(Page::RenameDevice);
-            }
-            Action::ServerKeybindings => self.toggle_server_keybindings(cx),
-            Action::Theme => self.open_device_theme(window, cx),
-            #[cfg(feature = "cloud")]
-            Action::ProviderSettings => {
-                if let Some(HostMenu {
-                    saved: Saved::Cloud { provider, .. },
-                    ..
-                }) = self.menu.host
-                {
-                    self.open_provider_settings(provider, window, cx);
-                }
-                return;
-            }
-            #[cfg(feature = "cloud")]
-            Action::RunSetup => {
-                let Some(id) = self.menu.host.as_ref().map(|host| host.id.clone()) else {
-                    return;
-                };
-                self.dismiss_menu(window, cx);
-                if let Err(error) = self.rerun_cloud_setup(&id, cx) {
-                    self.show_flash(crate::window::Flash::warning(error.to_string()), cx);
-                }
-                return;
-            }
-            #[cfg(unix)]
-            Action::ForwardPort => {
-                let input = cx.new(SearchInput::new);
-                input.update(cx, |input, cx| {
-                    input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
-                    input.set_placeholder("3000", cx);
-                    window.focus(&input.focus, cx);
-                });
-                if let Some(host) = &mut self.menu.host {
-                    host.input = Some(input);
-                    host.error = None;
-                }
-                self.menu.page = Some(Page::ForwardPort);
-            }
-            Action::Remove => {
-                self.menu.page = Some(Page::RemoveDevice);
-                #[cfg(feature = "cloud")]
-                self.check_unsynced(cx);
-            }
-        }
-        cx.notify();
     }
 
     /// Saves the other choice. The reload that follows the save applies it, in
@@ -723,6 +658,10 @@ impl HerdrWindow {
                     );
                 }
             }
+            #[cfg(target_os = "ios")]
+            {
+                body = body.child(self.render_host_key_review(host, cx));
+            }
             return body.child(self.render_forwards(host, cx));
         }
         if self.menu.page == Some(Page::RenameDevice) {
@@ -946,11 +885,14 @@ fn removal_note(host: &HostMenu) -> String {
     }
 }
 
+mod actions;
 #[cfg(feature = "cloud")]
 mod destroy;
 #[cfg(feature = "cloud")]
 use destroy::remove_label;
 mod forwards;
+#[cfg(target_os = "ios")]
+mod host_key;
 mod theme;
 
 #[cfg(not(feature = "cloud"))]

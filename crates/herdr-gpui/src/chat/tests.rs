@@ -43,6 +43,7 @@ mod recall;
 mod running;
 mod selection;
 mod session;
+mod ssh;
 mod start;
 mod stop;
 mod subagents;

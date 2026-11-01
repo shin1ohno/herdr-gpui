@@ -3,15 +3,19 @@
 //! own. The window reads the outcome on its tick.
 
 use super::Error;
-use herdr_core_client::{Core, CoreBackend, Endpoint, PROGRAM};
+use herdr_client::ConnectTarget;
+use herdr_core_client::CoreBackend;
+#[cfg(not(target_os = "ios"))]
+use herdr_core_client::{Core, Endpoint, PROGRAM};
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
 
 /// Scrollback lines each herdr-core terminal keeps in the app.
-const SCROLLBACK: usize = 10_000;
+pub(super) const SCROLLBACK: usize = 10_000;
 /// How long a started core has to listen.
+#[cfg(not(target_os = "ios"))]
 const START_TIMEOUT: Duration = Duration::from_secs(20);
 /// How long a failed join waits before restored tabs try again, so a core
 /// that is not running costs one attempt now and then, not one per tick.
@@ -23,6 +27,7 @@ pub(crate) enum State {
     #[default]
     Idle,
     Connecting(std::sync::mpsc::Receiver<Result<CoreBackend, Error>>),
+    Detached,
     Ready(CoreBackend),
     /// Shared so the window can show it without moving it.
     Unavailable(Arc<Error>),
@@ -39,7 +44,7 @@ pub(crate) enum Start {
 }
 
 /// How an attempt joins: the real one dials herdr-core; tests stand in.
-type Join = fn(Start) -> Result<CoreBackend, Error>;
+type Join = fn(&ConnectTarget, Start) -> Result<CoreBackend, Error>;
 
 pub(crate) struct Hub {
     /// What the attempt in flight may do.
@@ -48,9 +53,18 @@ pub(crate) struct Hub {
     failed: Option<Instant>,
     join: Join,
     state: State,
+    target: ConnectTarget,
     /// A start asked for while a join-only attempt was in flight; it runs if
     /// that attempt fails, rather than being dropped.
     wants_start: bool,
+}
+
+impl Drop for Hub {
+    fn drop(&mut self) {
+        if let State::Ready(backend) = &self.state {
+            backend.core().disconnect();
+        }
+    }
 }
 
 impl Default for Hub {
@@ -60,14 +74,45 @@ impl Default for Hub {
 }
 
 impl Hub {
-    fn with_join(join: Join) -> Self {
+    pub(super) fn with_join(join: Join) -> Self {
         Self {
             attempt: None,
             failed: None,
             join,
             state: State::Idle,
+            target: ConnectTarget::Local,
             wants_start: false,
         }
+    }
+
+    pub(super) fn target(&self) -> &ConnectTarget {
+        &self.target
+    }
+
+    pub(super) fn retarget(&mut self, target: &ConnectTarget) -> bool {
+        if self.target == *target {
+            return false;
+        }
+        self.target = target.clone();
+        self.reset();
+        true
+    }
+
+    /// Dropping the old receiver fences late attempts; its worker cleans up
+    /// its result when nobody receives it, without blocking the UI thread.
+    pub(super) fn reset(&mut self) {
+        if let State::Ready(backend) = &self.state {
+            backend.core().disconnect();
+        }
+        self.attempt = None;
+        self.failed = None;
+        self.state = State::Idle;
+        self.wants_start = false;
+    }
+
+    pub(super) fn detach(&mut self) {
+        self.reset();
+        self.state = State::Detached;
     }
 
     pub(crate) fn state(&self) -> &State {
@@ -85,6 +130,14 @@ impl Hub {
     /// A join-only ask waits a moment after a failure; asking to start
     /// always tries, and upgrades a join-only attempt in flight.
     pub(crate) fn connect(&mut self, start: Start) {
+        // hc connect always starts a missing remote core. Saved tabs cannot
+        // turn a join-only request into that explicit operation.
+        if start == Start::Join
+            && (matches!(self.target, ConnectTarget::Ssh { .. })
+                || matches!(self.state, State::Detached))
+        {
+            return;
+        }
         match &self.state {
             State::Ready(_) => return,
             State::Connecting(_) => {
@@ -99,15 +152,16 @@ impl Hub {
             {
                 return;
             }
-            State::Idle | State::Unavailable(_) => {}
+            State::Idle | State::Detached | State::Unavailable(_) => {}
         }
         self.attempt = Some(start);
         let join = self.join;
+        let target = self.target.clone();
         let (send, receive) = std::sync::mpsc::sync_channel(1);
         let spawned = std::thread::Builder::new()
             .name("herdr-core-connect".into())
             .spawn(move || {
-                let _ = send.send(join(start));
+                let _ = send.send(join(&target, start));
             });
         self.state = match spawned {
             Ok(_) => State::Connecting(receive),
@@ -141,7 +195,15 @@ impl Hub {
 }
 
 /// Blocking: joins the session's core, starting one first when allowed.
-fn join(start: Start) -> Result<CoreBackend, Error> {
+#[cfg(target_os = "ios")]
+fn join(target: &ConnectTarget, _start: Start) -> Result<CoreBackend, Error> {
+    super::Remote::from_target(target)
+        .ok_or(Error::Unavailable)?
+        .connect()
+}
+
+#[cfg(not(target_os = "ios"))]
+fn join(_target: &ConnectTarget, start: Start) -> Result<CoreBackend, Error> {
     let endpoint = Endpoint::resolve(herdr_client::login_env::var)?;
     let first = match Core::connect(&endpoint) {
         Ok(core) => return Ok(CoreBackend::new(core, SCROLLBACK)),

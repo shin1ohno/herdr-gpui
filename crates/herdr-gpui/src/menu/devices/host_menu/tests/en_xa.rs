@@ -49,7 +49,7 @@ fn the_host_menu_and_its_pages_show_only_messages_under_en_xa() {
         open(&view, cx, Some(Action::Remove));
         assert_translated("Host menu > Remove", &recorder.take(), &device);
 
-        #[cfg(unix)]
+        #[cfg(all(unix, not(target_os = "ios")))]
         {
             open(&view, cx, Some(Action::ForwardPort));
             assert_translated(

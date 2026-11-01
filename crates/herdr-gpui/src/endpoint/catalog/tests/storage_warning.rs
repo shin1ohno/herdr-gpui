@@ -13,6 +13,7 @@ fn failed(path: &str) -> Result<CatalogUpdate> {
 
 fn loaded() -> Result<CatalogUpdate> {
     Ok(CatalogUpdate {
+        generations: Generations::new(),
         hosts: Vec::new(),
         wsl: Vec::new(),
         selection: None,

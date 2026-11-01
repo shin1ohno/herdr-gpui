@@ -50,6 +50,9 @@ impl HerdrWindow {
     /// gone from the config is dropped from memory; removing it from the
     /// GitHub page deletes its saved credential first.
     pub(crate) fn sync_github_accounts(&mut self) {
+        if cfg!(target_os = "ios") {
+            return;
+        }
         let configured = &self.config.github.accounts;
         let accounts = &mut self.menu.github_accounts;
         accounts.retain(|account| configured.iter().any(|entry| entry.id == account.id));

@@ -27,6 +27,10 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        self.select_core_target(cx);
+        if !self.core_target_supported() {
+            return false;
+        }
         let Some((tab, terminal)) = self.core_terminals.focused_pane(window, cx) else {
             return false;
         };
@@ -112,16 +116,24 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((scope, workspace)) = cx
+        let Some((scope, workspace, remote)) = cx
             .try_global::<Store>()
             .and_then(|store| store.get(tab))
-            .map(|shown| (shown.scope.clone(), shown.workspace_id.clone()))
+            .and_then(|shown| match &shown.location {
+                Some(Location::CoreTerminal { remote, .. }) => Some((
+                    shown.scope.clone(),
+                    shown.workspace_id.clone(),
+                    remote.clone(),
+                )),
+                _ => None,
+            })
         else {
             return;
         };
         let location = Location::CoreTerminal {
             panes: Panes::single(terminal),
             observe: true,
+            remote,
         };
         let Some(id) = Store::update(cx, |store| {
             store.open(scope, &workspace, Some(location), None)

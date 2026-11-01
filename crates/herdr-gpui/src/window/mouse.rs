@@ -265,6 +265,9 @@ impl HerdrWindow {
         self.pressed_terminal_link = None;
         self.selection = None;
         window.focus(&self.focus, cx);
+        if event.button == MouseButton::Left {
+            self.request_terminal_keyboard(window);
+        }
         cx.stop_propagation();
         if let Some(button) = button(event.button)
             && !cx.has_active_drag()

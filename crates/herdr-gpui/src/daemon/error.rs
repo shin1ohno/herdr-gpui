@@ -18,6 +18,8 @@ pub enum Error {
     },
     #[error("Timed out waiting for herdr server at {}. Check the Herdr server log and use Terminal > Reconnect.", .0.display())]
     Timeout(PathBuf),
+    #[error("Local terminals are unavailable on iPad. Add a computer to connect over SSH.")]
+    Unavailable,
     // keep-sorted end
 }
 

@@ -28,16 +28,6 @@ impl DeviceScope {
         matches!(self, Self::Only(ids) if ids.contains(id))
     }
 
-    /// The IDs picked by name; empty for All Devices.
-    pub(crate) fn picked(&self) -> impl Iterator<Item = &str> {
-        match self {
-            Self::All => None,
-            Self::Only(ids) => Some(ids.iter().map(String::as_str)),
-        }
-        .into_iter()
-        .flatten()
-    }
-
     /// Keeps the newly selected device listed. A scope that already shows it
     /// stays as it is; otherwise the sidebar follows to that device alone.
     pub(crate) fn follow(&mut self, id: &str) {

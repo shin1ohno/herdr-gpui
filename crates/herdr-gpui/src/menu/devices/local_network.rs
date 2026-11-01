@@ -9,24 +9,31 @@ use crate::HerdrWindow;
 use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_client::{HostProbe, LocalNetworkAccess, SshFailure};
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
-/// System Settings › Privacy & Security › Local Network.
-const SETTINGS_URL: &str =
-    "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork"; // i18n: data
+fn settings_url() -> Option<&'static str> {
+    if cfg!(target_os = "ios") {
+        Some("app-settings:") // i18n: data
+    } else if cfg!(target_os = "macos") {
+        Some("x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork") // i18n: data
+    } else {
+        None
+    }
+}
 /// How long a refused host check waits for the user to allow Herdr.
 const PERMISSION_WAIT: Duration = Duration::from_secs(60);
 
 impl HerdrWindow {
-    /// A button that opens the Local Network settings. Only macOS has them.
+    /// Opens this app's permission settings on iPadOS, or Local Network on macOS.
     pub(super) fn local_network_settings_button(
         &self,
         id: &'static str,
         cx: &mut Context<Self>,
     ) -> Option<Stateful<Div>> {
-        if !cfg!(target_os = "macos") {
-            return None;
-        }
+        let url = settings_url()?;
         let theme = &self.theme;
         Some(
             div()
@@ -38,8 +45,12 @@ impl HerdrWindow {
                 .cursor_pointer()
                 .rounded(px(crate::config::corners::CONTROL))
                 .hover(|s| s.bg(rgb(theme.active)))
-                .child(fl!("add-device-local-network-settings"))
-                .on_click(cx.listener(|_, _, _, cx| cx.open_url(SETTINGS_URL))),
+                .child(if cfg!(target_os = "ios") {
+                    fl!("add-device-ipad-local-network-settings")
+                } else {
+                    fl!("add-device-local-network-settings")
+                })
+                .on_click(cx.listener(move |_, _, _, cx| cx.open_url(url))),
         )
     }
 
@@ -54,6 +65,31 @@ impl HerdrWindow {
         claim: setup::Claim,
         cx: &mut Context<Self>,
     ) {
+        self.await_local_network_with(
+            request,
+            claim,
+            |request, watched| {
+                let access = herdr_client::wait_for_local_network(PERMISSION_WAIT, || {
+                    watched.strong_count() > 0
+                });
+                match access {
+                    LocalNetworkAccess::Denied => {
+                        Ok(HostProbe::SshFailed(SshFailure::LocalNetworkDenied))
+                    }
+                    LocalNetworkAccess::Allowed | LocalNetworkAccess::Unknown => request.probe(),
+                }
+            },
+            cx,
+        );
+    }
+
+    pub(super) fn await_local_network_with(
+        &mut self,
+        request: setup::Request,
+        claim: setup::Claim,
+        probe: impl FnOnce(&setup::Request, &Weak<()>) -> crate::Result<HostProbe> + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
         let Some(form) = &mut self.menu.device_setup else {
             return;
         };
@@ -66,15 +102,7 @@ impl HerdrWindow {
         let alive = Arc::new(());
         let watched = Arc::downgrade(&alive);
         let background = cx.background_executor().spawn(async move {
-            let access = herdr_client::wait_for_local_network(PERMISSION_WAIT, || {
-                watched.strong_count() > 0
-            });
-            let probe = match access {
-                LocalNetworkAccess::Denied => {
-                    Ok(HostProbe::SshFailed(SshFailure::LocalNetworkDenied))
-                }
-                LocalNetworkAccess::Allowed | LocalNetworkAccess::Unknown => request.probe(),
-            };
+            let probe = probe(&request, &watched);
             Ok::<_, crate::Error>((claim, probe))
         });
         form.task = Some(cx.spawn(async move |this, cx| {
@@ -88,5 +116,12 @@ impl HerdrWindow {
 
 /// What the dialog says while it waits.
 pub(super) fn waiting_status(target: &str) -> String {
-    fl!("add-device-local-network-waiting", target = target)
+    if cfg!(target_os = "ios") {
+        fl!("add-device-ipad-local-network-waiting", target = target)
+    } else {
+        fl!("add-device-local-network-waiting", target = target)
+    }
 }
+
+#[cfg(test)]
+mod tests;

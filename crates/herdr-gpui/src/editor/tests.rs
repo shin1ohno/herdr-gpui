@@ -11,7 +11,7 @@ fn target(path: &str, line: Option<u32>) -> EditorTarget {
 
 /// Runs a typed `line` the way a pane's shell would, with `editor` (a
 /// program name) as `$EDITOR`, and returns the arguments that editor got.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn typed(line: &str, editor: &str, configured: Option<&str>) -> Vec<String> {
     use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::tempdir().unwrap();
@@ -46,7 +46,7 @@ fn typed(line: &str, editor: &str, configured: Option<&str>) -> Vec<String> {
         .collect()
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn the_typed_line_runs_the_panes_editor_at_the_line() {
     let file = "/w/it is $(here)`x`;y.rs";
@@ -58,7 +58,7 @@ fn the_typed_line_runs_the_panes_editor_at_the_line() {
     assert_eq!(typed(&line, "vim", None), ["+1", "/w/a.rs"]);
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_neovim_listens_on_the_socket_in_a_private_folder() {
     let dir = tempfile::tempdir().unwrap();
@@ -97,7 +97,7 @@ fn a_neovim_listens_on_the_socket_in_a_private_folder() {
     assert_eq!(typed(&line, "hx", Some("hx")), ["/w/a.rs:3"]);
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_template_that_quotes_its_placeholders_keeps_the_path_one_word() {
     let command = |text: &str| EditorCommand::try_from(text.to_owned()).unwrap();
@@ -204,13 +204,18 @@ fn media_files_are_left_to_the_system() {
 #[cfg(unix)]
 mod flow {
     // Not a glob: the parent's imports would shadow `#[test]`.
-    use super::{EditorTarget, Error, PathBuf, command_line, json};
+    use super::{EditorTarget, PathBuf};
+    #[cfg(not(target_os = "ios"))]
+    use super::{Error, command_line, json};
+    #[cfg(not(target_os = "ios"))]
+    use crate::NavigationTarget;
     use crate::{
-        NavigationTarget, sidebar::layout_tests::fixture_window, window::MockPeer,
-        worktree_scripts::tests::connect,
+        sidebar::layout_tests::fixture_window, window::MockPeer, worktree_scripts::tests::connect,
     };
+    #[cfg(not(target_os = "ios"))]
     use herdr_client::protocol::{ClientMessage, ClientPaneInputEvent};
 
+    #[cfg(not(target_os = "ios"))]
     #[gpui::test]
     fn a_file_opens_in_a_split_beside_its_pane_with_the_editor_typed(
         cx: &mut gpui::TestAppContext,
@@ -345,7 +350,7 @@ fn a_neovim_request_opens_and_jumps_in_one_expression() {
 
 /// Against a real Neovim; run with
 /// `cargo test -p herdr-gpui -- --ignored editor::tests::a_listening`.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 #[ignore = "needs nvim on PATH"]
 fn a_listening_neovim_opens_files_at_their_line() {

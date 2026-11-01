@@ -37,6 +37,13 @@ const NAVIGATION_MIN_WIDTH: f32 = 320.;
 
 impl HerdrWindow {
     fn open_profile(&mut self, connect: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if cfg!(target_os = "ios") {
+            self.show_flash(
+                crate::window::Flash::warning(fl!("platform-github-unavailable")),
+                cx,
+            );
+            return;
+        }
         let shown = matches!(self.menu.page, Some(Page::GitHub | Page::GitLab));
         if !shown && !self.open_menu(window, cx) {
             return;

@@ -748,7 +748,7 @@ impl Render for SettingsWindow {
                 _ => self.render_controls(window, cx),
             },
         };
-        self.viewport_width = f32::from(window.viewport_size().width);
+        self.viewport_width = f32::from(window.fully_visible_bounds().size.width);
         let navigation = self.navigation(cx);
         let font_picker = self.render_control_font_picker(window, cx);
         let this = cx.entity().downgrade();
@@ -785,6 +785,7 @@ impl Render for SettingsWindow {
             .size_full()
             .flex()
             .flex_col()
+            .map(|root| crate::window::viewport::pad(root, window))
             .overflow_hidden()
             .text_font(&self.config.ui)
             .text_size(px(12.))

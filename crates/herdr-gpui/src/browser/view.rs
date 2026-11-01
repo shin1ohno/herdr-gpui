@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 mod agent_tab;
 pub(in crate::browser) mod present;
 mod render;
+#[cfg(not(target_os = "ios"))]
 mod requests;
 
 /// One window's browser state. How each workspace's view is split, and what
@@ -186,6 +187,9 @@ pub(crate) enum PageOpened {
 
 impl HerdrWindow {
     pub(crate) fn browser_key(&self) -> Option<(Scope, String)> {
+        if let Some(key) = self.core_workspace_key() {
+            return Some(key);
+        }
         let workspace = self.live.snapshot.as_ref()?.focused_workspace_id.clone()?;
         Some((scope(&self.endpoints[self.selected_endpoint]), workspace))
     }

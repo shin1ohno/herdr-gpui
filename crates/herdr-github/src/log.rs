@@ -179,6 +179,10 @@ pub(super) fn kind(error: &Error) -> &'static str {
         Error::Rejected(_) => "rejected",
         Error::Worker(_) => "worker",
         Error::Credentials(error) => match error {
+            #[cfg(target_os = "ios")]
+            CredentialError::DeviceKey(_) => "device_key",
+            #[cfg(target_os = "ios")]
+            CredentialError::IosKeychain(_) => "ios_keychain",
             #[cfg(target_os = "macos")]
             CredentialError::KeychainRead(_) => "keychain_read",
             #[cfg(target_os = "macos")]
@@ -222,3 +226,6 @@ pub(super) fn failure(context: &'static str, error: &Error) {
         "GitHub operation failed"
     );
 }
+
+#[cfg(test)]
+mod tests;

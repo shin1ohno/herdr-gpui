@@ -69,6 +69,7 @@ pub enum Error {
     ConnectionBusy,
     #[error("The connection is not ready. Try again.")]
     ConnectionNotReady,
+    #[cfg(not(target_os = "ios"))]
     #[error(transparent)]
     Control(#[from] crate::control::Error),
     #[error(transparent)]
@@ -180,8 +181,17 @@ pub enum Error {
     LocalGit(#[source] io::Error),
     /// The search waited for the permission and macOS still refused it.
     /// Turning it on applies to the next search; the app need not restart.
-    #[error(
-        "macOS has not allowed Herdr on your local network. Turn on Herdr in System Settings › Privacy & Security › Local Network, then search again"
+    #[cfg_attr(
+        target_os = "ios",
+        error(
+            "iPadOS has not allowed Herdr on your local network. In Settings, allow Local Network for Herdr, then search again"
+        )
+    )]
+    #[cfg_attr(
+        not(target_os = "ios"),
+        error(
+            "macOS has not allowed Herdr on your local network. Turn on Herdr in System Settings › Privacy & Security › Local Network, then search again"
+        )
     )]
     LocalNetworkDenied,
     #[error("Worktree notes stay in this app and are never sent to the daemon")]
@@ -286,7 +296,7 @@ pub enum Error {
     Settings(#[from] crate::config::Error),
     #[error("Could not finish saving Settings: {0}")]
     SettingsSave(#[source] std::sync::Arc<Error>),
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "ios")))]
     #[error(transparent)]
     SetupRelay(#[from] crate::setup_relay::Error),
     #[error("Could not install the agent skill at {}: {source}", path.display())]

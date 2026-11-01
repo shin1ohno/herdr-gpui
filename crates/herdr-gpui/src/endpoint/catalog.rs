@@ -8,9 +8,12 @@ use crate::{Error, HerdrWindow, Result, storage_warning::StorageFailure};
 use gpui::Context;
 use herdr_client::{ConnectTarget, SavedHost, WslHost};
 use std::{
+    collections::HashMap,
     sync::mpsc,
     time::{Duration, Instant},
 };
+
+type Generations = HashMap<String, herdr_backend::Generation>;
 
 pub(crate) struct Catalog {
     development: Option<bool>,
@@ -25,9 +28,12 @@ pub(crate) struct Catalog {
     /// The storage failure last warned about. Loads retry every two seconds,
     /// so each distinct failure warns once until a load succeeds.
     last_failure: Option<StorageFailure>,
+    /// Backend choices read after the hosts in the last accepted catalog.
+    generations: Generations,
 }
 
 pub(super) struct CatalogUpdate {
+    generations: Generations,
     pub(super) hosts: Vec<SavedHost>,
     pub(super) wsl: Vec<WslHost>,
     /// The endpoint ID the stored selection names, read only at startup.
@@ -75,26 +81,58 @@ fn load(development: bool, startup: bool) -> Result<CatalogUpdate> {
     } else {
         Default::default()
     };
-    if !startup {
-        return Ok(CatalogUpdate {
-            hosts: herdr_client::load_saved_hosts(development)?,
-            wsl: wsl.hosts,
-            selection: None,
-            #[cfg(feature = "cloud")]
-            cloud: cloud_devices(),
-        });
+    #[cfg(target_os = "ios")]
+    let read_generations = || crate::config::Config::load_startup().map(configured_generations);
+    #[cfg(not(target_os = "ios"))]
+    let read_generations = || Ok(Generations::new());
+    let mut update = load_with(
+        || {
+            if !startup {
+                return Ok((herdr_client::load_saved_hosts(development)?, None));
+            }
+            let (hosts, selected) = herdr_client::load_saved_host_selection(development)?;
+            let selection = match wsl.selected_host() {
+                Some(host) => Some(format!("{WSL_PREFIX}{}", host.distro)),
+                None => selected.map(|id| format!("{SAVED_PREFIX}{id}")),
+            };
+            Ok((hosts, Some(selection)))
+        },
+        read_generations,
+    )?;
+    update.wsl = wsl.hosts;
+    #[cfg(feature = "cloud")]
+    {
+        update.cloud = cloud_devices();
     }
-    let (hosts, selected) = herdr_client::load_saved_host_selection(development)?;
-    let selection = match wsl.selected_host() {
-        Some(host) => Some(format!("{WSL_PREFIX}{}", host.distro)),
-        None => selected.map(|id| format!("{SAVED_PREFIX}{id}")),
-    };
+    Ok(update)
+}
+
+#[cfg(any(target_os = "ios", test))]
+fn configured_generations(config: crate::config::Config) -> Generations {
+    config
+        .devices
+        .into_iter()
+        .filter_map(|(profile, settings)| settings.generation.map(|value| (profile, value)))
+        .collect()
+}
+
+/// Core-only registration publishes its settings before its saved host. Reading
+/// hosts first guarantees a newly observed host includes that backend choice,
+/// even when another scene's settings watcher has not reloaded yet. A failed
+/// settings read publishes neither half of the catalog.
+fn load_with(
+    read_hosts: impl FnOnce() -> Result<(Vec<SavedHost>, Option<Option<String>>)>,
+    read_generations: impl FnOnce() -> Result<Generations>,
+) -> Result<CatalogUpdate> {
+    let (hosts, selection) = read_hosts()?;
+    let generations = read_generations()?;
     Ok(CatalogUpdate {
+        generations,
         hosts,
-        wsl: wsl.hosts,
-        selection: Some(selection),
+        wsl: Vec::new(),
+        selection,
         #[cfg(feature = "cloud")]
-        cloud: cloud_devices(),
+        cloud: None,
     })
 }
 
@@ -124,6 +162,7 @@ impl Catalog {
             queued_write: None,
             writing: None,
             last_failure: None,
+            generations: Generations::new(),
         }
     }
 
@@ -170,11 +209,13 @@ impl Catalog {
 
     /// Whether the saved devices have been read once, so a device missing
     /// from the window is really not saved rather than not loaded yet.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn loaded(&self) -> bool {
         self.initialized
     }
 
     pub(super) fn accept(&mut self, update: &CatalogUpdate) {
+        self.generations.clone_from(&update.generations);
         if !self.initialized {
             self.desired = update.selection.clone().flatten();
             self.restore_pending = self.desired.is_some();
@@ -184,6 +225,13 @@ impl Catalog {
             self.desired = None;
             self.restore_pending = false;
         }
+    }
+
+    #[cfg(any(target_os = "ios", test))]
+    fn backend_generation(&self, endpoint_id: &str) -> herdr_backend::Generation {
+        super::saved_profile_id(endpoint_id)
+            .and_then(|profile| self.generations.get(profile).copied())
+            .unwrap_or(herdr_backend::Generation::Herdr1)
     }
 
     pub(super) fn choose(&mut self, id: &str) {
@@ -232,14 +280,37 @@ impl HerdrWindow {
         if self.endpoints.iter().any(|endpoint| {
             endpoint.id == id
                 && endpoint.enabled
-                && endpoint.connection.handle.is_some()
-                && endpoint.live.status.is_connected()
-                && endpoint.live.snapshot.is_some()
+                && (endpoint.backend_generation() == herdr_backend::Generation::Herdr2
+                    || (endpoint.connection.handle.is_some()
+                        && endpoint.live.status.is_connected()
+                        && endpoint.live.snapshot.is_some()))
         }) {
             // One handoff attempt: activation failure may fall back to Local,
             // but must neither overwrite the preference nor loop on every tick.
             self.catalog.restore_pending = false;
             self.switch_endpoint(&id, cx);
+        }
+    }
+
+    /// Runtime transport policy comes from the accepted catalog, never a later
+    /// appearance reload that might have sampled settings before registration.
+    #[cfg(any(target_os = "ios", test))]
+    pub(super) fn apply_catalog_generations(&mut self, cx: &mut Context<Self>) {
+        let mut selected_changed = false;
+        for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
+            if endpoint.set_backend_generation(self.catalog.backend_generation(&endpoint.id)) {
+                selected_changed |= index == self.selected_endpoint;
+            }
+        }
+        if selected_changed {
+            self.reset_selected(cx);
+            self.retire_core_connection(cx);
+            #[cfg(target_os = "ios")]
+            if self.endpoints[self.selected_endpoint].backend_generation()
+                == herdr_backend::Generation::Herdr2
+            {
+                self.show_core_workspace(cx);
+            }
         }
     }
 
@@ -364,6 +435,8 @@ impl HerdrWindow {
             .iter()
             .position(|e| e.id == selected_id)
             .unwrap_or(0);
+        #[cfg(target_os = "ios")]
+        self.apply_catalog_generations(cx);
         // Devices picked for the sidebar that left or were disabled are no
         // longer listed; the selected one was followed above.
         self.device_filter.reconcile(

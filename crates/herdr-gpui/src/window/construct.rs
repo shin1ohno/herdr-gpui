@@ -184,7 +184,7 @@ impl HerdrWindow {
                 endpoint::LOCAL.into(),
                 "Local".into(),
                 target,
-                true,
+                !cfg!(target_os = "ios"),
             )],
             fan_out: None,
             file_transfer: None,

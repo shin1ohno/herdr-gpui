@@ -3,7 +3,7 @@
 use super::Error;
 use super::{
     Config, DEFAULT_CONFIG, Daemon, FONT_SIZE_RANGE, FontFace, LOCAL_CONFIG, LayoutMode,
-    MANAGED_HEADER,
+    MANAGED_HEADER, read_text,
 };
 use crate::{Result, contrast::Contrast};
 use std::{
@@ -16,6 +16,17 @@ impl Config {
     /// Serialize migration, defaults refresh, and theme saves across GUI windows
     /// and processes. This is only called by background config workers.
     pub(super) fn prepare_files(path: &Path) -> Result<(fs::File, PathBuf)> {
+        Self::prepare_files_with(path, || {
+            #[cfg(target_os = "ios")]
+            super::ipad_storage::migrate_or_warn(path, &super::ipad_storage::legacy_path()?);
+            Ok(())
+        })
+    }
+
+    pub(super) fn prepare_files_with(
+        path: &Path,
+        before: impl FnOnce() -> Result<()>,
+    ) -> Result<(fs::File, PathBuf)> {
         let parent = path
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
@@ -37,8 +48,9 @@ impl Config {
                 tracing::warn!(operation = "config_lock_acquire", kind = ?error.kind(), raw_os_error = ?error.raw_os_error(), "Config lock failed");
             })
             .map_err(|error| crate::Error::from(error).at_path(&lock_path))?;
+        before()?;
         let local = path.with_extension("local.toml");
-        let original = match fs::read_to_string(path) {
+        let original = match read_text(path) {
             Ok(text) => Some(text),
             Err(error) if error.kind() == ErrorKind::NotFound => None,
             Err(error) => return Err(crate::Error::from(error).at_path(path)),
@@ -51,7 +63,7 @@ impl Config {
             // safely stored in the local file. A conflict needs human resolution.
             Self::parse_over(text, &Daemon::default()).map_err(|error| error.at_path(path))?;
         }
-        match fs::read_to_string(&local) {
+        match read_text(&local) {
             Ok(text) if legacy.is_some_and(|legacy| legacy != text) => {
                 return Err(Error::MigrationConflict {
                     original: path.into(),
@@ -111,7 +123,7 @@ impl Config {
         };
         selected.validate_theme()?;
         let result = (|| -> Result<()> {
-            let text = match fs::read_to_string(path) {
+            let text = match read_text(path) {
                 Ok(text) => text,
                 Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
                 Err(error) => return Err(error.into()),
@@ -138,7 +150,7 @@ impl Config {
 
     pub(super) fn save_layout_path(mode: LayoutMode, path: &Path) -> Result<()> {
         let result = (|| -> Result<()> {
-            let text = match fs::read_to_string(path) {
+            let text = match read_text(path) {
                 Ok(text) => text,
                 Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
                 Err(error) => return Err(error.into()),
@@ -179,7 +191,7 @@ impl Config {
 
     pub(super) fn save_usage_visibility_path(show: bool, path: &Path) -> Result<()> {
         let result = (|| -> Result<()> {
-            let text = match fs::read_to_string(path) {
+            let text = match read_text(path) {
                 Ok(text) => text,
                 Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
                 Err(error) => return Err(error.into()),
@@ -210,7 +222,7 @@ impl Config {
     pub(super) fn save_code_path(edit: &super::CodeEdit, path: &Path) -> Result<()> {
         use super::{CodeEdit, CodeMode};
         let result = (|| -> Result<()> {
-            let text = match fs::read_to_string(path) {
+            let text = match read_text(path) {
                 Ok(text) => text,
                 Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
                 Err(error) => return Err(error.into()),
@@ -266,7 +278,7 @@ impl Config {
 
     pub(super) fn save_contrast_path(contrast: Contrast, path: &Path) -> Result<()> {
         let result = (|| -> Result<()> {
-            let text = match fs::read_to_string(path) {
+            let text = match read_text(path) {
                 Ok(text) => text,
                 Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
                 Err(error) => return Err(error.into()),
@@ -290,7 +302,7 @@ impl Config {
 
     pub(super) fn save_show_agents_path(show: bool, path: &Path) -> Result<()> {
         let result = (|| -> Result<()> {
-            let text = match fs::read_to_string(path) {
+            let text = match read_text(path) {
                 Ok(text) => text,
                 Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
                 Err(error) => return Err(error.into()),
@@ -346,7 +358,7 @@ impl Config {
             return Err(Error::EmptyFontFamily("fonts").into());
         }
         let result = (|| -> Result<()> {
-            let text = fs::read_to_string(path)?;
+            let text = read_text(path)?;
             let mut document = text.parse::<toml_edit::DocumentMut>()?;
             for face in faces {
                 if let Some(family) = family {
@@ -381,7 +393,7 @@ impl Config {
             }
         }
         let result = (|| -> Result<()> {
-            let text = fs::read_to_string(path)?;
+            let text = read_text(path)?;
             let mut document = text.parse::<toml_edit::DocumentMut>()?;
             for &(face, size) in sizes {
                 let font = document

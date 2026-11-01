@@ -201,6 +201,34 @@ jobs:
         if: matrix.features == 'all'
         run: cargo test --locked --workspace --all-features
 
+  # Desktop checks cannot type-check code behind target_os = "ios".
+  ios:
+    if: >-
+      needs.commits.outputs.code == 'true' &&
+      github.repository == 'penso/herdr-gpui' &&
+      (github.event_name == 'pull_request' ||
+       ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+        github.actor == 'penso' && github.triggering_actor == 'penso' &&
+        github.ref == 'refs/heads/main'))
+    name: iPadOS device and simulator
+    needs: [zizmor, commits]
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain and iPad targets
+        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: ios
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Lint both iPad targets and test simulator tooling
+        run: bash scripts/ios/lint.sh
+
   # Match the other platforms' Rust checks without an extra optimized build.
   # Native GUI tests run in windows-native; the Windows release builds run in
   # the release workflow.
@@ -381,7 +409,7 @@ jobs:
   # Keep the branch-protection context stable while requiring every platform.
   checks-passed:
     name: Format, lint, and test
-    needs: [checks, windows, windows-native, windows-package, build-macos, commits]
+    needs: [checks, windows, windows-native, windows-package, build-macos, ios, commits]
     if: >-
       always() &&
       github.repository == 'penso/herdr-gpui' &&
@@ -400,6 +428,7 @@ jobs:
           NATIVE: ${{ needs.windows-native.result }}
           PACKAGE: ${{ needs.windows-package.result }}
           MACOS_RELEASE: ${{ needs.build-macos.result }}
+          IOS: ${{ needs.ios.result }}
           EVENT: ${{ github.event_name }}
           COMMITS: ${{ needs.commits.result }}
           CODE: ${{ needs.commits.outputs.code }}
@@ -408,8 +437,11 @@ jobs:
           test "$COMMITS" = success || exit 1
           if [ "$CODE" = true ]; then
             test "$RESULT" = success && test "$WINDOWS" = success && test "$NATIVE" = success || exit 1
+            # The iPad targets only type-check on macOS, so the desktop checks above never see them.
+            test "$IOS" = success || exit 1
           else
             test "$CODE" = false && test "$RESULT" = skipped && test "$WINDOWS" = skipped && test "$NATIVE" = skipped || exit 1
+            test "$IOS" = skipped || exit 1
           fi
           # The macOS release builds run on pull requests only.
           if [ "$CODE" = true ] && [ "$EVENT" = pull_request ]; then

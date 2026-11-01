@@ -228,7 +228,11 @@ pub struct Updater {
 impl Default for Updater {
     fn default() -> Self {
         Self {
-            state: State::Disabled("In-app updates require a release build with an embedded update verification key. Local builds and test fixtures never check automatically.".into()),
+            state: State::Disabled(if cfg!(target_os = "ios") {
+                "In-app updates are unavailable on iPadOS. Install updates through the App Store or Xcode."
+            } else {
+                "In-app updates require a release build with an embedded update verification key. Local builds and test fixtures never check automatically."
+            }.into()),
             commands: None,
             cancelled: Arc::new(AtomicBool::new(false)),
             stopped: Arc::new(AtomicBool::new(false)),
@@ -250,6 +254,9 @@ impl Updater {
     /// stage and restart the same installation at once.
     pub fn secondary() -> Self {
         let mut updater = Self::default();
+        if cfg!(target_os = "ios") {
+            return updater;
+        }
         updater.state = State::Disabled(
             "another window owns app updates in this process. Use the window that was open first."
                 .into(),
@@ -260,6 +267,9 @@ impl Updater {
     pub fn start(channel: UpdateChannel) -> Self {
         let mut updater = Self::default();
         updater.channel = channel;
+        if cfg!(target_os = "ios") {
+            return updater;
+        }
         let Some(key) = option_env!("HERDR_UPDATE_PUBLIC_KEY") else {
             return updater;
         };

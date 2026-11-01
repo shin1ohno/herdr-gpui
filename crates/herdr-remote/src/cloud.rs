@@ -67,7 +67,11 @@ pub enum Error {
 /// streams, which only the Unix client supports; offering setup elsewhere
 /// would save devices that can never connect.
 pub fn unavailable() -> Option<&'static str> {
-    cfg!(windows).then_some("Cloud devices are unavailable on Windows.")
+    if cfg!(target_os = "ios") {
+        Some("Cloud devices are unavailable on iPadOS.")
+    } else {
+        cfg!(windows).then_some("Cloud devices are unavailable on Windows.")
+    }
 }
 
 /// What a job reports while it adds a machine, in words every provider shares.

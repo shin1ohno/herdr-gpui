@@ -2,6 +2,7 @@
 //! the panes beneath, and painting the page the menu is currently on. Geometry
 //! here is the same geometry used for hit testing and IME placement.
 
+mod anchor;
 mod keys;
 
 use super::{MENU_MARGIN, Page, WorkspaceAction, devices::rail};
@@ -186,6 +187,7 @@ impl HerdrWindow {
                         .id("session-picker-underlay")
                         .debug_selector(|| "session-picker-underlay".into()),
                     window.viewport_size(),
+                    window.fully_visible_bounds(),
                     Page::Sessions,
                     px(0.),
                 )
@@ -223,10 +225,11 @@ impl HerdrWindow {
         &self,
         panel: Stateful<Div>,
         viewport: Size<Pixels>,
+        visible: Bounds<Pixels>,
         page: Page,
         lift: Pixels,
     ) -> Stateful<Div> {
-        let (room, above) = self.footer_room(viewport);
+        let (room, above) = self.footer_room(visible);
         let list = matches!(page, Page::Devices | Page::Sessions);
         let width = if list {
             super::devices::MENU_WIDTH
@@ -243,10 +246,19 @@ impl HerdrWindow {
             Page::Sessions => anchor.min((viewport.width - px(width + MENU_MARGIN)).max(px(0.))),
             _ => px(56.),
         };
-        let panel = panel
-            .absolute()
-            .inset_s(start)
-            .w(px(width).min((viewport.width - px(16.)).max(px(0.))));
+        let width = px(width).min((visible.size.width - px(16.)).max(px(0.)));
+        let (near, far) = if crate::direction::is_rtl() {
+            (
+                viewport.width - visible.right(),
+                viewport.width - visible.left(),
+            )
+        } else {
+            (visible.left(), visible.right())
+        };
+        let start = start
+            .max(near + px(8.))
+            .min((far - width - px(8.)).max(near));
+        let panel = panel.absolute().inset_s(start).w(width);
         if above {
             panel
                 .bottom(
@@ -263,12 +275,12 @@ impl HerdrWindow {
 
     /// The room a footer menu has, and whether it opens above its anchor,
     /// as it does from the sidebar footer at the window's foot.
-    fn footer_room(&self, viewport: Size<Pixels>) -> (Pixels, bool) {
-        let chrome = px(crate::titlebar::HEIGHT);
-        let band = (viewport.height - chrome - px(2. * MENU_MARGIN)).max(px(60.));
+    fn footer_room(&self, visible: Bounds<Pixels>) -> (Pixels, bool) {
+        let chrome = visible.top() + px(crate::titlebar::HEIGHT);
+        let band = (visible.bottom() - chrome - px(2. * MENU_MARGIN)).max(px(0.));
         let room = |side: Pixels| side.clamp(px(0.), band).max(px(60.)).min(band);
         let above = room(self.menu.anchor.y - px(12. + MENU_MARGIN) - chrome);
-        let below = room(viewport.height - self.menu.anchor.y - px(12. + MENU_MARGIN));
+        let below = room(visible.bottom() - self.menu.anchor.y - px(12. + MENU_MARGIN));
         if above >= below {
             (above, true)
         } else {
@@ -301,7 +313,8 @@ impl HerdrWindow {
     ) -> Stateful<Div> {
         let font = &self.config.ui;
         let theme = &self.theme;
-        let viewport = window.viewport_size();
+        let visible = window.fully_visible_bounds();
+        let viewport = visible.size;
         let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
         // Add Device's sources share one wide dialog; a narrow window keeps
         // the rail to icons so the form still has room.
@@ -359,10 +372,10 @@ impl HerdrWindow {
             // All Devices rises out of the footer that opened it, so a box in
             // its place clips it on the way; see the end of this function.
             .when(footer_anchored && !rises, |panel| {
-                self.anchor_footer_panel(panel, viewport, page, lift)
+                self.anchor_footer_panel(panel, window.viewport_size(), visible, page, lift)
             })
             .when(rises, |panel| {
-                let (room, above) = self.footer_room(viewport);
+                let (room, above) = self.footer_room(visible);
                 let below = 1. - shown;
                 // Its own height, as the last frame laid it out; the box it
                 // rises in takes its height from it, so a share of that box
@@ -387,7 +400,7 @@ impl HerdrWindow {
             .when(matches!(page, Page::Usage(_)), |panel| {
                 // Rises from the status bar segment that opened it, kept inside
                 // the window and clear of the titlebar.
-                let chrome = px(crate::titlebar::HEIGHT);
+                let chrome = visible.top() + px(crate::titlebar::HEIGHT);
                 let width = px(crate::usage::PANEL_WIDTH)
                     .min((viewport.width - px(2. * MENU_MARGIN)).max(px(0.)));
                 // The segment's own x, whichever side the bar starts on.
@@ -397,10 +410,13 @@ impl HerdrWindow {
                         self.menu
                             .anchor
                             .x
-                            .min(viewport.width - width - px(MENU_MARGIN))
-                            .max(px(MENU_MARGIN)),
+                            .min(visible.right() - width - px(MENU_MARGIN))
+                            .max(visible.left() + px(MENU_MARGIN)),
                     )
-                    .bottom((viewport.height - self.menu.anchor.y).max(px(MENU_MARGIN)) - lift)
+                    .bottom(
+                        (window.viewport_size().height - self.menu.anchor.y).max(px(MENU_MARGIN))
+                            - lift,
+                    )
                     .w(width)
                     .max_h((self.menu.anchor.y - chrome - px(MENU_MARGIN)).max(px(60.)))
                     .flex()
@@ -847,28 +863,30 @@ impl HerdrWindow {
         });
         let placed = if pointer_anchored {
             let position = if page == Page::Git {
-                point(self.menu.anchor.x, px(crate::titlebar::HEIGHT + 6.))
+                point(
+                    self.menu.anchor.x,
+                    visible.top() + px(crate::titlebar::HEIGHT + 6.),
+                )
             } else {
                 self.menu.anchor
             };
-            anchored()
-                .position(position)
-                // A menu hangs toward the end from the pointer, and toward
-                // the start from a button at the end: the remote indicator,
-                // or the "…" at a strip's right end, which stays there
-                // because strips never mirror.
-                .anchor(match page {
+            // A menu hangs toward the end from the pointer, and toward the
+            // start from a button at the end of a strip, which never mirrors.
+            anchor::place(
+                panel,
+                position,
+                match page {
                     Page::Group => Anchor::TopRight,
                     Page::RemoteDevices => crate::direction::anchor(Anchor::TopRight),
                     _ => crate::direction::anchor(Anchor::TopLeft),
-                })
-                .snap_to_window_with_margin(Edges::all(px(12.)))
-                .child(panel)
-                .into_any_element()
+                },
+                window,
+            )
         } else if rises {
             self.anchor_footer_panel(
                 div().id("menu-rise").overflow_hidden(),
-                viewport,
+                window.viewport_size(),
+                visible,
                 page,
                 px(0.),
             )
@@ -883,6 +901,7 @@ impl HerdrWindow {
                 .absolute()
                 .inset_0()
                 .when(dims, |layer| layer.row().items_center().justify_center())
+                .when(dims, |layer| crate::window::viewport::pad(layer, window))
                 .child(placed);
         }
         div()
@@ -902,6 +921,7 @@ impl HerdrWindow {
                     .row()
                     .items_center()
                     .justify_center()
+                    .map(|overlay| crate::window::viewport::pad(overlay, window))
                     .bg(super::appear::backdrop(
                         theme.background,
                         self.menu.appear.backdrop(now),

@@ -34,3 +34,5 @@ status-bar-awake-display-on = Keeping the display awake · Right-click: until ag
 status-bar-awake-system-on = Keeping the system awake · Right-click: until agents finish
 status-bar-awake-display-off = Keep the display awake · Right-click: until agents finish
 status-bar-awake-system-off = Keep the system awake · Right-click: until agents finish
+status-bar-awake-system-unavailable = Keeping only the system awake is unavailable on iPad. Choose display keep-awake in Settings.
+status-bar-ipad-select-device = Choose a computer, or add one to connect over SSH.

@@ -196,6 +196,7 @@ pub(crate) fn remove(home: &Path) -> crate::Result<Vec<PathBuf>> {
 }
 
 /// Whether any agent directory exists to install into.
+#[cfg(not(target_os = "ios"))]
 fn agents_present(home: &Path) -> bool {
     ROOTS.iter().any(|root| home.join(root).is_dir())
 }
@@ -230,12 +231,14 @@ pub(crate) struct AgentSkill {
 impl Global for AgentSkill {}
 
 impl AgentSkill {
+    #[cfg(not(target_os = "ios"))]
     fn path() -> Option<PathBuf> {
         crate::preferences::state_dir().map(|dir| dir.join("agent-skill.json"))
     }
 
     /// Called before starting GPUI. Only a release build asks or keeps the
     /// skill current: a development build would point agents at itself.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn load() -> Self {
         let path = Self::path();
         let choice = path
@@ -274,6 +277,7 @@ impl AgentSkill {
         }
     }
 
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn install_global(self, cx: &mut App) {
         // Fixtures never read the user's settings, so they never ask either.
         let follow = self.path.is_some();
@@ -298,6 +302,7 @@ impl AgentSkill {
     }
 
     /// Applies the settings' `[agent_skill] install`, as loaded or edited.
+    #[cfg(not(target_os = "ios"))]
     fn allow(cx: &mut App, install: SkillInstall) {
         let skill = cx.global_mut::<Self>();
         skill.install = Some(install);
@@ -359,12 +364,14 @@ impl AgentSkill {
 
 /// Records `choice` as the app records the user's answer, for a process
 /// without the app's global, such as the command line. Blocking.
+#[cfg(not(target_os = "ios"))]
 pub(crate) fn save_choice(choice: Choice) -> crate::Result<()> {
     let path = AgentSkill::path().ok_or(crate::Error::MissingStateRoot)?;
     state_file::write(&path, &Saved { choice })
 }
 
 /// Rewrites the installed skill if this app's text or location changed.
+#[cfg(not(target_os = "ios"))]
 fn refresh_installed(cx: &mut App) {
     let Ok(home) = crate::config::home() else {
         return;
@@ -522,6 +529,7 @@ mod tests {
         assert!(bundled.contains("/Applications/Herdr.app/Contents/MacOS/Herdr browser example"));
     }
 
+    #[cfg(not(target_os = "ios"))]
     #[test]
     fn installing_keeps_to_existing_agent_directories_and_the_users_own_files() {
         let home = tempfile::tempdir().unwrap();
@@ -572,6 +580,7 @@ mod tests {
         assert_eq!(saved.choice, Choice::Installed);
     }
 
+    #[cfg(not(target_os = "ios"))]
     mod install_setting;
 
     #[gpui::test]

@@ -1,4 +1,5 @@
 //! Requires an active native desktop and an explicitly selected daemon executable.
+#![cfg(not(target_os = "ios"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::disallowed_methods)]
 #[path = "../../test-support/sandbox.rs"]
 mod sandbox;

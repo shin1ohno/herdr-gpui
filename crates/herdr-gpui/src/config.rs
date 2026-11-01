@@ -30,6 +30,8 @@ mod files;
 mod font_weight;
 mod fonts;
 mod github;
+#[cfg(any(test, target_os = "ios"))]
+mod ipad_storage;
 mod keybindings;
 mod layout;
 mod notifications;
@@ -75,6 +77,7 @@ pub(crate) use daemon::daemon_config_path;
 use daemon::{Daemon, daemon_settings};
 use devices::MAX_DEVICES;
 pub(crate) use devices::{DeviceSettings, KeybindingSource};
+#[cfg(any(test, not(target_os = "ios")))]
 pub(crate) use edit::{Layer, parse_value};
 pub(crate) use error::{Error, ThemeParseError};
 pub use features::{Feature, Features};
@@ -109,6 +112,8 @@ pub(crate) use herdr_remote::config::OpenSandboxFields;
 pub use herdr_remote::config::SpritesConfig;
 #[cfg(feature = "sprites")]
 pub(crate) use herdr_remote::config::SpritesFields;
+#[cfg(target_os = "ios")]
+use ipad_storage::read_text;
 pub use layout::{Density, Layout, LayoutMode, Style};
 pub(crate) use notifications::NotificationDelivery;
 pub use notifications::{
@@ -129,6 +134,8 @@ pub use sidebar_style::{SelectMode, SidebarOverrides, SidebarStyle};
 pub use ssh_hosts::SshConfig;
 pub use status_bar::StatusBar;
 pub use status_icons::StatusIcons;
+#[cfg(not(target_os = "ios"))]
+use std::fs::read_to_string as read_text;
 use std::{
     collections::BTreeMap,
     fs,
@@ -228,6 +235,9 @@ pub struct Config {
     /// The language the app shows: `system`, or a BCP 47 tag (docs/i18n.md).
     pub language: herdr_i18n::Language,
     pub layout: Layout,
+    /// Only a successful load from the matching path inherits this warning.
+    #[cfg(any(test, target_os = "ios"))]
+    pub(crate) migration_warning: Option<std::sync::Arc<ipad_storage::MigrationWarning>>,
     /// Configured families, sorted, that font resolution found no installed
     /// family for; `diagnostic` reports them.
     pub(crate) missing_fonts: Vec<String>,
@@ -436,6 +446,8 @@ impl Default for Config {
             keybindings: Keymap::default(),
             language: herdr_i18n::Language::default(),
             layout: Layout::default(),
+            #[cfg(any(test, target_os = "ios"))]
+            migration_warning: None,
             missing_fonts: Vec::new(),
             missing_weight: None,
             mods: crate::mods::Config::default(),
@@ -591,6 +603,7 @@ impl Config {
     }
 
     /// The provider tables `herdr-remote` reads, from a full load.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn load_remote()
     -> std::result::Result<herdr_remote::config::Sections, herdr_remote::config::LoadError> {
         let config = Self::load()?;
@@ -632,6 +645,14 @@ impl Config {
             }
         };
         let mut lines = Vec::new();
+        #[cfg(any(test, target_os = "ios"))]
+        if let Some(warning) = self
+            .migration_warning
+            .as_ref()
+            .and_then(|warning| warning.diagnostic())
+        {
+            lines.push(warning);
+        }
         if !self.unknown_keys.is_empty() {
             lines.push(format!(
                 "config-gpui.local.toml: ignoring unknown keys {}",
@@ -669,7 +690,10 @@ impl Config {
     /// First-frame settings only: no lock, migration, writes, or fsync. The
     /// background load performs maintenance after the window has appeared.
     pub(crate) fn load_startup() -> Result<Self> {
-        Self::load_startup_path(&Self::path()?, &daemon_config_path(herdr_client::local_var))
+        let path = Self::path()?;
+        #[cfg(target_os = "ios")]
+        let path = ipad_storage::startup_path(&path, &ipad_storage::legacy_path()?)?;
+        Self::load_startup_path(&path, &daemon_config_path(herdr_client::local_var))
     }
 
     fn load_startup_path(path: &Path, daemon: &Path) -> Result<Self> {
@@ -683,11 +707,11 @@ impl Config {
     /// come from, without writing anything.
     pub(super) fn overrides_text(path: &Path) -> Result<(String, PathBuf)> {
         let local = path.with_extension("local.toml");
-        Ok(match fs::read_to_string(&local) {
+        Ok(match read_text(&local) {
             Ok(text) => (text, local),
             // Without overrides or a personal config to migrate, maintenance
             // will seed the first-launch overrides; show them from frame one.
-            Err(error) if error.kind() == ErrorKind::NotFound => match fs::read_to_string(path) {
+            Err(error) if error.kind() == ErrorKind::NotFound => match read_text(path) {
                 Ok(text) if text.lines().next() != Some(MANAGED_HEADER) => (text, path.to_owned()),
                 Ok(_) => (LOCAL_CONFIG.into(), local),
                 Err(error) if error.kind() == ErrorKind::NotFound => (LOCAL_CONFIG.into(), local),
@@ -702,14 +726,19 @@ impl Config {
     fn load_path(path: &Path, daemon: &Path) -> Result<Self> {
         let base = daemon_settings(daemon);
         let (_lock, local) = Self::prepare_files(path)?;
-        let text = fs::read_to_string(&local)
-            .map_err(|error| crate::Error::from(error).at_path(&local))?;
+        let text = read_text(&local).map_err(|error| crate::Error::from(error).at_path(&local))?;
         // Validate the override independently so bad types/unknown keys cannot
         // disappear inside the merge. Empty arrays explicitly replace defaults.
         Self::parse_over(&text, &base).map_err(|error| error.at_path(&local))?;
-        Self::parse_layers([DEFAULT_CONFIG, &text], &base)
-            .map_err(|error| error.at_path(&local))
-            .map(|config| config.with_desktop_theme(&text))
+        let config = Self::parse_layers([DEFAULT_CONFIG, &text], &base)
+            .map_err(|error| error.at_path(&local))?
+            .with_desktop_theme(&text);
+        #[cfg(any(test, target_os = "ios"))]
+        let config = Self {
+            migration_warning: ipad_storage::warning_for(path),
+            ..config
+        };
+        Ok(config)
     }
 
     /// Without a home directory there is no desktop theme to find, and the

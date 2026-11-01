@@ -48,13 +48,13 @@ pub(crate) fn connect(
             "--pane".to_owned(),
             target.pane_id.clone(),
         ];
-        let command = match &target.route {
+        let dial = match &target.route {
             super::Route::Local => {
                 // Unlike a missing socket directory, this is not permanent:
                 // the lookup started this tick may still be running.
                 let mut command = herdr_client::new_command(program.found()?);
                 command.args(args);
-                command
+                Dial::Process(command)
             }
             super::Route::Ssh(host) => {
                 let args = args
@@ -63,10 +63,10 @@ pub(crate) fn connect(
                     .collect::<Vec<_>>()
                     .join(" ");
                 let script = super::remote_program_script(&args);
-                herdr_client::script_command(host, &script).map_err(Error::Remote)?
+                Dial::ssh(host, &script)?
             }
         };
-        return Link::start(Dial::Process(command), since, resend);
+        return Link::start(dial, since, resend);
     }
     let dial = match &target.route {
         super::Route::Local => Dial::Socket(
@@ -74,7 +74,7 @@ pub(crate) fn connect(
         ),
         super::Route::Ssh(host) => {
             let script = super::remote_program_script(&format!("connect {}", target.endpoint));
-            Dial::Process(herdr_client::script_command(host, &script).map_err(Error::Remote)?)
+            Dial::ssh(host, &script)?
         }
     };
     Link::start(dial, since, resend)

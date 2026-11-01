@@ -174,9 +174,28 @@ pub(super) struct Endpoint {
     /// link can come back to the same daemon process.
     config_reload_pending: bool,
     sounds: crate::sound::Policy,
+    /// The app's explicit backend choice, separate from transport revision fencing.
+    backend: herdr_backend::Generation,
 }
 
 impl Endpoint {
+    pub(crate) fn backend_generation(&self) -> herdr_backend::Generation {
+        self.backend
+    }
+
+    #[cfg(any(target_os = "ios", test))]
+    fn set_backend_generation(&mut self, backend: herdr_backend::Generation) -> bool {
+        if self.backend == backend {
+            return false;
+        }
+        self.stop();
+        self.backend = backend;
+        self.outage = None;
+        self.attempts = 0;
+        self.retry_at = Instant::now();
+        true
+    }
+
     pub fn surface_requested(&self) -> bool {
         self.initial_surface
     }
@@ -240,6 +259,7 @@ impl Endpoint {
             initial_surface: false,
             config_reload_pending: false,
             sounds: Default::default(),
+            backend: herdr_backend::Generation::Herdr1,
         }
     }
 
@@ -295,7 +315,7 @@ impl Endpoint {
     }
 
     fn connect(&mut self, options: ConnectOptions, active: bool) {
-        if self.suspended() {
+        if !self.enabled || self.suspended() || self.backend == herdr_backend::Generation::Herdr2 {
             return;
         }
         self.stop();
@@ -547,6 +567,10 @@ impl HerdrWindow {
         if !self.endpoints[index].enabled {
             return;
         }
+        if self.uses_core_terminal_backend() {
+            self.reconnect_core_connection(cx);
+            return;
+        }
         self.install_warning_shown = false;
         self.version_notice_shown = false;
         #[cfg(feature = "container")]
@@ -557,6 +581,9 @@ impl HerdrWindow {
     }
 
     pub(super) fn detach_endpoint(&mut self, cx: &mut Context<Self>) {
+        if cfg!(target_os = "ios") {
+            self.detach_core_connection(cx);
+        }
         let endpoint = &mut self.endpoints[self.selected_endpoint];
         endpoint.stop();
         endpoint.outage = None;
@@ -709,10 +736,18 @@ impl HerdrWindow {
     }
 
     fn switch_endpoint(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
-        let Some(index) = self.endpoints.iter().position(|e| e.id == id && e.enabled) else {
+        let Some(index) = self
+            .endpoints
+            .iter()
+            .position(|e| e.id == id && (e.enabled || (cfg!(target_os = "ios") && e.id == LOCAL)))
+        else {
             return false;
         };
         if index == self.selected_endpoint {
+            #[cfg(target_os = "ios")]
+            if self.endpoints[index].backend_generation() == herdr_backend::Generation::Herdr2 {
+                self.show_core_workspace(cx);
+            }
             return true;
         }
         if index != 0
@@ -744,6 +779,10 @@ impl HerdrWindow {
         self.presentation.clear();
         self.activation_deadline =
             (!self.endpoints[index].detached).then(|| Instant::now() + ACTIVATION_TIMEOUT);
+        #[cfg(target_os = "ios")]
+        if self.endpoints[index].backend_generation() == herdr_backend::Generation::Herdr2 {
+            self.show_core_workspace(cx);
+        }
         cx.notify();
         true
     }

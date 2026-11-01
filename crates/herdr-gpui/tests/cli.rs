@@ -1,4 +1,5 @@
 //! Informational and usage-error paths must not reach GPUI or require a desktop/daemon.
+#![cfg(not(target_os = "ios"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::disallowed_methods)]
 
 #[cfg(target_os = "macos")]

@@ -37,3 +37,4 @@ settings-general-browser-skill-remove = Remove
 # Windows' own Startup switch has turned the entry off.
 settings-general-launch-at-login-disabled = Turned off in Settings > Apps > Startup. Turn it back on there.
 settings-general-error-launch-at-login = Launch at login: { $error }
+settings-general-browser-skill-ipad = Agent control of the app is unavailable on iPad.

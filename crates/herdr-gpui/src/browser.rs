@@ -71,15 +71,18 @@ pub(crate) use chat_pages::chat_page_visible;
 pub(crate) use closed::ClosedHerdrTab;
 pub(crate) use editor::Editor;
 pub(crate) use feedback::{Batch, Feedback, FeedbackKey};
+#[cfg(not(target_os = "ios"))]
 pub(crate) use feedback::{TAKE_BUDGET, json_size};
 pub(crate) use group_motion::Fold;
 #[cfg(test)]
 pub(crate) use groups::GroupIds;
 pub(crate) use groups::{GroupId, Pick, Shown, Slot};
 pub(crate) use layouts::Layouts;
+#[cfg(not(target_os = "ios"))]
+pub(crate) use location::LocalFile;
 #[cfg(any(target_os = "macos", windows))]
 pub(crate) use location::PostedFrom;
-pub(crate) use location::{LocalFile, Location, OrchestratorRepo, ReviewCheckout};
+pub(crate) use location::{Location, OrchestratorRepo, ReviewCheckout};
 #[cfg(any(target_os = "macos", windows))]
 pub(crate) use native::Pages;
 #[cfg(target_os = "macos")]
@@ -96,6 +99,7 @@ pub(crate) use underlay::{
     picture as picture_around_pages,
 };
 pub(crate) use view::{Browser, PageOpened, scope};
+#[cfg(not(target_os = "ios"))]
 pub(crate) use zoom::Zoom;
 
 /// Whether this build can show a page inside the window. Elsewhere a browser

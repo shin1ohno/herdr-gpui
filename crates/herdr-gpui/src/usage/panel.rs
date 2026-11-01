@@ -21,6 +21,13 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if cfg!(target_os = "ios") {
+            self.show_flash(
+                crate::window::Flash::warning(crate::i18n::fl!("platform-usage-unavailable")),
+                cx,
+            );
+            return;
+        }
         if self.open_menu(window, cx) {
             self.menu.anchor = anchor;
             self.menu.page = Some(Page::Usage(provider));

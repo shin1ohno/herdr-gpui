@@ -328,6 +328,18 @@ impl HerdrWindow {
                 .is_some_and(|(target, snapshot)| target.boot == snapshot.boot_id)
     }
 
+    /// UIKit's responder outlives a resize's missing cells, just as held input
+    /// does. This retains focus only for a target from a coherent projection;
+    /// it does not authorize sending or reopening the software keyboard.
+    pub(crate) fn pending_input_keeps_text_focus(&self) -> bool {
+        self.in_projection_gap()
+            && self
+                .pending_input
+                .target
+                .as_ref()
+                .is_some_and(|target| self.input_target_shown(&target.input))
+    }
+
     /// Record the current target and deliver held input to it in order, or
     /// discard it if focus moved during the gap. Returns whether the
     /// projection is coherent, so the caller may send after held input.

@@ -9,7 +9,7 @@ use crate::{Error, usage::Host};
 use herdr_client::ConnectTarget;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod repeated_scans;
 mod ssh_links;
 mod status_bar;
@@ -237,7 +237,7 @@ fn seeded_hosts_are_looked_up_by_workspace_and_forgotten_when_dropped() {
 
 /// The real step against this machine's own tools: a socket this test holds
 /// is listed with this process's id.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn this_machine_lists_a_socket_this_process_holds() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -369,7 +369,7 @@ fn a_bad_target_never_starts_ssh() {
 }
 
 /// A child that runs until killed, standing in for `ssh -N`.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn idle_child() -> std::process::Child {
     std::process::Command::new("/bin/sh")
         .args(["-c", "exec sleep 600"])
@@ -382,7 +382,7 @@ fn idle_child() -> std::process::Child {
 
 /// Whether `pid` has exited and been reaped, waiting a bounded while for the
 /// reaper thread.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn gone(pid: u32) -> bool {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while std::time::Instant::now() < deadline {
@@ -399,7 +399,7 @@ fn gone(pid: u32) -> bool {
     false
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn tunnels_close_with_their_port_and_never_open_twice() {
     let key = Key {
@@ -430,7 +430,7 @@ fn tunnels_close_with_their_port_and_never_open_twice() {
     assert!(gone(pid), "the tunnel's child outlived it");
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_tunnel_can_be_closed_by_hand_and_reopens_on_its_old_port() {
     let (mine, other) = (
@@ -464,7 +464,7 @@ fn a_tunnel_can_be_closed_by_hand_and_reopens_on_its_old_port() {
     assert_eq!(tunnels.begin(&mine), Some(Some(41005)));
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn closing_a_tunnel_still_opening_drops_its_result() {
     let key = Key {
@@ -485,7 +485,7 @@ fn closing_a_tunnel_still_opening_drops_its_result() {
     assert!(gone(pid));
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn closing_all_kills_a_tunnel_that_is_still_connecting() {
     let key = Key {
@@ -508,7 +508,7 @@ fn closing_all_kills_a_tunnel_that_is_still_connecting() {
     );
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn closing_a_connecting_port_by_hand_or_when_it_unlists_kills_its_child() {
     for by_hand in [true, false] {
@@ -532,7 +532,7 @@ fn closing_a_connecting_port_by_hand_or_when_it_unlists_kills_its_child() {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn an_attempt_cancelled_before_its_child_exists_kills_it_on_arrival() {
     let attempt = tunnel::Attempt::default();
@@ -541,7 +541,7 @@ fn an_attempt_cancelled_before_its_child_exists_kills_it_on_arrival() {
     assert!(killed(&attempt));
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn quitting_kills_a_finished_tunnel_still_on_its_way_to_the_window() {
     let key = Key {
@@ -565,7 +565,7 @@ fn quitting_kills_a_finished_tunnel_still_on_its_way_to_the_window() {
     assert_eq!(tunnels.finish(key, in_flight), None);
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn retain_reports_when_a_dead_tunnel_is_pruned() {
     let key = Key {
@@ -586,7 +586,7 @@ fn retain_reports_when_a_dead_tunnel_is_pruned() {
 /// Whether the child `attempt` holds was killed, waiting a bounded while.
 /// The attempt only kills it; reaping is its owner's job, so this reaps it
 /// here, which works on every Unix rather than reading `/proc`.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn killed(attempt: &tunnel::Attempt) -> bool {
     use std::os::unix::process::ExitStatusExt;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -600,7 +600,7 @@ fn killed(attempt: &tunnel::Attempt) -> bool {
     false
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn closing_all_tunnels_kills_every_child_and_drops_late_results() {
     let (open, opening) = (
@@ -640,7 +640,7 @@ fn closing_all_tunnels_kills_every_child_and_drops_late_results() {
     );
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_tunnel_finished_after_its_port_closed_is_dropped() {
     let key = Key {
@@ -661,7 +661,7 @@ fn a_tunnel_finished_after_its_port_closed_is_dropped() {
     assert!(gone(pid));
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_dead_tunnel_is_forgotten() {
     let key = Key {
@@ -679,7 +679,7 @@ fn a_dead_tunnel_is_forgotten() {
 }
 
 /// A child printing `script`'s output on a pipe, standing in for `ssh -N`.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn scripted(script: &str) -> (std::process::Child, std::process::ChildStdout) {
     let mut child = std::process::Command::new("/bin/sh")
         .args(["-c", script])
@@ -692,7 +692,7 @@ fn scripted(script: &str) -> (std::process::Child, std::process::ChildStdout) {
     (child, stdout)
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn another_process_on_the_port_is_never_taken_for_the_tunnel() {
     // Something else already listens on the port the tunnel was given; a
@@ -711,7 +711,7 @@ fn another_process_on_the_port_is_never_taken_for_the_tunnel() {
     );
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_tunnel_is_ready_once_ssh_prints_its_line() {
     let (mut child, stdout) =
@@ -723,7 +723,7 @@ fn a_tunnel_is_ready_once_ssh_prints_its_line() {
     assert!(result.is_ok(), "{result:?}");
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn ssh_ending_before_its_forward_is_bound_reports_why() {
     // ExitOnForwardFailure: a taken port ends SSH before LocalCommand runs.
@@ -735,7 +735,7 @@ fn ssh_ending_before_its_forward_is_bound_reports_why() {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_local_port_is_never_handed_back_to_a_previous_remote_port() {
     let first = Key {

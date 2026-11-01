@@ -5,6 +5,7 @@ use herdr_client::{ClientEvent, SavedHost};
 #[cfg(feature = "container")]
 mod container_stop;
 
+mod disabled;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod local_peer_warning;
 mod staged_notifications;
@@ -21,7 +22,6 @@ fn saved_profile_ids_are_the_catalog_ids_behind_ssh_endpoints() {
 impl Endpoint {
     /// Attaches `handle` the way `connect` leaves the shown endpoint, with its
     /// surface requested, for window tests that run without a daemon.
-    #[cfg(feature = "integration-test")]
     pub(crate) fn attach_shown(&mut self, handle: ClientHandle) {
         self.connection.handle = Some(handle);
         self.initial_surface = true;
@@ -476,4 +476,5 @@ fn timeout_and_return_to_local_do_not_wait_for_remote_release(cx: &mut gpui::Tes
     });
 }
 
+mod ipad_session_probes;
 mod version_mismatch;

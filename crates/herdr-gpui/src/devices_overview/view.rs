@@ -180,6 +180,14 @@ impl HerdrWindow {
                             .flex_col()
                             .gap_5()
                             .child(self.overview_header(&look, &devices, page, cx))
+                            .when(cfg!(target_os = "ios"), |body| {
+                                body.child(
+                                    div()
+                                        .debug_selector(|| "devices-monitoring-unavailable".into())
+                                        .text_color(rgb(look.theme.muted))
+                                        .child(crate::i18n::fl!("platform-monitoring-unavailable")),
+                                )
+                            })
                             .child(chart::activity(
                                 &look,
                                 &self.devices_overview.history,

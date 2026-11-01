@@ -5,6 +5,9 @@
 pub(super) mod keys;
 pub(super) mod paste;
 mod pointer;
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests;
 
 use super::{
     screen::Screen,
@@ -404,6 +407,14 @@ impl Render for CoreTerminalView {
 }
 
 impl EntityInputHandler for CoreTerminalView {
+    fn accepts_text_input(&self, window: &mut Window, _: &mut Context<Self>) -> bool {
+        self.focus.is_focused(window)
+            && !self.observe
+            && self.screen.frame.is_some()
+            && self.screen.ended.is_none()
+            && self.screen.failure.is_none()
+    }
+
     fn text_for_range(
         &mut self,
         range: Range<usize>,
@@ -443,10 +454,13 @@ impl EntityInputHandler for CoreTerminalView {
         &mut self,
         _: Option<Range<usize>>,
         text: &str,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.marked.clear();
+        if !self.accepts_text_input(window, cx) {
+            return;
+        }
         if !text.is_empty() {
             self.send(ClientPaneInputEvent::TextCommit(text.into()));
         }
@@ -458,9 +472,12 @@ impl EntityInputHandler for CoreTerminalView {
         _: Option<Range<usize>>,
         text: &str,
         _: Option<Range<usize>>,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.accepts_text_input(window, cx) {
+            return;
+        }
         self.marked = text.into();
         cx.notify();
     }

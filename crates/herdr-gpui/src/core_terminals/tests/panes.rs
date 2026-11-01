@@ -142,6 +142,7 @@ fn a_tab_saved_before_splits_reads_back_as_one_pane() {
         Location::CoreTerminal {
             panes: Panes::single(id("t4")),
             observe: false,
+            remote: None,
         }
     );
     let again = serde_json::to_string(&location).unwrap();
@@ -166,6 +167,7 @@ fn a_mirror_tab_saves_that_it_only_watches() {
     let mirror = Location::CoreTerminal {
         panes: Panes::single(id("t4")),
         observe: true,
+        remote: None,
     };
     let saved = serde_json::to_string(&mirror).unwrap();
     assert!(saved.contains("\"observe\":true"), "{saved}");
@@ -174,6 +176,7 @@ fn a_mirror_tab_saves_that_it_only_watches() {
     let typing = Location::CoreTerminal {
         panes: Panes::single(id("t4")),
         observe: false,
+        remote: None,
     };
     assert!(!serde_json::to_string(&typing).unwrap().contains("observe"));
 }

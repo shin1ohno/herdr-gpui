@@ -89,6 +89,9 @@ impl HerdrWindow {
     /// This machine first, then every enabled, connected device on another
     /// machine, in the window's device order.
     pub(crate) fn automation_hosts(&self) -> Vec<Wanted> {
+        if cfg!(target_os = "ios") {
+            return Vec::new();
+        }
         let mut wanted: Vec<Wanted> = Vec::new();
         let local = self
             .endpoints

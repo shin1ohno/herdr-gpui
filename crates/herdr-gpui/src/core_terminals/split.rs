@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     HerdrWindow,
-    browser::{Slot, Tab, TabId},
+    browser::{Slot, Store, Tab, TabId},
     i18n::fl,
     sidebar::Indicators,
     tab_layout::panes::{PaneChrome, PaneContext, PaneFace},
@@ -46,13 +46,16 @@ impl HerdrWindow {
         tab: &Tab,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        if !self.core_target_supported() {
+            return self.core_placeholder(tab, cx);
+        }
         let Some(shown) = self.core_terminals.tabs.get(&tab.id) else {
-            return self.core_placeholder();
+            return self.core_placeholder(tab, cx);
         };
         if shown.panes.len() == 1 {
             let key = (tab.id, shown.panes.first().clone());
             let Some(view) = self.core_terminals.views.get(&key) else {
-                return self.core_placeholder();
+                return self.core_placeholder(tab, cx);
             };
             view.update(cx, |view, _| view.set_pane(None));
             return view.clone().into_any_element();
@@ -323,9 +326,39 @@ impl HerdrWindow {
         moved
     }
 
+    /// Recovery belongs to the selected core's namespace and requires a
+    /// user action; a placeholder never opens a connection while rendering.
+    pub(super) fn core_tab_can_reconnect(&self, tab: &Tab) -> bool {
+        crate::ipad_ui::active()
+            && self.core_target_supported()
+            && self.core_terminals.scope.as_ref() == Some(&tab.scope)
+            && matches!(&tab.location, Some(crate::browser::Location::CoreTerminal { remote, .. })
+                if super::Remote::matches_target(remote.as_ref(), self.core_terminals.hub.target()))
+            && matches!(
+                self.core_terminals.hub.state(),
+                State::Idle | State::Detached | State::Unavailable(_)
+            )
+    }
+
     /// What a herdr-core tab shows before its panes have views.
-    fn core_placeholder(&self) -> AnyElement {
+    fn core_placeholder(&self, tab: &Tab, cx: &mut Context<Self>) -> AnyElement {
+        let tab_id = tab.id;
+        let wrong_namespace = matches!(&tab.location, Some(crate::browser::Location::CoreTerminal { remote, .. })
+            if !super::Remote::matches_target(remote.as_ref(), self.core_terminals.hub.target()));
         let note = match self.core_terminals.hub.state() {
+            _ if !self.core_target_supported() => {
+                let reason = super::Error::UnsupportedTarget.to_string();
+                fl!("core-terminals-unavailable", reason = reason)
+            }
+            _ if wrong_namespace => {
+                let reason = super::Error::Namespace.to_string();
+                fl!("core-terminals-unavailable", reason = reason)
+            }
+            State::Detached => crate::state::ConnectionStatus::Detached.label(),
+            State::Idle if cfg!(target_os = "ios") => {
+                let reason = super::Error::Unavailable.to_string();
+                fl!("core-terminals-unavailable", reason = reason)
+            }
             State::Unavailable(error) => {
                 let reason = error.to_string();
                 fl!("core-terminals-unavailable", reason = reason)
@@ -336,12 +369,46 @@ impl HerdrWindow {
             .flex_1()
             .size_full()
             .flex()
+            .when(crate::ipad_ui::active(), |body| {
+                body.flex_col().gap_3().p_4()
+            })
             .items_center()
             .justify_center()
             .bg(self.fill().base(self.terminal_theme().background))
             .text_color(rgb(self.theme.foreground))
             .text_sm()
             .child(note)
+            .when(self.core_tab_can_reconnect(tab), |body| {
+                body.child(
+                    div()
+                        .id("core-reconnect")
+                        .debug_selector(|| "core-reconnect".into())
+                        .role(Role::Button)
+                        .aria_label(fl!("core-terminals-reconnect"))
+                        .px_3()
+                        .py_2()
+                        .rounded(px(crate::config::corners::CONTROL))
+                        .border_1()
+                        .border_color(rgb(self.theme.active))
+                        .cursor_pointer()
+                        .hover(|button| button.bg(rgb(self.theme.active)))
+                        .child(fl!("core-terminals-reconnect"))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            // A second tap before the next frame would reset
+                            // the attempt the first one started; recheck the
+                            // tab as the sidebar path does.
+                            let reconnect = cx
+                                .try_global::<Store>()
+                                .and_then(|store| store.get(tab_id))
+                                .is_some_and(|tab| this.core_tab_can_reconnect(tab));
+                            if reconnect {
+                                this.reconnect_core_connection(cx);
+                                this.sync_core_views(cx);
+                            }
+                        })),
+                )
+            })
             .into_any_element()
     }
 }

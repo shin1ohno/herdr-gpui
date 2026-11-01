@@ -132,12 +132,12 @@ fn a_frame_the_program_cannot_have_sent_ends_the_link() {
 }
 
 /// `bytes` as a POSIX `printf` format of octal escapes.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn printf_format(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("\\{byte:03o}")).collect()
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_child_process_carries_the_connection() {
     use crate::chat::link::Dial;
@@ -156,7 +156,7 @@ fn a_child_process_carries_the_connection() {
     drop(link);
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_child_that_exits_ends_the_link() {
     use crate::chat::link::Dial;

@@ -24,7 +24,11 @@ impl HerdrWindow {
         let text = setup.fields[0].read(cx).text().to_owned();
         let completion = self.device_completion(setup, &text);
         let status = if discovery.awaiting_local_network {
-            fl!("devices-discover-waiting")
+            if cfg!(target_os = "ios") {
+                fl!("devices-discover-ipad-waiting")
+            } else {
+                fl!("devices-discover-waiting")
+            }
         } else if discovery.searching() {
             fl!(
                 "devices-discover-searching",

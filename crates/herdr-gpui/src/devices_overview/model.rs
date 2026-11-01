@@ -117,14 +117,19 @@ pub(crate) struct Device {
 }
 
 impl Device {
-    pub(crate) fn new(index: usize, endpoint: &Endpoint, live: &LiveState) -> Self {
+    pub(crate) fn new(
+        index: usize,
+        endpoint: &Endpoint,
+        live: &LiveState,
+        status: crate::state::ConnectionStatus,
+    ) -> Self {
         let link = if !endpoint.enabled {
             Link::Disabled
-        } else if live.status.is_connected() {
+        } else if status.is_connected() {
             Link::Online
         } else if live.error.is_some()
             || matches!(
-                live.status,
+                status,
                 crate::state::ConnectionStatus::Disconnected
                     | crate::state::ConnectionStatus::Detached
             )
@@ -134,7 +139,10 @@ impl Device {
             Link::Connecting
         };
         // A device out of reach shows no agents rather than stale ones.
-        let snapshot = live.snapshot.as_deref().filter(|_| link == Link::Online);
+        let snapshot = live
+            .snapshot
+            .as_deref()
+            .filter(|_| live.status.is_connected() && link == Link::Online);
         let agents = snapshot.map_or(&[][..], |snapshot| &snapshot.agents[..]);
         let mut lines: Vec<AgentLine> = agents
             .iter()

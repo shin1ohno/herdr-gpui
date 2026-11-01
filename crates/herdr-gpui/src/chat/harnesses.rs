@@ -8,10 +8,11 @@ use crate::HerdrWindow;
 use gpui::prelude::*;
 use herdr_chat_protocol::Agent;
 use herdr_client::ScriptLimits;
+#[cfg(not(target_os = "ios"))]
+use std::sync::atomic::AtomicBool;
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::atomic::AtomicBool,
     time::{Duration, Instant},
 };
 
@@ -106,7 +107,25 @@ enum Probing {
 }
 
 impl Probing {
+    #[cfg(target_os = "ios")]
+    fn run(self) -> Option<Vec<Agent>> {
+        let host = match self {
+            Self::Ssh(host) => host,
+            Self::Local(program) => {
+                drop(program);
+                return None;
+            }
+        };
+        let script = super::remote_program_script("agents");
+        let command = format!("/bin/sh -c {}", herdr_client::shell_quote(&script));
+        let (status, output) =
+            herdr_client::run_ssh_command(&host, &command, LIMITS.idle, LIMITS.output, || false)
+                .ok()?;
+        status.success().then(|| parse(&output))
+    }
+
     /// Runs `herdr-acp agents`; blocking, for the background executor.
+    #[cfg(not(target_os = "ios"))]
     fn run(self) -> Option<Vec<Agent>> {
         // Held until the lookup's child is reaped below.
         let (command, _channel) = match self {

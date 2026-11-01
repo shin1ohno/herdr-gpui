@@ -32,6 +32,9 @@ impl HerdrWindow {
 
     /// [`Self::pr_origin`] for any device, selected or not.
     fn endpoint_pr_origin(&self, index: usize) -> Option<Origin> {
+        if cfg!(target_os = "ios") {
+            return None;
+        }
         let endpoint = self.endpoints.get(index)?;
         let live = if index == self.selected_endpoint {
             &self.live

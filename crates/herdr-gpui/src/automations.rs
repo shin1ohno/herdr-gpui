@@ -442,7 +442,7 @@ impl HerdrWindow {
         // need the hosts' state whether or not the section can be shown.
         // Turned off in the settings, nothing is read or started.
         self.forget_closed_automation_dialog();
-        if !self.activity_panel_listed(ActivityPanel::Automations) {
+        if cfg!(target_os = "ios") || !self.activity_panel_listed(ActivityPanel::Automations) {
             LogSources::turn_off(cx);
             self.automations.shown = false;
             if self.automations.sync_hosts(Vec::new()) {

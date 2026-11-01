@@ -7,6 +7,8 @@ use super::windows::Directory;
 #[cfg(windows)]
 mod windows;
 
+mod ipad_root;
+
 pub(crate) struct Fixture(pub PathBuf);
 impl Fixture {
     pub(crate) fn new() -> Self {

@@ -26,7 +26,7 @@ fn every_install_skips_a_tool_already_there() {
 
 /// Run `agent`'s composed setup under `sh -e`, as the setup tab does, with
 /// only stub `curl` and `bash` commands on `PATH`.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn run_with_curl(agent: Agent, curl: &str) -> std::process::Output {
     use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::tempdir().unwrap();
@@ -44,7 +44,7 @@ fn run_with_curl(agent: Agent, curl: &str) -> std::process::Output {
         .unwrap()
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_failed_installer_download_stops_the_setup() {
     for agent in [Agent::Claude, Agent::OpenCode] {

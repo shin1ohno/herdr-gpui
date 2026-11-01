@@ -14,6 +14,9 @@ pub(crate) use jobs::Jobs;
 /// idle containers. Each reads its table as the first frame does, with no
 /// maintenance, and only when one of its devices is saved.
 pub(crate) fn install_idle_checks(cx: &mut gpui::App) {
+    if cfg!(target_os = "ios") {
+        return;
+    }
     #[cfg(feature = "azure")]
     every(cx, std::time::Duration::from_secs(60), || {
         crate::azure::check_all_idle_devices(|| {

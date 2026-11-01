@@ -311,7 +311,7 @@ impl OrchestratorView {
     }
 
     /// The shown repository's last worker snapshot, for tests.
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "ios")))]
     pub(crate) fn repo_snapshot_for_tests(&self) -> Snapshot {
         self.repos[self.active].snapshot.clone()
     }

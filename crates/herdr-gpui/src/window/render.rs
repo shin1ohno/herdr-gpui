@@ -7,6 +7,7 @@ use super::{
     tab_strip::{Reach, native_page},
 };
 use crate::direction::Logical;
+use crate::menu::{ContextMenuEvent, context_menu};
 use crate::{
     CheckForUpdates, Minimize, PlaySound, RunCommand, ShowHerdrNotDetected, ShowUpdatePreview,
     ZoomWindow,
@@ -110,7 +111,7 @@ impl Render for HerdrWindow {
         self.sync_device_themes(cx);
         let fill = self.fill();
         let ground = self.ground();
-        self.viewport_width = f32::from(window.viewport_size().width);
+        self.viewport_width = f32::from(window.fully_visible_bounds().size.width);
         let font = self.config.terminal.font();
         // Parked groups paint with the same face as the window's terminal.
         let parked_font = font.clone();
@@ -123,14 +124,12 @@ impl Render for HerdrWindow {
         self.cell_width = self.painter.borrow_mut().cell_width(&font, window, cx);
         // Registers the window for surface-only redraws; see `redraw_terminal`.
         self.surface_signal.read(cx);
-        let sidebar = self
-            .sidebar_column_width(f32::from(window.viewport_size().width))
-            .map(|width| {
-                (
-                    crate::sidebar::cached_view(&self.sidebar_view, width),
-                    width,
-                )
-            });
+        let sidebar = self.sidebar_column_width(self.viewport_width).map(|width| {
+            (
+                crate::sidebar::cached_view(&self.sidebar_view, width),
+                width,
+            )
+        });
         // The tab strip reserves its moving marks afresh; a hidden sidebar
         // leaves none behind.
         if let Some(marks) = crate::mark_layer::Marks::of(window, cx) {
@@ -354,17 +353,24 @@ impl Render for HerdrWindow {
                     this.terminal_mouse_down(event, window, cx);
                 }),
             )
-            .on_mouse_down(
-                MouseButton::Right,
-                cx.listener(|this, event: &MouseDownEvent, window, cx| {
-                    if this.terminal_mouse_down(event, window, cx) {
-                        return;
-                    }
-                    cx.stop_propagation();
-                    this.open_pane_menu_at(event.position, window, cx);
-                    this.menu.opening_right_click = this.menu.page == Some(crate::menu::Page::Pane);
-                }),
-            )
+            .map(|row| {
+                context_menu(
+                    row,
+                    cx.listener(|this, event: &ContextMenuEvent, window, cx| {
+                        if event
+                            .mouse
+                            .as_ref()
+                            .is_some_and(|event| this.terminal_mouse_down(event, window, cx))
+                        {
+                            return;
+                        }
+                        cx.stop_propagation();
+                        this.open_pane_menu_at(event.position, window, cx);
+                        this.menu.opening_right_click = event.mouse.is_some()
+                            && this.menu.page == Some(crate::menu::Page::Pane);
+                    }),
+                )
+            })
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
@@ -380,6 +386,10 @@ impl Render for HerdrWindow {
                     if this.menu.page.is_some() {
                         return;
                     }
+                    // Starting a selection may end copy mode; that gesture
+                    // must still leave its software keyboard hidden.
+                    let request_keyboard = !this.copy_mode_active()
+                        && this.terminal_mouse_at(event.position).is_some();
                     // A press on a link may still turn into a drag across it,
                     // so the selection starts either way; the click that opens
                     // the link is the one that never left its half-cell.
@@ -394,6 +404,9 @@ impl Render for HerdrWindow {
                         return;
                     }
                     window.focus(&this.focus, cx);
+                    if request_keyboard {
+                        this.request_terminal_keyboard(window);
+                    }
                     if this.input_ready()
                         && let Some(surface) = &this.live.surface
                     {
@@ -913,6 +926,7 @@ impl Render for HerdrWindow {
             .relative()
             .flex()
             .flex_col()
+            .map(|root| super::viewport::pad(root, window))
             .map(|root| self.with_backdrop(root))
             .text_color(rgb(self.theme.foreground))
             .text_font(&self.config.ui)

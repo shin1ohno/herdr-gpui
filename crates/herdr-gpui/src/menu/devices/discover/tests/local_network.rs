@@ -76,6 +76,10 @@ fn a_closed_form_stops_the_wait() {
 #[test]
 fn a_refusal_names_the_setting_without_asking_for_a_restart() {
     let message = crate::Error::LocalNetworkDenied.to_string();
-    assert!(message.contains("Privacy & Security › Local Network"));
+    assert!(message.contains(if cfg!(target_os = "ios") {
+        "Local Network for Herdr"
+    } else {
+        "Privacy & Security › Local Network"
+    }));
     assert!(!message.contains("reopen"));
 }

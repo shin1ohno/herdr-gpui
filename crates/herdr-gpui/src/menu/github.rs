@@ -94,7 +94,7 @@ impl HerdrWindow {
     /// Whether this window reads and writes saved sign-ins. Headless windows
     /// never touch them, so tests leave the user's keyring alone.
     pub(crate) fn reads_credentials(&self) -> bool {
-        self.avatars.is_some()
+        !cfg!(target_os = "ios") && self.avatars.is_some()
     }
 
     /// Start signing in the account the GitHub page shows.
@@ -128,6 +128,9 @@ impl HerdrWindow {
     /// dropped from memory; its saved credential stays until signed out, so
     /// re-adding the device finds it again.
     pub(crate) fn sync_github_hosts(&mut self) {
+        if cfg!(target_os = "ios") {
+            return;
+        }
         let hosts = &mut self.menu.github_hosts;
         hosts.retain(|id, _| {
             self.endpoints.iter().any(|endpoint| {
@@ -162,6 +165,10 @@ impl HerdrWindow {
     }
 
     pub(crate) fn poll_github(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if cfg!(target_os = "ios") {
+            self.prune_device_removals();
+            return;
+        }
         self.sync_github_hosts();
         self.sync_github_accounts();
         self.prune_device_removals();
@@ -250,6 +257,13 @@ impl HerdrWindow {
     }
 
     fn github_action(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        if cfg!(target_os = "ios") && action != Action::Close {
+            self.show_flash(
+                crate::window::Flash::warning(fl!("platform-github-unavailable")),
+                cx,
+            );
+            return;
+        }
         if !self.github_actions().contains(&action) {
             return;
         }
@@ -442,6 +456,9 @@ impl HerdrWindow {
     }
 
     pub(super) fn render_github_auth(&self, cx: &mut Context<Self>) -> Div {
+        if cfg!(target_os = "ios") {
+            return div().p(px(16.)).child(fl!("platform-github-unavailable"));
+        }
         let auth = self.github_auth();
         let theme = &self.theme;
         let mut body = div()

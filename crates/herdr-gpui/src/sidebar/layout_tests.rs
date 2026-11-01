@@ -41,6 +41,8 @@ mod device_sessions_row;
 #[cfg(test)]
 mod devices_layout;
 #[cfg(test)]
+mod first_device;
+#[cfg(test)]
 mod gpu_line;
 #[cfg(test)]
 mod host_agents;
@@ -112,6 +114,8 @@ mod superset_badges;
 mod superset_dots;
 #[cfg(test)]
 mod text_width;
+#[cfg(test)]
+mod touch_context_menus;
 #[cfg(test)]
 mod update_download_caption;
 #[cfg(test)]

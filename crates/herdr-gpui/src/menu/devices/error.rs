@@ -7,6 +7,9 @@ pub enum Error {
         "This host is already being added, in another Add Device dialog or a \u{201c}Set up\u{201d} workspace that is still running. Finish or close it, then try again."
     )]
     Adding,
+    #[cfg(target_os = "ios")]
+    #[error(transparent)]
+    Bonjour(#[from] super::discover::bonjour::Error),
     #[error("This host and session are already saved as \u{201c}{0}\u{201d}.")]
     Exists(String),
     #[error("Device names are at most 128 bytes, without control characters.")]
@@ -50,7 +53,14 @@ pub enum Error {
     TailscaleJson(#[source] serde_json::Error),
     #[error("Tailscale did not answer in time")]
     TailscaleTimeout,
-    #[error("Setting up a device in a terminal is unavailable on Windows.")]
+    #[cfg_attr(
+        target_os = "ios",
+        error("Setting up a device in a local terminal is unavailable on iPadOS.")
+    )]
+    #[cfg_attr(
+        not(target_os = "ios"),
+        error("Setting up a device in a terminal is unavailable on Windows.")
+    )]
     TerminalSetupUnavailable,
     // keep-sorted end
 }

@@ -10,6 +10,7 @@ use toml_edit::{Item, TableLike};
 
 /// Where a setting's effective value comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(any(test, not(target_os = "ios")))]
 pub(crate) enum Layer {
     /// `config-gpui.local.toml`, the user's overrides.
     Local,
@@ -19,12 +20,14 @@ pub(crate) enum Layer {
 
 /// A command-line value as TOML: a number, boolean, array, inline table, or
 /// quoted string, and anything else as a plain string.
+#[cfg(any(test, not(target_os = "ios")))]
 pub(crate) fn parse_value(text: &str) -> toml_edit::Value {
     text.trim()
         .parse::<toml_edit::Value>()
         .unwrap_or_else(|_| toml_edit::Value::from(text))
 }
 
+#[cfg(any(test, not(target_os = "ios")))]
 fn lookup<'a>(mut value: &'a toml::Value, key: &str) -> Option<&'a toml::Value> {
     for part in key.split('.') {
         value = value.as_table()?.get(part)?;
@@ -35,10 +38,12 @@ fn lookup<'a>(mut value: &'a toml::Value, key: &str) -> Option<&'a toml::Value> 
 impl Config {
     /// The effective value of `key`, overrides over defaults, read without
     /// writing anything. `None` when neither file sets it.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn effective_value(key: &str) -> Result<Option<(toml::Value, Layer)>> {
         Self::effective_value_at(&Self::path()?, key)
     }
 
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(super) fn effective_value_at(
         path: &Path,
         key: &str,
@@ -61,10 +66,12 @@ impl Config {
     /// The settings as the app would load them now, checked as loading checks
     /// them (the overrides alone, then layered), without writing anything.
     /// Fonts are not resolved: only the app's text system knows them.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn check_files() -> Result<Self> {
         Self::check_files_at(&Self::path()?, &daemon_config_path(herdr_client::local_var))
     }
 
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(super) fn check_files_at(path: &Path, daemon: &Path) -> Result<Self> {
         let base = daemon_settings(daemon);
         let (text, source) = Self::overrides_text(path)?;

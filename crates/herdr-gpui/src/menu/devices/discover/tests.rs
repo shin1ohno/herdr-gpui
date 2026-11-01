@@ -241,5 +241,5 @@ fn source_lists_read_as_prose() {
         sources(&[Source::Tailscale, Source::Bonjour]),
         "Tailscale and Bonjour"
     );
-    assert_eq!(sources(&Source::ALL), "SSH config, Tailscale, and Bonjour");
+    assert_eq!(sources(Source::ALL), "SSH config, Tailscale, and Bonjour");
 }

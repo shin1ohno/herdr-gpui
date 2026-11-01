@@ -26,6 +26,7 @@ mod go_to;
 mod interaction_tests;
 mod keys;
 mod last_seen;
+#[cfg(not(target_os = "ios"))]
 pub(crate) use canonical::canonicalize;
 pub(crate) use error::Error;
 pub(crate) use last_seen::LastSeen;

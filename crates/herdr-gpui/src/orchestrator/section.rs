@@ -5,6 +5,7 @@
 //! narrowed to one workspace's project.
 
 use super::{List, OrchestratorView, ViewId};
+use crate::i18n::fl;
 use crate::{HerdrWindow, browser::OrchestratorRepo, sidebar::ActivityPanel};
 use gpui::{prelude::*, *};
 
@@ -14,6 +15,9 @@ impl HerdrWindow {
     /// orchestrator's scripts. Called from the tick and when a section is
     /// picked; a new view, or a new section, gets its list picked here.
     pub(crate) fn sync_activity_section(&mut self, cx: &mut Context<Self>) {
+        if cfg!(target_os = "ios") {
+            return;
+        }
         let Some(list) = self.activity_section().and_then(list_of) else {
             return;
         };
@@ -77,6 +81,13 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if cfg!(target_os = "ios") {
+            self.show_flash(
+                crate::window::Flash::warning(fl!("platform-orchestrator-unavailable")),
+                cx,
+            );
+            return;
+        }
         // The sections are the bar's: without it there is nowhere to show them.
         if !self.activity_bar_shown() {
             self.show_flash(
@@ -174,15 +185,18 @@ impl HerdrWindow {
     }
 
     /// Why a section has no view to show.
-    fn orchestrator_unavailable(&self) -> &'static str {
+    fn orchestrator_unavailable(&self) -> String {
+        if cfg!(target_os = "ios") {
+            return fl!("platform-orchestrator-unavailable");
+        }
         if self
             .endpoints
             .iter()
             .any(|endpoint| super::host::scripts_run_on(&endpoint.connection.target))
         {
-            "Opening the repositories…"
+            "Opening the repositories…".into()
         } else {
-            "Pull requests and issues need a local or SSH host"
+            "Pull requests and issues need a local or SSH host".into()
         }
     }
 }

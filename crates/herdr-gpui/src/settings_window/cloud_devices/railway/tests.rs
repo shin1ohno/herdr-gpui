@@ -182,8 +182,8 @@ fn a_generated_key_fills_the_path_and_a_refresh_keeps_a_change(cx: &mut TestAppC
     });
 }
 
-// Cloud jobs are unavailable on Windows, so there is no setup to wait for.
-#[cfg(unix)]
+// Cloud jobs are unavailable on Windows and iPadOS, so there is no setup to wait for.
+#[cfg(all(unix, not(target_os = "ios")))]
 #[gpui::test]
 fn removal_waits_for_a_running_setup(cx: &mut TestAppContext) {
     let ((view, cx), main) = open(cx);

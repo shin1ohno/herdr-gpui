@@ -49,7 +49,9 @@ pub(super) fn now_ms() -> u64 {
             u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
         })
 }
-pub(crate) use start::{Error as StartError, PROGRAM_ENV, Program};
+#[cfg(any(test, not(target_os = "ios")))]
+pub(crate) use start::Error as StartError;
+pub(crate) use start::{PROGRAM_ENV, Program};
 
 use herdr_chat_protocol::{ByeReason, EndpointId};
 use std::io;
@@ -108,6 +110,9 @@ pub enum Error {
     Remote(#[source] herdr_client::Error),
     #[error("could not start the chat worker")]
     Spawn(#[source] io::Error),
+    #[cfg(target_os = "ios")]
+    #[error(transparent)]
+    Ssh(#[from] herdr_ssh::Failure),
     #[error(transparent)]
     Start(#[from] start::Error),
     #[error("chat change {got:?} does not follow {after:?}")]

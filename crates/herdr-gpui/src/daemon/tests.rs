@@ -5,6 +5,8 @@ use std::sync::atomic::AtomicUsize;
 mod config_home;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod endpoint_classification;
+#[cfg(target_os = "ios")]
+mod ios;
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 mod mutes;
 mod omo;
+mod touch_context;
 
 fn rail_window(
     cx: &mut TestAppContext,

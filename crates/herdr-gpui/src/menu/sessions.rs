@@ -10,6 +10,9 @@ use herdr_client::{ConnectTarget, LocalSession};
 mod management;
 pub(super) use management::Edit;
 
+#[cfg(test)]
+mod tests;
+
 /// A line in the popup, in the order it is painted. Only a row can be selected,
 /// so navigation walks the `Row` entries and skips headers and notes.
 enum Entry {
@@ -100,6 +103,9 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.sessions_available() {
+            return;
+        }
         if !self.open_menu(window, cx) {
             return;
         }
@@ -135,6 +141,11 @@ impl HerdrWindow {
                 text: format!("{} · CURRENT DEVICE", endpoint.label.to_uppercase()),
             });
             self.device_entries(&mut entries, endpoint, current);
+        }
+        // iPad has no local daemon. Its control operates on the selected
+        // Herdr 1 device through the existing SSH session API.
+        if cfg!(target_os = "ios") {
+            return entries;
         }
         entries.push(Entry::Header {
             selector: "sessions-local-header".to_owned(),

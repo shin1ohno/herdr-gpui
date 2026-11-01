@@ -420,6 +420,7 @@ impl HerdrWindow {
     /// Delivers notes a control request sent, if this window shows the
     /// caller's pane on its selected endpoint, the only one it types into.
     /// `None` leaves them to another window, or to the request to keep.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn deliver_requested_notes(
         &mut self,
         target: &crate::control::Target<'_>,

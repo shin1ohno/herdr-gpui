@@ -5,12 +5,15 @@
 //! host or probes ports: only hosts that announce themselves, or that the
 //! user's own configuration names, are listed.
 
+#[cfg(not(target_os = "ios"))]
 use crate::i18n::fl;
 
-mod bonjour;
+pub(super) mod bonjour;
 mod complete;
 mod render;
+#[cfg(not(target_os = "ios"))]
 mod ssh_config;
+#[cfg(not(target_os = "ios"))]
 mod tailscale;
 
 use crate::HerdrWindow;
@@ -42,20 +45,30 @@ const CHANNEL: usize = 64;
 /// and a Tailscale name keeps working away from the local network.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Source {
+    #[cfg(not(target_os = "ios"))]
     SshConfig,
+    #[cfg(not(target_os = "ios"))]
     Tailscale,
     Bonjour,
 }
 
 impl Source {
-    const ALL: [Self; 3] = [Self::SshConfig, Self::Tailscale, Self::Bonjour];
+    const ALL: &[Self] = &[
+        #[cfg(not(target_os = "ios"))]
+        Self::SshConfig,
+        #[cfg(not(target_os = "ios"))]
+        Self::Tailscale,
+        Self::Bonjour,
+    ];
 
     fn name(self) -> String {
         match self {
+            #[cfg(not(target_os = "ios"))]
             Self::SshConfig => fl!("devices-discover-ssh-config"),
             // Products' names.
+            #[cfg(not(target_os = "ios"))]
             Self::Tailscale => "Tailscale".to_owned(), // i18n: data
-            Self::Bonjour => "Bonjour".to_owned(),     // i18n: data
+            Self::Bonjour => "Bonjour".to_owned(), // i18n: data
         }
     }
 }
@@ -92,6 +105,7 @@ impl Candidate {
 
     /// Also identify the machine by an SSH alias. An alias is the user's own
     /// name for a host, not a network name, so it adds no short-name key.
+    #[cfg(not(target_os = "ios"))]
     pub(super) fn with_alias(mut self, alias: &str) -> Self {
         let alias = alias.to_lowercase();
         if !self.keys.contains(&alias) {
@@ -294,9 +308,11 @@ impl Discovery {
 fn run_source(source: Source, sender: SyncSender<Event>) {
     let found = |candidate| sender.send(Event::Found(candidate)).is_ok();
     let result = match source {
+        #[cfg(not(target_os = "ios"))]
         Source::SshConfig => ssh_config::hosts().map(|hosts| {
             hosts.into_iter().all(&found);
         }),
+        #[cfg(not(target_os = "ios"))]
         Source::Tailscale => tailscale::peers().map(|peers| {
             peers.into_iter().all(&found);
         }),
@@ -322,7 +338,8 @@ impl HerdrWindow {
         };
         let (sender, events) = mpsc::sync_channel(CHANNEL);
         let sources = Source::ALL
-            .into_iter()
+            .iter()
+            .copied()
             .map(|source| {
                 let sender = sender.clone();
                 cx.background_executor()
@@ -360,6 +377,6 @@ impl HerdrWindow {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 #[allow(clippy::unwrap_used)]
 mod tests;

@@ -25,9 +25,11 @@ fn transaction<T>(work: impl FnOnce() -> Result<T>) -> Result<T> {
 
 pub const PLAINTEXT_WARNING: &str = "WARNING: plaintext credential storage is enabled. GitHub tokens are unencrypted on disk; software running as you and backups can read them.";
 pub const DEVELOPMENT_WARNING: &str = "WARNING: this development build does not use the macOS Keychain. GitHub tokens are unencrypted beside the GUI config; software running as you and backups can read them.";
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "linux", target_os = "ios", windows)))]
 pub const KEYRING_NOTICE: &str =
     "Credentials are saved in macOS Keychain. macOS may ask you to unlock or approve access.";
+#[cfg(target_os = "ios")]
+pub const KEYRING_NOTICE: &str = "Credentials are saved in this iPad's device-only Keychain and are available while it is unlocked.";
 #[cfg(target_os = "linux")]
 pub const KEYRING_NOTICE: &str =
     "Credentials are saved in your desktop keyring (Secret Service). It may ask you to unlock it.";
@@ -36,7 +38,7 @@ pub const KEYRING_NOTICE: &str =
     "Credentials are saved in Windows Credential Manager for your Windows account.";
 
 // The GitHub sign-in's keyring entries: one service, an account per sign-in.
-#[cfg(any(target_os = "macos", target_os = "linux", windows))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", windows))]
 const SERVICE: &str = "dev.herdr.gpui.github";
 #[cfg(any(target_os = "linux", windows))]
 const LABEL: &str = "Herdr UI GitHub sign-in";
@@ -67,7 +69,7 @@ impl Account {
         crate::config::valid_account_id(id).then(|| Self::Additional(id.to_owned()))
     }
 
-    #[cfg(any(target_os = "macos", target_os = "linux", windows))]
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", windows))]
     fn keyring_account(&self) -> String {
         match self {
             Self::Main => "github.com".into(),
@@ -155,20 +157,20 @@ pub enum Note {
     Info(&'static str),
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux", windows))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", windows))]
 fn keyring_token(account: &Account) -> Result<Option<SecretString>> {
     Ok(keyring_read(SERVICE, &account.keyring_account())?)
 }
 
 // `Store::Keyring` is never selected elsewhere; the stub keeps the match total.
-#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "linux", windows)))]
 fn keyring_token(_: &Account) -> Result<Option<SecretString>> {
     Ok(None)
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux", windows))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", windows))]
 fn keyring_save_token(token: Option<&SecretString>, account: &Account) -> Result<()> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     let label = "";
     #[cfg(any(target_os = "linux", windows))]
     let label = LABEL;
@@ -180,7 +182,7 @@ fn keyring_save_token(token: Option<&SecretString>, account: &Account) -> Result
     )?)
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "linux", windows)))]
 fn keyring_save_token(_: Option<&SecretString>, _: &Account) -> Result<()> {
     Err(herdr_credentials::Error::Policy.into())
 }

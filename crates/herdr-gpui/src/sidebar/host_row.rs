@@ -12,6 +12,7 @@ use super::{
     wash,
 };
 use crate::direction::Logical;
+use crate::menu::{ContextMenuEvent, context_menu};
 use crate::{HerdrWindow, endpoint::Endpoint};
 use gpui::{prelude::*, *};
 
@@ -71,7 +72,7 @@ impl HerdrWindow {
         let removing = self.device_removing(endpoint);
         let endpoint_collapsed = endpoint.collapsed;
         let endpoint_label = endpoint.label.clone();
-        let connected = endpoint.live.status.is_connected();
+        let connected = self.displayed_connection_status(endpoint).is_connected();
         // Of cloud machines, only Azure's load is read so far.
         let host = crate::usage::Host::load_of(&endpoint.connection.target);
         let reading = host.as_ref().and_then(|host| self.system_load.get(host));
@@ -225,14 +226,17 @@ impl HerdrWindow {
                 theme.muted
             }))
             .cursor_pointer()
-            .on_mouse_down(
-                MouseButton::Right,
-                cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                    cx.stop_propagation();
-                    this.open_host_menu(&menu_id, event.position, window, cx);
-                    this.menu.opening_right_click = this.menu.page == Some(crate::menu::Page::Host);
-                }),
-            )
+            .map(|row| {
+                context_menu(
+                    row,
+                    cx.listener(move |this, event: &ContextMenuEvent, window, cx| {
+                        cx.stop_propagation();
+                        this.open_host_menu(&menu_id, event.position, window, cx);
+                        this.menu.opening_right_click = event.mouse.is_some()
+                            && this.menu.page == Some(crate::menu::Page::Host);
+                    }),
+                )
+            })
             .child(
                 div()
                     .row()
@@ -319,7 +323,7 @@ impl HerdrWindow {
                             .size(px(STATUS_WIDTH))
                             .flex_none()
                             .rounded_full()
-                            .bg(rgb(if endpoint.live.status.is_connected() {
+                            .bg(rgb(if connected {
                                 crate::menu::online(theme)
                             } else {
                                 theme.muted

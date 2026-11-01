@@ -41,6 +41,12 @@ pub fn connect(
     stop: &AtomicBool,
     on_start: impl FnOnce(),
 ) -> io::Result<(Stream, LocalPeer)> {
+    if cfg!(target_os = "ios") {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            Error::Unavailable,
+        ));
+    }
     let socket = target
         .socket_path()
         .map_err(|error| io::Error::new(error.kind(), error))?;

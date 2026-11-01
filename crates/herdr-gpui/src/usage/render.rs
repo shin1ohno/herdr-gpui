@@ -36,7 +36,10 @@ impl HerdrWindow {
         let host_error = entry
             .and_then(|entry| entry.error.clone())
             .filter(|_| shown.is_empty());
-        if !self.config.usage.show || (shown.is_empty() && host_error.is_none()) {
+        if cfg!(target_os = "ios")
+            || !self.config.usage.show
+            || (shown.is_empty() && host_error.is_none())
+        {
             return None;
         }
         let busy = self.usage.busy();

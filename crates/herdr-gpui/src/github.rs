@@ -2,7 +2,7 @@
 //! requests, and the credential store; the app keeps each account's avatar
 //! (`avatars::ProfileAvatars`) and draws the menus.
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 pub(crate) use herdr_github::fake_graphql;
 pub(crate) use herdr_github::{
     Access, Account, Auth, Installation, Note, Profile, Source, Store, Tokens, VERIFY_URL, forget,

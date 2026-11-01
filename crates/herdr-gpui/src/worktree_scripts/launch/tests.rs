@@ -24,7 +24,7 @@ fn typed_lines_hold_no_repository_content_and_survive_any_shell() {
 }
 
 #[test]
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn archive_line_removes_only_after_the_script_succeeds() {
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("log");

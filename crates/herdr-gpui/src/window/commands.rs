@@ -210,6 +210,9 @@ impl HerdrWindow {
                     NavigationTarget::Pane(id) => handle.focus_pane(boot, id),
                 }
             });
+        if queued {
+            self.leave_core_workspace();
+        }
         self.discard_composition(cx);
         cx.notify();
         queued
@@ -437,6 +440,13 @@ impl HerdrWindow {
                 return;
             }
             Command::InstallBrowserSkill => {
+                if cfg!(target_os = "ios") {
+                    self.show_flash(
+                        Flash::warning(fl!("settings-general-browser-skill-ipad")),
+                        cx,
+                    );
+                    return;
+                }
                 self.install_browser_skill(window, cx);
                 return;
             }
@@ -489,7 +499,7 @@ impl HerdrWindow {
             // Every interactive creation path ends here, so Herdr's name prompt
             // covers buttons, menus, shortcuts, and the palette alike.
             // With Herdr 2 chosen for new terminals, a new tab is herdr-core's.
-            Command::Tab if self.config.herdr_2_terminals => {
+            Command::Tab if self.config.herdr_2_terminals || self.uses_core_terminal_backend() => {
                 self.new_core_terminal(window, cx);
                 return;
             }

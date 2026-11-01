@@ -17,6 +17,7 @@ mod fallback;
 mod hub;
 mod infos;
 pub(crate) mod panes;
+mod remote;
 mod screen;
 mod selection;
 mod sidebar;
@@ -31,6 +32,7 @@ mod tests;
 
 pub(crate) use error::Error;
 pub(crate) use hub::{Hub, Start, State};
+pub(crate) use remote::Remote;
 pub(crate) use view::{CoreTerminalView, Look};
 
 use crate::{
@@ -45,6 +47,16 @@ use panes::{Axis, Panes};
 use std::collections::HashMap;
 
 type Started = std::sync::mpsc::Receiver<Result<TerminalInfo, herdr_core_client::Error>>;
+
+/// Desktop core discovery is local; iPad connects only through SSH. A browser
+/// workspace never changes which machine the core transport actually reaches.
+fn supports_core_target(target: &herdr_client::ConnectTarget) -> bool {
+    if cfg!(target_os = "ios") {
+        matches!(target, herdr_client::ConnectTarget::Ssh { .. })
+    } else {
+        !target.is_remote()
+    }
+}
 
 /// What a shell being started is for.
 #[derive(Clone, Debug)]
@@ -120,15 +132,31 @@ pub(crate) struct CoreTerminals {
     infos: infos::Infos,
     /// How the views draw now, to tell when the window's look changed.
     look: Option<Look>,
+    /// The endpoint whose core results and views this window currently accepts.
+    scope: Option<Scope>,
     /// A shell starting, and what for.
     starting: Option<(Purpose, Started)>,
     tabs: HashMap<TabId, TabPanes>,
     views: HashMap<(TabId, TerminalId), Entity<CoreTerminalView>>,
     /// A shell to start once the hub connects.
     wanted: Option<Purpose>,
+    /// An app-owned workspace explicitly opened for a core-only SSH host.
+    workspace: Option<String>,
 }
 
 impl CoreTerminals {
+    fn reset_views(&mut self) {
+        let hub = std::mem::take(&mut self.hub);
+        let scope = self.scope.take();
+        let workspace = self.workspace.take();
+        *self = Self {
+            hub,
+            scope,
+            workspace,
+            ..Self::default()
+        };
+    }
+
     /// Every view on screen: the tabs' panes and the stand-in shell.
     fn shown(&self) -> impl Iterator<Item = &Entity<CoreTerminalView>> {
         let fallback = match &self.fallback {
@@ -159,11 +187,197 @@ impl CoreTerminals {
 }
 
 impl HerdrWindow {
+    fn core_target_supported(&self) -> bool {
+        self.endpoints
+            .get(self.selected_endpoint)
+            .is_some_and(|endpoint| supports_core_target(&endpoint.connection.target))
+    }
+
+    /// A changed endpoint retires every inbox, pending spawn, and view before
+    /// another core may supply an identically named terminal. No worker is joined.
+    fn select_core_target(&mut self, cx: &mut Context<Self>) -> bool {
+        let endpoint = self.endpoints.get(self.selected_endpoint);
+        let scope = endpoint.map(crate::browser::scope);
+        #[cfg(target_os = "ios")]
+        let target = endpoint
+            .map(|endpoint| endpoint.connection.target.clone())
+            .unwrap_or_default();
+        #[cfg(not(target_os = "ios"))]
+        let target = herdr_client::ConnectTarget::Local;
+        let changed = self.core_terminals.hub.retarget(&target);
+        if !changed && self.core_terminals.scope == scope {
+            return false;
+        }
+        self.save_core_panes(cx);
+        self.core_terminals.hub.reset();
+        let hub = std::mem::take(&mut self.core_terminals.hub);
+        self.core_terminals = CoreTerminals {
+            hub,
+            scope,
+            ..CoreTerminals::default()
+        };
+        true
+    }
+
+    /// The browser key for a core-only host is client-local UI state. It
+    /// never creates a daemon workspace or fabricates a daemon snapshot.
+    pub(crate) fn core_workspace_key(&self) -> Option<(Scope, String)> {
+        let endpoint = self.endpoints.get(self.selected_endpoint)?;
+        if self.core_terminals.hub.target() != &endpoint.connection.target
+            || self.core_terminals.scope.as_ref() != Some(&crate::browser::scope(endpoint))
+        {
+            return None;
+        }
+        Some((
+            self.core_terminals.scope.clone()?,
+            self.core_terminals.workspace.clone()?,
+        ))
+    }
+
+    /// The actual core connection for this endpoint, projected for painting
+    /// without changing Herdr 1's status, snapshot, or authoritative inbox.
+    pub(crate) fn core_connection_status(
+        &self,
+        endpoint_id: &str,
+    ) -> crate::state::ConnectionStatus {
+        use crate::state::ConnectionStatus;
+        if !self.core_endpoint_matches(endpoint_id) {
+            return ConnectionStatus::Disconnected;
+        }
+        match self.core_terminals.hub.state() {
+            State::Connecting(_) => ConnectionStatus::Connecting,
+            State::Detached => ConnectionStatus::Detached,
+            State::Ready(backend) if !backend.core().is_lost() => ConnectionStatus::Connected,
+            State::Idle | State::Ready(_) | State::Unavailable(_) => ConnectionStatus::Disconnected,
+        }
+    }
+
+    fn core_endpoint_matches(&self, endpoint_id: &str) -> bool {
+        self.endpoints
+            .get(self.selected_endpoint)
+            .is_some_and(|endpoint| {
+                endpoint.id == endpoint_id
+                    && self.core_terminals.scope.as_ref() == Some(&crate::browser::scope(endpoint))
+                    && self.core_terminals.hub.target() == &endpoint.connection.target
+            })
+    }
+
+    pub(crate) fn core_connection_error(&self, endpoint_id: &str) -> Option<&Error> {
+        if !self.core_endpoint_matches(endpoint_id) {
+            return None;
+        }
+        match self.core_terminals.hub.state() {
+            State::Unavailable(error) => Some(error.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Detaching only signals the connection and retires local views/inboxes.
+    /// It never kills a terminal, stops a daemon, or joins a worker on the UI thread.
+    pub(crate) fn detach_core_connection(&mut self, cx: &mut Context<Self>) {
+        self.save_core_panes(cx);
+        self.select_core_target(cx);
+        self.core_terminals.hub.detach();
+        self.core_terminals.reset_views();
+        cx.notify();
+    }
+
+    /// A changed backend policy retires pending terminal work as well as its
+    /// old connection, without reconnecting or carrying its workspace forward.
+    #[cfg(any(target_os = "ios", test))]
+    pub(crate) fn retire_core_connection(&mut self, cx: &mut Context<Self>) {
+        self.save_core_panes(cx);
+        self.core_terminals.hub.reset();
+        self.core_terminals.reset_views();
+        self.leave_core_workspace();
+    }
+
+    /// Reconnects the same namespace after an explicit user action. Restored
+    /// tabs attach when ready; reconnect never starts another shell.
+    pub(crate) fn reconnect_core_connection(&mut self, cx: &mut Context<Self>) {
+        self.save_core_panes(cx);
+        self.select_core_target(cx);
+        if !self.core_target_supported() {
+            return;
+        }
+        #[cfg(target_os = "ios")]
+        if self.browser_key().is_none() {
+            self.open_core_workspace();
+        }
+        let focus = self
+            .active_group()
+            .and_then(|group| self.group_pick(group))
+            .and_then(|pick| match pick {
+                crate::browser::Pick::Page(tab) if self.core_terminals.tabs.contains_key(&tab) => {
+                    Some(tab)
+                }
+                _ => None,
+            });
+        self.core_terminals.hub.reset();
+        self.core_terminals.reset_views();
+        self.core_terminals.focus_wanted = focus;
+        self.core_terminals.hub.connect(Start::IfMissing);
+        cx.notify();
+    }
+
+    /// Explicit daemon-workspace navigation can leave the app-owned core workspace.
+    pub(crate) fn leave_core_workspace(&mut self) {
+        self.core_terminals.workspace = None;
+    }
+
+    /// Opens only the saved tabs' client namespace. Selecting a core-only
+    /// device never starts its daemon or opens an SSH connection.
+    #[cfg(target_os = "ios")]
+    pub(crate) fn show_core_workspace(&mut self, cx: &mut Context<Self>) {
+        self.select_core_target(cx);
+        self.open_core_workspace();
+        cx.notify();
+    }
+
+    #[cfg(any(target_os = "ios", test))]
+    fn open_core_workspace(&mut self) -> Option<(Scope, String)> {
+        let herdr_client::ConnectTarget::Ssh { session, .. } = self.core_terminals.hub.target()
+        else {
+            return None;
+        };
+        // Reserved only in the client's tab/layout stores, never sent to Herdr.
+        // Sessions keep separate tab strips as well as separate transport fences.
+        self.core_terminals.workspace = Some(format!("herdr-ui:core:{session}"));
+        self.core_workspace_key()
+    }
+
+    /// The host menu's explicit action; a failed Herdr 1 probe never calls it.
+    #[cfg(target_os = "ios")]
+    pub(crate) fn new_core_terminal_for_host(
+        &mut self,
+        endpoint_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.select_endpoint(endpoint_id, cx) {
+            self.new_core_terminal(window, cx);
+        }
+    }
+
     /// The `new_core_terminal` command: starts a shell in herdr-core and
     /// shows it in a tab of the focused workspace. With no core running, the
     /// user's own `herdr-core` or the bundled one starts.
     pub(crate) fn new_core_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((scope, workspace)) = self.browser_key() else {
+        self.select_core_target(cx);
+        if !self.core_target_supported() {
+            self.show_flash(
+                Flash::warning(fl!(
+                    "core-terminals-unavailable",
+                    reason = Error::UnsupportedTarget.to_string()
+                )),
+                cx,
+            );
+            return;
+        }
+        let key = self.browser_key();
+        #[cfg(target_os = "ios")]
+        let key = key.or_else(|| self.open_core_workspace());
+        let Some((scope, workspace)) = key else {
             self.show_flash(Flash::warning(fl!("core-terminals-open-workspace")), cx);
             return;
         };
@@ -209,6 +423,9 @@ impl HerdrWindow {
     /// Runs every window tick: connects for restored tabs, places a started
     /// terminal, gives each shown pane its view, and takes new screens.
     pub(crate) fn poll_core_terminals(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.select_core_target(cx) {
+            cx.notify();
+        }
         let connected = self.core_terminals.hub.backend().is_some();
         if self.core_terminals.hub.poll() {
             // A lost connection ended every pane's worker. Their views go, so
@@ -309,6 +526,7 @@ impl HerdrWindow {
                 let location = Location::CoreTerminal {
                     panes: Panes::single(info.id),
                     observe: false,
+                    remote: Remote::from_target(self.core_terminals.hub.target()),
                 };
                 let Some(id) = Store::update(cx, |store| {
                     store.open(scope, &workspace, Some(location), None)

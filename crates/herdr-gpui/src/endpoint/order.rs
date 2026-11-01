@@ -51,6 +51,9 @@ impl HerdrWindow {
                 .map_or(devices.len(), |at| at + 1);
             devices[..at].rotate_left(1);
         }
+        if cfg!(target_os = "ios") {
+            devices.retain(|(_, endpoint)| endpoint.id != LOCAL);
+        }
         devices
     }
 

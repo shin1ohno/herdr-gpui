@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(not(target_os = "ios"))]
 use herdr_client::HostKeys;
 
 #[test]
@@ -62,6 +63,7 @@ fn a_list_that_names_no_ssh_target_is_refused() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_os = "ios"))]
 #[test]
 fn saving_a_choice_edits_only_the_ssh_list() -> anyhow::Result<()> {
     let temp = TempDirectory::new()?;

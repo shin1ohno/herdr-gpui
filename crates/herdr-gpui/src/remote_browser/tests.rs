@@ -5,11 +5,11 @@ use super::*;
 mod line_endings;
 
 /// The shim run with a fake `herdr`, as an agent on a host runs it.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod shim;
 
 /// The scripts that put the shim and the skill on a host.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod install;
 
 /// Windows acting on requests in their snapshots. Opening a tab without

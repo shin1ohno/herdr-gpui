@@ -72,5 +72,5 @@ fn runnable(path: &Path) -> bool {
     metadata.is_file()
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 mod tests;

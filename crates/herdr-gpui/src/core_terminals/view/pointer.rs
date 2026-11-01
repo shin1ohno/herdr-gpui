@@ -74,6 +74,9 @@ impl CoreTerminalView {
         cx: &mut Context<Self>,
     ) {
         window.focus(&self.focus, cx);
+        if event.button == MouseButton::Left && self.accepts_text_input(window, cx) {
+            window.request_virtual_keyboard();
+        }
         let Some(cell) = self.cell_at(event.position) else {
             return;
         };

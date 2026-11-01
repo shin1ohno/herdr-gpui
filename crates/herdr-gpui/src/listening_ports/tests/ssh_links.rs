@@ -42,7 +42,7 @@ fn a_first_tunnel_prefers_the_servers_own_port() {
     assert_eq!(tunnels.begin(&key(80, None)), Some(Some(10080)));
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn a_port_another_remote_port_last_used_is_not_preferred() {
     let mut tunnels = tunnel::Tunnels::default();

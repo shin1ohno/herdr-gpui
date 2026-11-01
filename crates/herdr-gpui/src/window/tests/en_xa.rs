@@ -67,8 +67,8 @@ fn data(view: &HerdrWindow, shown: &[String]) -> Vec<String> {
     names.extend(view.endpoints.iter().map(|endpoint| endpoint.label.clone()));
     names.push(herdr_updater::APP_VERSION.to_owned());
     names.push(env!("HERDR_BUILD_BRANCH").to_owned());
-    // The device menu's footer, migrated with menu/.
-    names.push("All Devices".to_owned());
+    // The footer measures and truncates its translated device label.
+    names.push(crate::i18n::fl!("devices-all"));
     // The terminal measures its cell width on one shaped "M".
     names.push("M".to_owned());
     shown

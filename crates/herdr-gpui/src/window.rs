@@ -13,6 +13,7 @@ pub(crate) mod clipboard;
 pub(crate) use clipboard::macos::run_helper as run_clipboard_helper;
 mod commands;
 mod config_diagnostic;
+mod connection_status;
 mod construct;
 mod copy_mode;
 mod device_themes;
@@ -56,6 +57,7 @@ mod tab_strip;
 mod tab_tear;
 mod toasts;
 mod transfers;
+pub(crate) mod viewport;
 pub(crate) mod wsl_drop;
 mod zen;
 #[cfg(test)]
@@ -636,6 +638,7 @@ impl HerdrWindow {
         self.update_workspace_dialog(window, cx);
         self.poll_teleport(window, cx);
         self.poll_carry(window, cx);
+        #[cfg(not(target_os = "ios"))]
         crate::link::follow::poll(self, window, cx);
         #[cfg(windows)]
         crate::jump_list::JumpList::observe(window.window_handle().window_id(), self, cx);

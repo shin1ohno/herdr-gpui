@@ -174,7 +174,7 @@ fn decoding_refuses_what_is_not_a_picture() -> anyhow::Result<()> {
 
 /// A FIFO with no writer would block an open forever; it must be refused
 /// before then, so neither the decode nor a Settings save waiting on it hangs.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn decoding_refuses_a_fifo_without_waiting_for_a_writer() -> anyhow::Result<()> {
     let directory = tempfile::tempdir()?;

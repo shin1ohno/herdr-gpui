@@ -118,6 +118,7 @@ impl Handle {
         Ok(())
     }
 
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(super) fn reload(&self) {
         lock(&self.link.inbox).reload = true;
         self.link.wake.notify_one();

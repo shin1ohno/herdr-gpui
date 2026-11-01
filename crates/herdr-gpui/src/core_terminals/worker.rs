@@ -66,6 +66,18 @@ pub(crate) struct Link {
 }
 
 impl Link {
+    #[cfg(test)]
+    pub(super) fn recording() -> (Self, std::sync::mpsc::Receiver<Command>) {
+        let (commands, received) = std::sync::mpsc::sync_channel(MAX_COMMANDS);
+        (
+            Self {
+                commands,
+                mailbox: Arc::new(Mailbox::default()),
+            },
+            received,
+        )
+    }
+
     pub(crate) fn send(&self, command: Command) {
         if let Err(error) = self.commands.try_send(command) {
             tracing::warn!(?error, "Dropped input for a herdr-core terminal");
@@ -111,6 +123,9 @@ fn run<B: Backend>(
     };
     while !mailbox.stop.load(Ordering::Acquire) {
         for command in queue.try_iter() {
+            if mailbox.stop.load(Ordering::Acquire) {
+                return;
+            }
             let applied = match command {
                 Command::Focus(focused) => terminal.focus(focused),
                 Command::Input(input) => terminal.input(&input),

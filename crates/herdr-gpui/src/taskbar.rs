@@ -5,7 +5,9 @@
 //! properties that point a pin at the launcher. Other platforms set nothing.
 //! The button's badge and progress bar live in [`button`].
 
-use gpui::{App, Global, Window};
+#[cfg(not(target_os = "ios"))]
+use gpui::Global;
+use gpui::{App, Window};
 
 #[cfg(any(windows, test))]
 use std::{
@@ -55,6 +57,7 @@ fn relaunch(gui: &Path) -> Option<Relaunch> {
 /// Startup's verdict on whether windows get relaunch properties, and the
 /// windows that carry them, so they are cleared before each one closes.
 #[derive(Debug, Default)]
+#[cfg(not(target_os = "ios"))]
 pub(crate) struct Taskbar {
     #[cfg(windows)]
     relaunch: Option<Relaunch>,
@@ -62,8 +65,10 @@ pub(crate) struct Taskbar {
     windows: std::collections::HashMap<gpui::WindowId, native::Hwnd>,
 }
 
+#[cfg(not(target_os = "ios"))]
 impl Global for Taskbar {}
 
+#[cfg(not(target_os = "ios"))]
 impl Taskbar {
     /// Decides, before GPUI starts, whether the launcher is installed beside
     /// this executable. Without it (a `cargo run` build, an old archive)

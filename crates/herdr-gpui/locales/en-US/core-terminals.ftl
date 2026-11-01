@@ -3,6 +3,7 @@
 core-terminals-open-workspace = Open a workspace first
 core-terminals-too-many-tabs = Too many tabs are open
 core-terminals-connecting = Connecting to herdr-core...
+core-terminals-reconnect = Reconnect
 # $reason is the error, in English or from herdr-core.
 core-terminals-unavailable = herdr-core is unavailable: { $reason }
 core-terminals-start-failed = Could not start a terminal: { $reason }

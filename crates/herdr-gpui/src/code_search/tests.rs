@@ -145,6 +145,7 @@ fn window<'a>(
     })
 }
 
+#[cfg(not(target_os = "ios"))]
 fn checkout() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -171,6 +172,7 @@ fn search<R>(
     view.read_with(cx, |view, _| read(view.menu.code_search.as_ref().unwrap()))
 }
 
+#[cfg(not(target_os = "ios"))]
 #[gpui::test]
 fn a_symbol_opens_in_the_editor_or_a_code_tab(cx: &mut TestAppContext) {
     let dir = checkout();
@@ -234,6 +236,7 @@ fn a_symbol_opens_in_the_editor_or_a_code_tab(cx: &mut TestAppContext) {
     });
 }
 
+#[cfg(not(target_os = "ios"))]
 #[gpui::test]
 fn files_mode_lists_the_checkout_and_tab_switches(cx: &mut TestAppContext) {
     let dir = checkout();
@@ -293,6 +296,7 @@ fn outside_a_checkout_the_search_shows_why(cx: &mut TestAppContext) {
     });
 }
 
+#[cfg(not(target_os = "ios"))]
 #[gpui::test]
 fn shown_hits_keep_the_index_they_were_ranked_against(cx: &mut TestAppContext) {
     let dir = checkout();

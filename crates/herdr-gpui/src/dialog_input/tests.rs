@@ -3,6 +3,7 @@ use gpui::Keystroke;
 
 mod branch_format;
 mod graphemes;
+mod keyboard_gesture;
 mod word_keys;
 
 #[test]

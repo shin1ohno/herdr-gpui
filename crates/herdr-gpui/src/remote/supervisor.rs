@@ -21,6 +21,7 @@ use std::{
 };
 
 /// How often the supervisor looks at what needs doing.
+#[cfg(not(target_os = "ios"))]
 const TICK: Duration = Duration::from_millis(500);
 /// How often the daemon is asked while something shows its details.
 const WATCHED: Duration = Duration::from_secs(2);
@@ -171,11 +172,13 @@ fn restart_host(config: &RemoteConfig) -> crate::Result<Outcome> {
 impl Supervisor {
     /// Installs the app's supervisor. Native test modes never do, so they
     /// never touch a service.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn install(cx: &mut App) {
         cx.set_global(Self::default());
         Self::start(cx);
     }
 
+    #[cfg(not(target_os = "ios"))]
     fn start(cx: &mut App) {
         crate::config::watch::follow(cx, "remote", |config| config.remote, Self::apply_config)
             .detach();
@@ -209,6 +212,7 @@ impl Supervisor {
         .detach();
     }
 
+    #[cfg(not(target_os = "ios"))]
     fn apply_config(cx: &mut App, config: RemoteConfig) {
         let supervisor = cx.global_mut::<Self>();
         if supervisor.loaded && supervisor.config == config {
@@ -221,6 +225,7 @@ impl Supervisor {
     }
 
     /// Takes the status marks set in Herdr UI, for the next poll to send.
+    #[cfg(not(target_os = "ios"))]
     pub(super) fn apply_indicators(cx: &mut App, name: &'static str) {
         let supervisor = cx.global_mut::<Self>();
         if supervisor.indicators != Some(name) {

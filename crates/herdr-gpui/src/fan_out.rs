@@ -20,5 +20,6 @@ mod state;
 mod ui;
 
 pub(crate) use journal::Journal;
+#[cfg(any(test, not(target_os = "ios")))]
 pub(crate) use plan::MAX_LANES;
 pub(crate) use state::{FanOut, Origin};

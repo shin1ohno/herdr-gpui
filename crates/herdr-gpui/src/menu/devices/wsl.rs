@@ -508,6 +508,14 @@ fn add(distro: &str, session: &str) -> Outcome {
             }
         }
         Ok(HostProbe::Missing) => Outcome::Refused(fl!("devices-wsl-missing", distro = distro)),
+        #[cfg(target_os = "ios")]
+        Ok(HostProbe::CoreAvailable) => {
+            Outcome::Refused(fl!("devices-wsl-missing", distro = distro))
+        }
+        #[cfg(target_os = "ios")]
+        Ok(HostProbe::OutdatedCoreAvailable) => {
+            Outcome::Refused(fl!("devices-wsl-outdated", distro = distro))
+        }
         Ok(HostProbe::Outdated) => Outcome::Refused(fl!("devices-wsl-outdated", distro = distro)),
         Ok(HostProbe::SshFailed(_)) => {
             Outcome::Refused(fl!("devices-wsl-no-answer", distro = distro))

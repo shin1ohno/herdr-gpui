@@ -22,7 +22,8 @@ pub(in crate::menu) enum Edit {
 
 impl HerdrWindow {
     pub(super) fn local_management_available(&self) -> bool {
-        !self.local_development()
+        !cfg!(target_os = "ios")
+            && !self.local_development()
             && !matches!(
                 self.endpoints[0].connection.target,
                 ConnectTarget::Socket(_)

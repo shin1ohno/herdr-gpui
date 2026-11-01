@@ -21,6 +21,7 @@ use super::{
 };
 use crate::direction::Logical;
 use crate::i18n::fl;
+use crate::menu::{ContextMenuEvent, context_menu};
 use crate::notification_mutes::{Daemon, Silenced};
 use crate::{
     Command, HerdrWindow, NavigationTarget,
@@ -230,15 +231,17 @@ impl HerdrWindow {
                         .debug_selector(|| format!("rail-host-{endpoint_id}"))
                         .cursor_pointer()
                         .tooltip(hint.with(text))
-                        .on_mouse_down(
-                            MouseButton::Right,
-                            cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                this.open_host_menu(&menu_id, event.position, window, cx);
-                                this.menu.opening_right_click =
-                                    this.menu.page == Some(crate::menu::Page::Host);
-                            }),
-                        )
+                        .map(|row| {
+                            context_menu(
+                                row,
+                                cx.listener(move |this, event: &ContextMenuEvent, window, cx| {
+                                    cx.stop_propagation();
+                                    this.open_host_menu(&menu_id, event.position, window, cx);
+                                    this.menu.opening_right_click = event.mouse.is_some()
+                                        && this.menu.page == Some(crate::menu::Page::Host);
+                                }),
+                            )
+                        })
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.select_endpoint(&select_id, cx);
                             window.focus(&this.focus, cx);
@@ -340,21 +343,28 @@ impl HerdrWindow {
                         None,
                         muted_word(status_word(workspace.agent_status), muted).as_deref(),
                     )))
-                    .on_mouse_down(
-                        MouseButton::Right,
-                        cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                            cx.stop_propagation();
-                            if this.navigate_endpoint(
-                                &context_endpoint,
-                                NavigationTarget::Workspace(&context_id),
-                                cx,
-                            ) {
-                                this.open_workspace_menu(&context_id, event.position, window, cx);
-                                this.menu.opening_right_click =
-                                    this.menu.page == Some(crate::menu::Page::Workspace);
-                            }
-                        }),
-                    )
+                    .map(|row| {
+                        context_menu(
+                            row,
+                            cx.listener(move |this, event: &ContextMenuEvent, window, cx| {
+                                cx.stop_propagation();
+                                if this.navigate_endpoint(
+                                    &context_endpoint,
+                                    NavigationTarget::Workspace(&context_id),
+                                    cx,
+                                ) {
+                                    this.open_workspace_menu(
+                                        &context_id,
+                                        event.position,
+                                        window,
+                                        cx,
+                                    );
+                                    this.menu.opening_right_click = event.mouse.is_some()
+                                        && this.menu.page == Some(crate::menu::Page::Workspace);
+                                }
+                            }),
+                        )
+                    })
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.navigate_endpoint(
                             &navigate_endpoint,
@@ -390,6 +400,8 @@ impl HerdrWindow {
             let id = agent.pane_id.clone();
             let key = format!("rail-agent-{endpoint_id}-{id}");
             let navigate_endpoint = endpoint_id.clone();
+            let menu_endpoint = endpoint_id.clone();
+            let menu_pane = id.clone();
             let focused = selected && agent.focused;
             let place = agent_place(agent, snapshot);
             let place = place.map(|(workspace, tab)| match tab {
@@ -474,6 +486,25 @@ impl HerdrWindow {
                     place.as_deref(),
                     agent_status_word(agent).as_deref(),
                 )))
+                // The expanded sidebar's agent rows have long had this menu;
+                // rail rows gain it on iPad, where a long press is the only
+                // way to reach it, and stay as they were on the desktop.
+                .when(crate::ipad_ui::active(), |row| {
+                    context_menu(
+                        row,
+                        cx.listener(move |this, event: &ContextMenuEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.open_agent_menu(
+                                &menu_endpoint,
+                                &menu_pane,
+                                event.position,
+                                window,
+                                cx,
+                            );
+                            this.menu.opening_right_click &= event.mouse.is_some();
+                        }),
+                    )
+                })
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.navigate_endpoint(&navigate_endpoint, NavigationTarget::Pane(&id), cx);
                     window.focus(&this.focus, cx);

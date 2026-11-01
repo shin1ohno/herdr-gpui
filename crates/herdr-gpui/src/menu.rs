@@ -11,6 +11,7 @@ mod cloud_create;
 #[cfg(feature = "cloud")]
 mod cloud_destroy;
 mod colors;
+mod context_menu;
 pub(crate) mod devices;
 mod fan_out;
 mod git;
@@ -59,6 +60,7 @@ mod worktree_tests;
 pub(crate) use state::Cover;
 pub(crate) use {
     colors::{accent, danger, online, teleported, tint},
+    context_menu::{ContextMenuEvent, context_menu},
     page::{Page, WorkspaceAction},
     state::{MenuState, Removal},
     version_mismatch::Notice as VersionNotice,

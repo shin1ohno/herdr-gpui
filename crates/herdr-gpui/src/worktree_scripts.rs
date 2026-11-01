@@ -17,7 +17,9 @@ mod error;
 mod launch;
 mod trust;
 
-pub(crate) use config::{Config, PATH as CONFIG_PATH, read as read_config};
+#[cfg(not(target_os = "ios"))]
+pub(crate) use config::PATH as CONFIG_PATH;
+pub(crate) use config::{Config, read as read_config};
 pub(crate) use error::Error;
 #[cfg(feature = "cloud")]
 pub(crate) use launch::SCRIPT_ENV;

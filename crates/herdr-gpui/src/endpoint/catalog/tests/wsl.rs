@@ -2,6 +2,7 @@ use super::*;
 
 fn update(wsl: &[&str], selection: Option<Option<&str>>) -> CatalogUpdate {
     CatalogUpdate {
+        generations: Generations::new(),
         hosts: vec![host("a", true)],
         wsl: wsl
             .iter()

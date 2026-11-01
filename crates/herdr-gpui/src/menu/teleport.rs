@@ -106,6 +106,13 @@ impl HerdrWindow {
     }
 
     pub(crate) fn open_teleport(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if cfg!(target_os = "ios") {
+            self.show_flash(
+                crate::window::Flash::warning(crate::i18n::fl!("platform-teleport-unavailable")),
+                cx,
+            );
+            return;
+        }
         let Some(target) = &self.menu.target else {
             return;
         };

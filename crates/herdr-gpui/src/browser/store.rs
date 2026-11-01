@@ -79,6 +79,7 @@ impl Scope {
     }
 
     /// The scope as `tab list` reports a tab's host.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
@@ -288,6 +289,7 @@ impl Store {
     }
 
     /// Every tab of every workspace, in the order they were opened.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn tabs(&self) -> impl Iterator<Item = &Tab> {
         self.tabs.iter()
     }

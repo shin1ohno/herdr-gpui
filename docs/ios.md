@@ -83,7 +83,12 @@ The signatures in each module's Wave 0 skeleton are the contract between them:
   `new(mtm, target)`, `view()`, `activate()`, `deactivate()`,
   `input_handler_changed()`, and `caret_bounds_changed(bounds)`. A separate
   view keeps the text system and IME out of the drawing view, as UIKit text
-  clients commonly do.
+  clients commonly do. A software keyboard the user hides with its own key
+  stays hidden while focus moves between elements, the window resizes, or the
+  app goes to the background and returns; only a gesture on a text target
+  (a terminal, composer, or field calling `request_virtual_keyboard`) shows it
+  again. Keyboard notifications from other apps, other windows, and inactive
+  scenes do not change a window's keyboard state.
 
 ## Scenes and windows
 
@@ -159,13 +164,30 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   HerdrRemote app's `DeviceKey.swift` does, and authenticates as
   `ecdsa-sha2-nistp256`, which macOS's `sshd` accepts. Its Keychain item is
   `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, not synchronizable, and in
-  no shared access group. It is created only when a lookup finds none, with
-  an add that fails on a duplicate, so two scenes cannot each create one; a
+  no shared access group. Lookup, creation, and replacement are serialized
+  within the app, and creation reads back the stored key. Security.framework
+  does not enforce uniqueness of a key's application tag, so the process-wide
+  lock keeps two scenes from each creating one; a
   locked device is a transient error, never a reason to make a new key. The
   simulator and the macOS tests use a software key behind the same signer.
   The Add Device dialog shows the line to add to `~/.ssh/authorized_keys`:
   `restrict ecdsa-sha2-nistp256 AAAA… herdr-ipad-<device>`, since the bridge
-  needs no PTY and no forwarding. Settings can replace the key.
+  needs no PTY and no forwarding. Key deletion is implemented in the credentials
+  layer; a confirmed replacement action in Settings remains to be added.
+- **Configuration** lives in the app container's
+  `Library/Application Support/herdr/config-gpui*.toml`, alongside its
+  app-owned state. Early builds' `.config/herdr` overrides are read for the
+  first frame, then copied by background maintenance without replacing
+  existing Library settings or deleting the originals. Migration reads are
+  limited to 1 MiB per file. Legacy files that cannot be moved (conflicting,
+  unparsable, or too large) stay where they are and are reported once in the
+  config notice; the Library settings then start from the defaults, so later
+  launches neither retry the migration nor refuse to save.
+  Only those settings files move. Custom themes (`herdr/themes`,
+  `ghostty/themes`) and mods (`herdr/gpui-mods`) are read from the same
+  Library root, so any an early build kept under `.config` are not carried
+  over; that build offered no way to add them, as the app shares no files.
+  Saved sign-ins are in the Keychain, not under either root.
 - **Host keys** are pinned per known-hosts name in an OpenSSH `known_hosts`
   file under `Library/Application Support`. A host with no pin is unknown;
   a host with any pin that the offered key does not match exactly is a
@@ -184,6 +206,12 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   confirmation.
 - The skip-verification list has no iPad equivalent.
 - The computer needs Remote Login (sshd) enabled and Herdr installed.
+- The bundle declares why it needs local network access and lists only
+  `_ssh._tcp` for Bonjour discovery, as required by
+  [Apple's local network privacy guidance](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy).
+  Discovery uses the system DNS-SD API on iOS, including address resolution,
+  instead of sending UDP multicast from the app. Permission waits and active
+  queries remain cancellable and bounded on the discovery worker.
 - Later: pin the host key out of band, from a QR code the desktop shows,
   instead of trusting the first key the network offers.
 
@@ -209,9 +237,11 @@ Rust targets: `rustup target add aarch64-apple-ios aarch64-apple-ios-sim`.
 
 | Recipe | What it does |
 | --- | --- |
-| `just lint-ios` | Clippy over `herdr-uikit` and its examples, for a device and for the simulator |
+| `just lint-ios` | Clippy over the UIKit platform, SSH, credentials, clients, and the real app, for a device and for the simulator |
 | `just ios-sim EXAMPLE [WAIT]` | Builds the example, bundles it, runs it in the simulator for `WAIT` seconds (default 5), and saves a screenshot |
+| `just ios-app [WAIT]` | Builds and runs the real iPad client with desktop cloud providers disabled |
 | `just test-ios` | Runs `herdr-uikit`'s tests inside the simulator, then the screenshot checker's own tests |
+| `just test-ssh /absolute/path/to/sshd /absolute/path/to/ssh-keygen` | Tests the SSH transport against its own isolated server; never uses a personal daemon |
 
 Two examples live in `crates/herdr-uikit/examples`:
 
@@ -238,6 +268,9 @@ The scripts behind the recipes are in `scripts/ios/`:
   from the `Info.plist` template, and ad-hoc signs it. A device bundle is left
   unsigned: installing on an iPad needs a development team and a provisioning
   profile, which the script does not handle yet.
+  Simulator executables embed private, bundle-specific Keychain entitlements
+  in `__TEXT,__entitlements`; those placeholders are never used on a device.
+  `--no-default-features` and `--features LIST` select Cargo features.
 - `sim.sh` boots the simulator when it is shut down, installs and launches the
   app, waits, and takes the screenshot. It never erases, deletes, or shuts
   down a simulator; `--terminate` stops the app it launched after the
@@ -254,3 +287,46 @@ The simulator is "iPad Pro 13-inch (M5)" by default, the newest runtime's when
 several exist. `HERDR_IOS_SIMULATOR` picks another by name or UDID (`xcrun
 simctl list devices available`). `RUST_LOG` and `RUST_BACKTRACE` reach the
 app; `RUST_*`, `CARGO_*`, and `HERDR_TEST_*` variables reach test binaries.
+
+## Choosing the remote backend
+
+Add Device scans and pins the computer's SSH host key before authentication.
+The iPad shows its public key for an explicit `authorized_keys` grant. A
+computer with Herdr 1 uses the existing bridge. If only `herdr-core`/`hc` is
+installed, the dialog offers to add a Herdr 2 host explicitly; it does not
+install software or start a daemon while probing.
+
+The Herdr 2 choice is saved in this client's `[devices.PROFILE]` table as
+`generation = "herdr2"`, leaving Herdr's saved-host schema unchanged. Such a
+device never attempts a Herdr 1 connection. Choose **New Herdr 2 terminal**
+from its menu to connect through `hc connect --session SESSION` over SSH.
+That explicit operation can start a missing remote core, as the core CLI
+normally does. Restoring a saved tab never starts a remote daemon by itself.
+Reconnect reattaches existing terminals; it does not create replacements.
+Detaching closes the client's connection and leaves the remote terminals running.
+
+Core tabs keep their exact SSH target and session with their saved layout.
+Changing a host or session retires old workers and views before a terminal ID
+from the new core can be used. Core connection indicators come from that
+connection, without manufacturing a Herdr 1 snapshot or agent activity.
+
+## Remaining platform work
+
+The real application builds and renders in the iPad simulator. This is still
+the first platform implementation: native `UIMenuBuilder` menus are not wired,
+the text input adapter reports a left-to-right base writing direction, and
+the renderer does not support Core Video surfaces or subpixel sprites. GPUI's
+in-window menus and grayscale text rendering remain available.
+
+Physical-device signing and provisioning are not automated. Secure Enclave
+key creation, native keyboard/IME composition, trackpad behavior, multiple
+scenes, and narrow multitasking layouts still need checks on an iPad. Simulator
+unit tests and a successful launch do not establish those behaviors.
+
+Manual checks in the simulator, against a private loopback `sshd` with Herdr
+1 and herdr-core, have covered adding a device with its host key confirmed,
+Herdr 1 and Herdr 2 terminals over SSH (typing, detaching and reattaching,
+live splits), ACP chats, long-press menus, and hiding and reshowing the
+software keyboard. Adding a real computer on the network and denying and
+granting Local Network access still need checks on an iPad; the private
+SSH/core transport tests cover the backend separately.

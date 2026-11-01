@@ -3,18 +3,43 @@
 //! do not announce themselves are not found; nothing is scanned.
 
 use super::{Candidate, Source, valid_host};
-use crate::{Error, Result};
+#[cfg(not(target_os = "ios"))]
+use crate::Error;
+use crate::Result;
+#[cfg(not(target_os = "ios"))]
 use herdr_client::LocalNetworkAccess;
+#[cfg(not(target_os = "ios"))]
 use mdns_sd::{RecvTimeoutError, ServiceDaemon};
-use std::{
-    collections::HashSet,
-    net::IpAddr,
-    time::{Duration, Instant},
-};
+#[cfg(not(target_os = "ios"))]
+use std::time::Instant;
+use std::{collections::HashSet, net::IpAddr, time::Duration};
+
+#[cfg(target_os = "ios")]
+mod native;
+#[cfg(target_os = "ios")]
+pub use native::Error;
 
 const SERVICE: &str = "_ssh._tcp.local.";
 /// How often the query is sent again while nothing has answered.
+#[cfg(not(target_os = "ios"))]
 const REQUERY: Duration = Duration::from_secs(1);
+
+/// iOS routes the declared service through the system Bonjour daemon. Raw
+/// UDP multicast would additionally require Apple's multicast entitlement.
+#[cfg(target_os = "ios")]
+pub(super) fn browse(
+    duration: Duration,
+    permission_wait: Duration,
+    waiting: impl FnMut(bool) -> bool,
+    found: impl FnMut(Candidate) -> bool,
+) -> Result<()> {
+    let local = if_addrs::get_if_addrs()
+        .map_err(crate::Error::LocalAddresses)?
+        .into_iter()
+        .map(|interface| interface.ip())
+        .collect();
+    native::browse(duration, permission_wait, waiting, found, &local)
+}
 
 /// Listen for `duration`, reporting each resolved announcement that is not
 /// this machine until `found` returns `false`. Blocks: call it from the
@@ -28,6 +53,7 @@ const REQUERY: Duration = Duration::from_secs(1);
 /// The first queries of a fresh permission can still go unanswered: the
 /// library backs off to queries 1, 3 and 7 seconds in, so until something
 /// answers, the browse restarts every second, which sends a new query.
+#[cfg(not(target_os = "ios"))]
 pub(super) fn browse(
     duration: Duration,
     permission_wait: Duration,
@@ -104,6 +130,7 @@ pub(super) fn browse(
 
 /// Where the Local Network permission left the browse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(not(target_os = "ios"))]
 pub(super) enum Permission {
     Granted,
     /// Still refused when the wait ran out.
@@ -116,6 +143,7 @@ pub(super) enum Permission {
 /// daemon only logs a refused send, so without this the browse would find
 /// nothing and look like an empty network. An `Unknown` answer is left to
 /// the browse.
+#[cfg(not(target_os = "ios"))]
 pub(super) fn permitted(
     check: impl FnOnce() -> LocalNetworkAccess,
     wait: impl FnOnce(&mut dyn FnMut() -> bool) -> LocalNetworkAccess,
