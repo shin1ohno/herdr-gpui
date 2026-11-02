@@ -510,6 +510,15 @@ Herdr prefix keys. The default is `ipad` on iOS and `herdr-prefix` elsewhere.
 Shortcut hints appear only once a hardware keyboard has been seen and no
 software keyboard is covering more than 120 pt of the window.
 
+Under `layout()` the sidebar, the tab strip, and the status bar take the iPad
+form: a 64 pt host row, 56 pt space rows, 44 pt agent rows and footer buttons;
+a 52 pt tab strip whose tabs carry a 40 pt close target that is always visible
+and, with a hardware keyboard, a shortcut hint; a 2 pt frame around the focused
+pane on Herdr 2 (Herdr 1 draws its own borders into the cells); and a 44 pt
+status bar with the host, a keyboard button, and a legend of four shortcuts.
+Hover-only controls have a touch replacement, and the activity bar is off by
+default on iOS. On a Nord theme the iPad accent is the theme's nord8.
+
 ## Remaining platform work
 
 The real application builds and renders in the iPad simulator. GPUI's menus

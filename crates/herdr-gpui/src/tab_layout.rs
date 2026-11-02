@@ -15,6 +15,7 @@ mod cards;
 mod classic;
 mod compact;
 mod curved;
+pub(crate) mod ipad;
 mod outline;
 pub(crate) mod panes;
 mod pills;
@@ -23,7 +24,7 @@ mod underline;
 use crate::{
     backdrop::Fill,
     browser::{Slot, TabId},
-    config::{FontConfig, TabLayoutMode, Theme},
+    config::{FontConfig, ShortcutStyle, TabLayoutMode, Theme},
     i18n::fl,
     icons::AgentIcon,
     sidebar::{Indicators, status_indicator},
@@ -70,17 +71,33 @@ pub(crate) enum Mark {
     Herdr {
         status: AgentStatus,
         agent: Option<AgentIcon>,
+        chat: bool,
+        hint: Option<ipad::TabHint>,
     },
     /// A browser tab's kind: a globe, a diff, a file, or an editor's mark.
     Icon(&'static str),
     /// The page's own icon, in place of the globe.
     Favicon(Arc<RenderImage>),
+    /// A page's per-tab touch shortcut; the shared context has no tab identity.
+    Hinted {
+        mark: Box<Mark>,
+        hint: ipad::TabHint,
+    },
 }
 
 impl Mark {
     /// Unknown is what a tab without an agent reports, so it leads with
     /// nothing rather than the sidebar's small grey dot.
     pub(crate) fn lead(&self) -> Lead {
+        if crate::ipad_ui::layout()
+            && let Self::Herdr { status, chat, .. } = self
+        {
+            return match (chat, status) {
+                (true, _) => Lead::Icon,
+                (_, AgentStatus::Working) => Lead::Status,
+                _ => Lead::Nothing,
+            };
+        }
         match self {
             Self::Herdr {
                 status: AgentStatus::Unknown,
@@ -88,6 +105,7 @@ impl Mark {
             } => Lead::Nothing,
             Self::Herdr { .. } => Lead::Status,
             Self::Icon(_) | Self::Favicon(_) => Lead::Icon,
+            Self::Hinted { mark, .. } => mark.lead(),
         }
     }
 }
@@ -184,6 +202,8 @@ pub(crate) struct TabState {
 
 /// Read-only inputs every tab of one strip shares.
 pub(crate) struct TabContext<'a> {
+    pub(crate) hardware: bool,
+    pub(crate) style: ShortcutStyle,
     pub(crate) theme: &'a Theme,
     /// The tab font.
     pub(crate) font: &'a FontConfig,
@@ -339,6 +359,9 @@ fn floating_new_tab(base: Stateful<Div>, icon: AnyElement, theme: &Theme) -> Sta
 
 /// The tabs a layout draws.
 pub(crate) fn layout_for(mode: TabLayoutMode) -> &'static dyn TabLayout {
+    if crate::ipad_ui::layout() {
+        return &ipad::Ipad;
+    }
     match mode {
         TabLayoutMode::Cards => &cards::Cards,
         TabLayoutMode::Classic => &classic::Classic,
@@ -374,6 +397,7 @@ fn lead_mark(
                 .flex_none()
                 .into_any_element(),
         ),
+        Mark::Hinted { mark, .. } => lead_mark(mark, probe, size, text, cx),
     }
 }
 
@@ -389,6 +413,7 @@ fn kind_icon(mark: &Mark, probe: &Probe, size: f32, text: u32, cx: &TabContext<'
         Mark::Icon(_) | Mark::Favicon(_) => {
             lead_mark(mark, probe, size, text, cx).unwrap_or_else(|| div().into_any_element())
         }
+        Mark::Hinted { mark, .. } => kind_icon(mark, probe, size, text, cx),
     }
 }
 
@@ -399,6 +424,7 @@ fn status_mark(mark: &Mark, probe: &Probe, cx: &TabContext<'_>) -> Option<AnyEle
     match mark {
         Mark::Herdr { .. } => lead_mark(mark, probe, 0., 0, cx),
         Mark::Icon(_) | Mark::Favicon(_) => None,
+        Mark::Hinted { mark, .. } => status_mark(mark, probe, cx),
     }
 }
 

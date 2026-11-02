@@ -23,6 +23,19 @@ use gpui::{App, ClickEvent, Div, ElementId, ParentElement, Styled, Window};
 use herdr_client::protocol::{AgentStatus, ClientShellWorkspace};
 use std::borrow::Cow;
 
+#[path = "ipad_meta.rs"]
+pub(super) mod ipad_meta;
+use ipad_meta::{AgentMeta, SpaceMeta};
+
+/// Prepared iPad-only data travels with the cell, leaving desktop row inputs
+/// and their existing callers unchanged.
+pub(super) enum IpadMeta {
+    // keep-sorted start
+    Agent(AgentMeta),
+    Space(SpaceMeta),
+    // keep-sorted end
+}
+
 /// Read-only inputs every row of one render shares.
 pub(super) struct RowContext<'a> {
     pub(super) indicators: super::agents::Indicators,
@@ -163,6 +176,7 @@ pub(super) trait RowLayout {
 /// One row waiting for its state: build it, mark it, then take the element.
 #[must_use = "a cell draws nothing until `row` takes its element"]
 pub(super) struct Cell<'a> {
+    ipad: Option<IpadMeta>,
     layout: &'a dyn RowLayout,
     data: RowData<'a>,
     state: RowState,
@@ -176,11 +190,19 @@ impl<'a> Cell<'a> {
         cx: &'a RowContext<'a>,
     ) -> Self {
         Self {
+            ipad: None,
             layout,
             data,
             state: RowState::default(),
             cx,
         }
+    }
+
+    pub(super) fn ipad(mut self, meta: Option<IpadMeta>) -> Self {
+        if crate::ipad_ui::layout() {
+            self.ipad = meta;
+        }
+        self
     }
 
     pub(super) fn selected(mut self, selected: bool) -> Self {
@@ -207,11 +229,23 @@ impl<'a> Cell<'a> {
                 let rail = (!row.removing)
                     .then(|| self.cx.indicators.rail(row.status, row.label))
                     .flatten();
-                (self.layout.workspace(row, self.state, self.cx), rail)
+                let element = match self.ipad {
+                    Some(IpadMeta::Space(meta)) => {
+                        super::layouts::Ipad::space(row, Some(meta), self.state, self.cx)
+                    }
+                    _ => self.layout.workspace(row, self.state, self.cx),
+                };
+                (element, rail)
             }
             RowData::Agent(row) => {
                 let rail = self.cx.indicators.rail(row.status, &row.key);
-                (self.layout.agent(row, self.state, self.cx), rail)
+                let element = match self.ipad {
+                    Some(IpadMeta::Agent(meta)) => {
+                        super::layouts::Ipad::agent_row(row, Some(meta), self.state, self.cx)
+                    }
+                    _ => self.layout.agent(row, self.state, self.cx),
+                };
+                (element, rail)
             }
         };
         match rail {
@@ -223,6 +257,9 @@ impl<'a> Cell<'a> {
 
 /// The rows a layout draws: Herdr's for every density, or a design of its own.
 pub(super) fn layout_for(mode: LayoutMode) -> &'static dyn RowLayout {
+    if crate::ipad_ui::layout() {
+        return &super::layouts::Ipad;
+    }
     match mode {
         LayoutMode::Classic { .. } => &super::layouts::Herdr,
         LayoutMode::Superset => &super::layouts::Superset,

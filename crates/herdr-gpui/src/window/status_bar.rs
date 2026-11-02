@@ -2,6 +2,16 @@
 //! its items show and how compactly, so a crowded bar can give room back.
 // i18n: migrated
 
+mod ipad;
+
+#[cfg(test)]
+#[path = "status_bar/tests/ipad_narrow.rs"]
+mod ipad_narrow;
+
+#[cfg(test)]
+#[path = "status_bar/tests/ipad.rs"]
+mod ipad_tests;
+
 use super::HerdrWindow;
 use crate::direction::Logical;
 use crate::i18n::{Localize, fl};
@@ -24,10 +34,16 @@ const MODEL_WIDTH: f32 = 160.;
 impl HerdrWindow {
     /// The bar's height, which grows with the UI font.
     pub(super) fn status_bar_height(&self) -> f32 {
+        if crate::ipad_ui::layout() {
+            return ipad::STATUS_BAR;
+        }
         (self.config.ui.size * 1.5 + 4.).max(22.)
     }
 
     pub(super) fn render_status_bar(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        if crate::ipad_ui::layout() {
+            return self.render_ipad_status_bar(cx);
+        }
         let connection = self.displayed_connection_status(&self.endpoints[self.selected_endpoint]);
         let status = (!matches!(connection, ConnectionStatus::Connected)
             || self.local_error.is_some()

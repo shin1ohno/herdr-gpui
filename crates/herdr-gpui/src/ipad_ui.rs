@@ -7,13 +7,16 @@
 //! Theme roles (no iPad colors are hard-coded):
 //! - Terminal: `background`; sidebar: `sidebar_background()`; bars: `surface`.
 //! - Borders and floating parts: `active`; body: `foreground`; secondary: `subtext()`.
-//! - Selection and focus: `primary()`, with `text_on(primary())` for its text.
-//!   PR2 introduces the iPad Nord accent override with its first caller.
+//! - Selection and focus: [`accent()`], with `text_on(accent())` for its text.
+//!   Under the iPad layout, Nord uses `palette[6]`; other themes use `primary()`.
 //! - Working/warnings: `palette[3]`; idle: `palette[6]`; done: `palette[2]`;
 //!   blocked: `palette[1]`. Dot shapes retain the existing status meanings.
 
+mod accent;
+pub(crate) mod harness;
 mod kbd;
 pub(crate) mod metrics;
+pub(crate) use accent::accent;
 pub(crate) use kbd::kbd;
 
 #[cfg(test)]

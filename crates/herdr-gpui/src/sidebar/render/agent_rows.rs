@@ -7,7 +7,7 @@ use crate::{
     sidebar::{
         Indicators, agent_name,
         agents::{agent_place, pane_name, state_label, status_text},
-        cell::{AgentRow, Cell, RowContext, RowData, layout_for},
+        cell::{AgentRow, Cell, IpadMeta, RowContext, RowData, ipad_meta::agent_meta, layout_for},
         layout::SidebarLook,
         line_height, tokens, wash,
     },
@@ -164,6 +164,7 @@ impl HerdrWindow {
             }),
             row_cx,
         )
+        .ipad(crate::ipad_ui::layout().then(|| IpadMeta::Agent(agent_meta(agent, snapshot))))
         .selected(selected && agent.focused)
         .highlighted(menu_open)
         .row()

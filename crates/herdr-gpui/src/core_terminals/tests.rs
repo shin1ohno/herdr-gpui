@@ -1,4 +1,5 @@
 mod focus;
+mod focus_frame;
 mod keys;
 mod panes;
 mod paste;

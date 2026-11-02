@@ -215,7 +215,11 @@ impl SidebarMetrics {
         self.gap
     }
     pub(super) fn child_indent(&self) -> f32 {
-        self.child_indent
+        if crate::ipad_ui::layout() {
+            22.
+        } else {
+            self.child_indent
+        }
     }
     pub(super) fn card_indent(&self) -> f32 {
         self.card_indent
@@ -324,6 +328,9 @@ impl SidebarLook {
     }
 
     pub(super) fn header_label(&self, label: &str) -> String {
+        if crate::ipad_ui::layout() {
+            return label.to_uppercase();
+        }
         match self.density.header_case {
             HeaderCase::Lower => label.to_owned(),
             HeaderCase::Title => {
