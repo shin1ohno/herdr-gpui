@@ -33,11 +33,13 @@ fn ssh_sheet_has_fixed_width_header_radius_and_theme_backdrop(cx: &mut TestAppCo
         Step::KeyCodeRefused,
         Step::Confirm(request.clone(), Offer::Update),
         Step::Verifying(request.clone(), Offer::Update),
+        #[cfg(all(unix, not(target_os = "ios")))]
         Step::Activating(
             request.clone(),
             setup::TerminalSetup::fixture("unused"),
             Offer::Update,
         ),
+        #[cfg(all(unix, not(target_os = "ios")))]
         Step::Opening(
             request.clone(),
             super::super::LocalSpace {
