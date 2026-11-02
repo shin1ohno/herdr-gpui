@@ -102,7 +102,7 @@ macro_rules! chat_layouts {
         /// How a chat view draws its entries and composer. Each one is a
         /// `chat::view::layout::ChatLayout`; what a chat does is the same in
         /// all.
-        #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub enum ChatLayoutMode {
             $($(#[$doc])* $variant,)+
         }
@@ -139,7 +139,6 @@ macro_rules! chat_layouts {
 chat_layouts! {
     /// Entries on a line down the left, an avatar where the speaker
     /// changes, and the settings inside the composer's card.
-    #[default]
     Timeline => "timeline", "chat-layout-timeline";
     /// The user's messages in bubbles on the right and the agent's as
     /// plain text, with the settings under the composer, like Claude's app.
@@ -161,6 +160,16 @@ chat_layouts! {
     /// hung from a gutter mark, the agent's prose in full ink, and earlier
     /// turns muted until pointed at, like iA Writer.
     IA => "ia", "chat-layout-ia";
+}
+
+impl Default for ChatLayoutMode {
+    fn default() -> Self {
+        if cfg!(target_os = "ios") {
+            Self::Bubbles
+        } else {
+            Self::Timeline
+        }
+    }
 }
 
 impl ChatLayoutMode {

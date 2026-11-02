@@ -37,6 +37,12 @@ pub(super) fn backdrop(background: u32, shown: f32) -> Rgba {
     rgba((background << 8) | alpha)
 }
 
+/// The iPad SSH sheet dims the theme background by 66 percent.
+pub(super) fn sheet_backdrop(background: u32, shown: f32) -> Rgba {
+    let alpha = (168. * shown.clamp(0., 1.)).round() as u32;
+    rgba((background << 8) | alpha)
+}
+
 /// What kind of popup the window shows, as far as its motion cares.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Shown {
@@ -61,6 +67,8 @@ pub(crate) struct Appear {
     /// All Devices' height as last laid out, which its rise travels.
     pub(super) rise_height: std::rc::Rc<std::cell::Cell<Option<Pixels>>>,
     backdrop: Toggle,
+    /// Retained while the last dialog's dimming fades after menu reset.
+    sheet_backdrop: bool,
     /// Unit tests lay menus out where they settle unless one asks to see
     /// them move, so geometry checks need not wait out the motion.
     #[cfg(test)]
@@ -70,6 +78,9 @@ pub(crate) struct Appear {
 impl Appear {
     fn observe(&mut self, shown: Option<Shown>, page: Option<Page>, now: Instant) {
         let last = std::mem::replace(&mut self.page, page);
+        if shown == Some(Shown::Dialog) {
+            self.sheet_backdrop = crate::ipad_ui::layout() && page == Some(Page::AddDevice);
+        }
         if shown == self.shown {
             return;
         }
@@ -199,7 +210,11 @@ impl HerdrWindow {
                 .debug_selector(|| "menu-fade".into())
                 .absolute()
                 .inset_0()
-                .bg(backdrop(self.theme.background, shown))
+                .bg(if self.menu.appear.sheet_backdrop {
+                    sheet_backdrop(self.theme.background, shown)
+                } else {
+                    backdrop(self.theme.background, shown)
+                })
                 .into_any_element()
         });
         let leaving = self

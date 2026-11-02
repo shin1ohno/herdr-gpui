@@ -61,12 +61,17 @@ impl HerdrWindow {
     /// The configured reading width, or the entire available conversation area.
     pub(super) fn chat_column(&self, content: impl IntoElement) -> Div {
         let width = self.config.chat.max_width;
+        let limit = if crate::ipad_ui::layout() && width == crate::config::chat::DEFAULT_MAX_WIDTH {
+            crate::ipad_ui::metrics::READING_WIDTH
+        } else {
+            f32::from(width)
+        };
         div().w_full().flex().justify_center().child(
             div()
                 .debug_selector(|| "chat-reading-column".into())
                 .w_full()
                 .min_w_0()
-                .when(width != 0, |column| column.max_w(px(f32::from(width))))
+                .when(width != 0, |column| column.max_w(px(limit)))
                 .child(content),
         )
     }
@@ -136,6 +141,9 @@ fn status_label(status: &Status) -> String {
 /// second.
 pub(super) fn status_text(transcript: &herdr_chat_protocol::Transcript) -> String {
     let label = status_label(&transcript.status);
+    if crate::ipad_ui::layout() {
+        return label;
+    }
     match transcript.turn {
         Some(turn) if transcript.status == Status::Working => {
             let elapsed = super::now_ms().saturating_sub(turn.started_ms);

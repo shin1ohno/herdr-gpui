@@ -181,6 +181,10 @@ impl HerdrWindow {
                         cx,
                     ))
             }
+            EntryKind::Turn(_) if crate::ipad_ui::layout() => div()
+                .debug_selector(|| "chat-turn".into())
+                .border_b_1()
+                .border_color(rgb(self.theme.active)),
             EntryKind::Turn(summary) => {
                 let text = self.render_chat_text(
                     pane_id,

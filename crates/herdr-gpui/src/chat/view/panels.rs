@@ -3,9 +3,9 @@
 
 use super::{super::chats::ChatPane, Hues};
 use crate::i18n::fl;
-use crate::{HerdrWindow, config::corners, notifications::safe_text};
+use crate::{HerdrWindow, config::corners, fonts::StyledFont, notifications::safe_text};
 use gpui::{prelude::*, *};
-use herdr_chat_protocol::{Command, PermissionKind, assist};
+use herdr_chat_protocol::{Command, PermissionKind, ToolKind, assist};
 
 /// Queued prompts in view at once; the list scrolls past them.
 const QUEUE_ROWS: f32 = 3.5;
@@ -20,11 +20,18 @@ impl HerdrWindow {
     ) -> Vec<Div> {
         let theme = &self.theme;
         let hues = Hues::of(theme);
-        chat.session
-            .transcript()
+        let ipad = crate::ipad_ui::layout();
+        let transcript = chat.session.transcript();
+        transcript
             .permissions
             .iter()
             .map(|permission| {
+                let execute = ipad
+                    && permission
+                        .call_id
+                        .as_deref()
+                        .and_then(|id| transcript.tool(id))
+                        .is_some_and(|tool| tool.kind == ToolKind::Execute);
                 let buttons = permission
                     .options
                     .iter()
@@ -36,6 +43,18 @@ impl HerdrWindow {
                             _ => theme.foreground,
                         };
                         let pane_id = chat.target.pane_id.clone();
+                        let label = if ipad {
+                            match option.kind {
+                                PermissionKind::AllowOnce => fl!("chat-permission-allow"),
+                                PermissionKind::AllowAlways => fl!("chat-permission-always-allow"),
+                                PermissionKind::RejectOnce | PermissionKind::RejectAlways => {
+                                    fl!("chat-permission-deny")
+                                }
+                                PermissionKind::Other => safe_text(&option.name, 60),
+                            }
+                        } else {
+                            safe_text(&option.name, 60)
+                        };
                         let command = Command::Answer {
                             option: option.id.clone(),
                             permission: permission.id,
@@ -50,9 +69,39 @@ impl HerdrWindow {
                             .border_1()
                             .border_color(rgb(color))
                             .text_color(rgb(color))
+                            .when(ipad, |button| {
+                                button
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .min_h(px(crate::ipad_ui::metrics::ANSWER))
+                                    .min_w_0()
+                                    .max_w_full()
+                            })
                             .cursor_pointer()
-                            .hover(|button| button.bg(rgb(theme.active)))
-                            .child(safe_text(&option.name, 60))
+                            .hover(|button| {
+                                button.bg(rgb(
+                                    if ipad && option.kind == PermissionKind::AllowOnce {
+                                        crate::ipad_ui::accent(theme)
+                                    } else {
+                                        theme.active
+                                    },
+                                ))
+                            })
+                            .when(ipad && option.kind == PermissionKind::AllowOnce, |button| {
+                                let accent = crate::ipad_ui::accent(theme);
+                                button
+                                    .bg(rgb(accent))
+                                    .border_color(rgb(accent))
+                                    .text_color(rgb(theme.text_on(accent)))
+                            })
+                            .map(|button| {
+                                if ipad {
+                                    button.child(div().min_w_0().child(label))
+                                } else {
+                                    button.child(label)
+                                }
+                            })
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                                 cx.stop_propagation();
@@ -74,12 +123,27 @@ impl HerdrWindow {
                     .bg(rgb(theme.surface))
                     .child(
                         div()
+                            .debug_selector(|| "chat-permission-heading".into())
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(safe_text(&permission.title, 400)),
+                            .child(if execute {
+                                fl!("chat-permission-run-command")
+                            } else {
+                                safe_text(&permission.title, 400)
+                            }),
                     )
+                    .children(execute.then(|| self.chat_permission_command(&permission.title)))
                     .child(div().flex().flex_wrap().gap(px(6.)).children(buttons))
             })
             .collect()
+    }
+
+    /// The agent's command is data, rendered in the configured terminal face.
+    pub(in crate::chat) fn chat_permission_command(&self, title: &str) -> Div {
+        div()
+            .debug_selector(|| "chat-permission-command".into())
+            .min_w_0()
+            .text_font(&self.config.terminal)
+            .child(safe_text(title, 400))
     }
 
     pub(super) fn render_chat_queue(

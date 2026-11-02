@@ -441,9 +441,10 @@ impl HerdrWindow {
                     && !matches!(page, Page::Dialog(_)),
                 |panel| {
                     panel
-                        .w((viewport.width - px(32.))
-                            .max(px(0.))
-                            .min(px(if add_device {
+                        .w((viewport.width - px(32.)).max(px(0.)).min(px(
+                            if add_device && page == Page::AddDevice && crate::ipad_ui::layout() {
+                                crate::ipad_ui::metrics::SHEET_WIDTH
+                            } else if add_device {
                                 rail::WIDTH * (font.size / 12.)
                             } else if page == Page::Palette && self.palette_previews(viewport) {
                                 // Room for Go To's list beside its preview.
@@ -453,7 +454,8 @@ impl HerdrWindow {
                                 720. * (font.size / 12.)
                             } else {
                                 480.
-                            })))
+                            },
+                        )))
                         .max_h((viewport.height - px(32.)).max(px(0.)))
                 },
             )
@@ -561,7 +563,13 @@ impl HerdrWindow {
             .when(page == Page::About, |panel| {
                 panel.w((viewport.width - px(24.)).max(px(0.)).min(px(340.)))
             })
-            .rounded(px(crate::config::corners::PANEL))
+            .rounded(px(
+                if add_device && page == Page::AddDevice && crate::ipad_ui::layout() {
+                    crate::ipad_ui::metrics::SHEET_RADIUS
+                } else {
+                    crate::config::corners::PANEL
+                },
+            ))
             .border_1()
             .border_color(rgb(theme.active))
             .bg(rgb(theme.surface))
@@ -865,10 +873,19 @@ impl HerdrWindow {
                     .items_center()
                     .justify_center()
                     .map(|overlay| crate::window::viewport::pad(overlay, window))
-                    .bg(super::appear::backdrop(
-                        theme.background,
-                        self.menu.appear.backdrop(now),
-                    ))
+                    .bg(
+                        if add_device && page == Page::AddDevice && crate::ipad_ui::layout() {
+                            super::appear::sheet_backdrop(
+                                theme.background,
+                                self.menu.appear.backdrop(now),
+                            )
+                        } else {
+                            super::appear::backdrop(
+                                theme.background,
+                                self.menu.appear.backdrop(now),
+                            )
+                        },
+                    )
             })
             .occlude()
             .track_focus(&self.menu.focus)

@@ -22,3 +22,5 @@ devices-discover-failed = { $source }: { $error }
 devices-discover-list-two = { $first } and { $second }
 devices-discover-list-middle = { $start }, { $next }
 devices-discover-list-end = { $start }, and { $last }
+
+devices-discover-heading-caps = NEARBY DEVICES

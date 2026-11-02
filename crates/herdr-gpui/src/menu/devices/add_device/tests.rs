@@ -8,6 +8,8 @@ use gpui::{
 };
 use herdr_client::HostKeys;
 
+mod ipad_en_xa;
+mod ipad_sheet;
 mod recheck;
 mod visible_viewport;
 

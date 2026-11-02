@@ -108,12 +108,18 @@ pub(super) fn row(working: Option<&Working>, look: &Look<'_>) -> Div {
                         .text_color(rgb(theme.subtext()))
                         .child(fl!("chat-working-doing", doing = working.doing.as_str())),
                 )
-                .children(working.elapsed.clone().map(|elapsed| {
-                    div()
-                        .flex_none()
-                        .text_color(rgb(theme.muted))
-                        .child(elapsed)
-                })),
+                .children(
+                    working
+                        .elapsed
+                        .clone()
+                        .filter(|_| !crate::ipad_ui::layout())
+                        .map(|elapsed| {
+                            div()
+                                .flex_none()
+                                .text_color(rgb(theme.muted))
+                                .child(elapsed)
+                        }),
+                ),
         })
 }
 

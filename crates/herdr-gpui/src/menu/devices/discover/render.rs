@@ -12,6 +12,7 @@ use gpui::{prelude::*, *};
 
 /// Suggestion rows shown before the list scrolls.
 pub(super) const MAX_VISIBLE_ROWS: f32 = 4.5;
+const IPAD_ROW: f32 = 56.;
 
 impl HerdrWindow {
     pub(in crate::menu::devices) fn render_device_suggestions(
@@ -21,6 +22,8 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Div {
         let theme = &self.theme;
+        let ipad = crate::ipad_ui::layout();
+        let secondary = if ipad { theme.subtext() } else { theme.muted };
         let text = setup.fields[0].read(cx).text().to_owned();
         let completion = self.device_completion(setup, &text);
         let status = if discovery.awaiting_local_network {
@@ -41,14 +44,26 @@ impl HerdrWindow {
             .flex()
             .items_center()
             .gap(px(8.))
-            .child(div().flex_none().child(fl!("devices-discover-heading")))
+            .child(
+                div()
+                    .flex_none()
+                    .when(ipad, |heading| {
+                        heading.debug_selector(|| "devices-discover-heading-caps".into())
+                    })
+                    .child(if ipad {
+                        fl!("devices-discover-heading-caps")
+                    } else {
+                        fl!("devices-discover-heading")
+                    }),
+            )
             .child(
                 div()
                     .debug_selector(|| "device-discovery-status".into())
                     .flex_1()
                     // Wraps rather than cutting a longer language short.
                     .min_w_0()
-                    .text_color(rgb(theme.muted))
+                    .when(ipad, |status| status.text_right())
+                    .text_color(rgb(secondary))
                     .child(status),
             );
         if !discovery.searching() {
@@ -59,6 +74,12 @@ impl HerdrWindow {
                     .flex_none()
                     .px_2()
                     .py_1()
+                    .when(ipad, |button| {
+                        button
+                            .min_h(px(crate::ipad_ui::metrics::TOUCH))
+                            .flex()
+                            .items_center()
+                    })
                     .cursor_pointer()
                     .rounded(px(crate::config::corners::CONTROL))
                     .hover(|s| s.bg(rgb(theme.active)))
@@ -77,13 +98,22 @@ impl HerdrWindow {
             view = view.child(progress::bar(
                 "device-discovery-progress",
                 Progress::Busy,
-                crate::menu::accent(theme).into(),
+                if ipad {
+                    rgb(crate::ipad_ui::accent(theme))
+                } else {
+                    crate::menu::accent(theme)
+                }
+                .into(),
                 rgb(theme.active).into(),
             ));
         }
         // A long list scrolls by itself rather than pushing the label and
         // session fields out of the dialog; half a row shows there is more.
-        let row = (self.config.ui.size * 1.6 + 12.).ceil();
+        let row = if ipad {
+            IPAD_ROW
+        } else {
+            (self.config.ui.size * 1.6 + 12.).ceil()
+        };
         let mut list = div()
             .id("device-suggestions")
             .debug_selector(|| "device-suggestions".into())
@@ -134,9 +164,23 @@ impl HerdrWindow {
                     .child(
                         div()
                             .flex_none()
-                            .text_color(rgb(theme.muted))
+                            .text_color(rgb(secondary))
                             .child(sources(&suggestion.sources)),
                     )
+                    .when(ipad && completion.highlight == Some(index), |row| {
+                        row.child(
+                            div()
+                                .debug_selector(move || format!("device-suggestion-check-{index}"))
+                                .flex_none()
+                                .size(px(18.))
+                                .child(
+                                    svg()
+                                        .path("icons/check.svg")
+                                        .size_full()
+                                        .text_color(rgb(crate::ipad_ui::accent(theme))),
+                                ),
+                        )
+                    })
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.use_device_suggestion(&target, &name, window, cx);
                     })),
@@ -144,7 +188,7 @@ impl HerdrWindow {
         }
         view = view.child(list);
         for (source, error) in &discovery.failures {
-            view = view.child(div().text_color(rgb(theme.muted)).child(fl!(
+            view = view.child(div().text_color(rgb(secondary)).child(fl!(
                 "devices-discover-failed",
                 source = source.name(),
                 error = error.to_string(),

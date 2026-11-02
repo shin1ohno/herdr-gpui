@@ -232,7 +232,12 @@ pub(super) fn bubble_row(row: Row<'_>, look: &Look<'_>, bubble: Bubble) -> AnyEl
     let id = row.entry.id.0;
     let body = match row.side() {
         Some(Side::User) => {
-            let fill = crate::config::mix(look.theme.background, look.theme.foreground, 9);
+            let ipad = crate::ipad_ui::layout();
+            let fill = if ipad {
+                look.theme.active
+            } else {
+                crate::config::mix(look.theme.background, look.theme.foreground, 9)
+            };
             // Measure rich blocks against the available cross-axis width.
             // A horizontal auto flex basis collapses their percentage widths
             // to the Copy button's width before the text is laid out.
@@ -244,6 +249,11 @@ pub(super) fn bubble_row(row: Row<'_>, look: &Look<'_>, bubble: Bubble) -> AnyEl
                     .px(px(bubble.padding * 1.4))
                     .py(px(bubble.padding))
                     .rounded(px(bubble.radius))
+                    .when(ipad, |bubble| {
+                        bubble
+                            .rounded(px(crate::ipad_ui::metrics::BUBBLE_RADIUS))
+                            .rounded_br(px(crate::ipad_ui::metrics::BUBBLE_TAIL))
+                    })
                     .bg(rgb(fill))
                     .text_color(rgb(look.theme.text_on(fill)))
                     .child(row.content),

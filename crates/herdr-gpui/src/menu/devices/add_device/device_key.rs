@@ -58,62 +58,100 @@ impl HerdrWindow {
             .flex()
             .flex_col()
             .gap(px(6.))
-            .child(fl!("add-device-ipad-key"));
+            .when(!crate::ipad_ui::layout(), |section| {
+                section.child(fl!("add-device-ipad-key"))
+            });
         match &setup.device_key.line {
             Line::Loading => {
-                section = section.child(
-                    div()
-                        .text_color(rgb(theme.muted))
-                        .child(fl!("add-device-ipad-key-loading")),
-                );
+                section = section
+                    .when(crate::ipad_ui::layout(), |section| {
+                        section.child(fl!("add-device-ipad-key-row"))
+                    })
+                    .child(
+                        div()
+                            .text_color(rgb(if crate::ipad_ui::layout() {
+                                theme.subtext()
+                            } else {
+                                theme.muted
+                            }))
+                            .child(fl!("add-device-ipad-key-loading")),
+                    );
             }
             Line::Failed(error) => {
-                section = section.child(
-                    div()
-                        .text_color(crate::menu::danger(theme))
-                        .child(fl!("add-device-ipad-key-failed", error = error.clone())),
-                );
+                section = section
+                    .when(crate::ipad_ui::layout(), |section| {
+                        section.child(fl!("add-device-ipad-key-row"))
+                    })
+                    .child(
+                        div()
+                            .text_color(crate::menu::danger(theme))
+                            .child(fl!("add-device-ipad-key-failed", error = error.clone())),
+                    );
             }
             Line::Ready(line) => {
                 let copied = line.clone();
-                section = section
-                    .child(
-                        div()
-                            .debug_selector(|| "device-setup-device-key-line".into())
-                            .p(px(8.))
-                            .rounded(px(crate::config::corners::CONTROL))
-                            .bg(rgb(theme.active))
-                            .font_family(self.config.terminal.family.clone())
-                            .child(line.clone()),
-                    )
-                    .child(
-                        div().flex().justify_end().child(
+                let copy = div()
+                    .id("device-setup-device-key-copy")
+                    .debug_selector(|| "device-setup-device-key-copy".into())
+                    .p(px(6.))
+                    .when(crate::ipad_ui::layout(), |button| {
+                        button
+                            .min_h(px(crate::ipad_ui::metrics::TOUCH))
+                            .min_w(px(crate::ipad_ui::metrics::TOUCH))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                    })
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .bg(rgb(theme.active))
+                    .cursor_pointer()
+                    .child(if crate::ipad_ui::layout() {
+                        fl!("add-device-ipad-key-copy-short")
+                    } else {
+                        fl!("add-device-ipad-key-copy")
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        // A replacement can invalidate this painted button.
+                        if !this.menu.device_setup.as_ref().is_some_and(|setup| {
+                            matches!(&setup.device_key.line, Line::Ready(line) if line == &copied)
+                        }) {
+                            return;
+                        }
+                        cx.write_to_clipboard(ClipboardItem::new_string(copied.clone()));
+                        this.show_flash(Flash::success(fl!("add-device-ipad-key-copied")), cx);
+                    }));
+                let public_line = div()
+                    .debug_selector(|| "device-setup-device-key-line".into())
+                    .p(px(8.))
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .bg(rgb(theme.active))
+                    .font_family(self.config.terminal.family.clone())
+                    .when(crate::ipad_ui::layout(), |line| {
+                        line.min_w_0().w_full().whitespace_normal()
+                    })
+                    .child(line.clone());
+                section = if crate::ipad_ui::layout() {
+                    section
+                        .child(
                             div()
-                                .id("device-setup-device-key-copy")
-                                .debug_selector(|| "device-setup-device-key-copy".into())
-                                .p(px(6.))
-                                .rounded(px(crate::config::corners::CONTROL))
-                                .bg(rgb(theme.active))
-                                .cursor_pointer()
-                                .child(fl!("add-device-ipad-key-copy"))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    // A replacement can invalidate this painted
-                                    // button before the next frame redraws it.
-                                    if !this.menu.device_setup.as_ref().is_some_and(|setup| {
-                                        matches!(&setup.device_key.line, Line::Ready(line) if line == &copied)
-                                    }) {
-                                        return;
-                                    }
-                                    cx.write_to_clipboard(ClipboardItem::new_string(
-                                        copied.clone(),
-                                    ));
-                                    this.show_flash(
-                                        Flash::success(fl!("add-device-ipad-key-copied")),
-                                        cx,
-                                    );
-                                })),
-                        ),
-                    );
+                                .flex()
+                                .items_center()
+                                .gap(px(12.))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .child(fl!("add-device-ipad-key-row")),
+                                )
+                                .child(copy),
+                        )
+                        .child(public_line)
+                } else {
+                    section
+                        .child(public_line)
+                        .child(div().flex().justify_end().child(copy))
+                };
             }
         }
         section

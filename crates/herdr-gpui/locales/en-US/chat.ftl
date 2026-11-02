@@ -31,6 +31,13 @@ chat-watching = { $count } watching
 chat-reconnecting = Reconnecting…
 chat-show-chat = Chat
 
+# A permission card's heading and standard answers. Other answers keep the
+# agent's own label.
+chat-permission-run-command = Run a command
+chat-permission-allow = Allow
+chat-permission-always-allow = Always allow
+chat-permission-deny = Deny
+
 # The composer.
 chat-composer-placeholder = Message the agent — / for commands, Shift-Enter for a new line
 chat-composer-closed = The agent cannot take prompts

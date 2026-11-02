@@ -3,6 +3,7 @@ use super::*;
 mod complete;
 mod en_xa;
 mod form;
+mod ipad_rows;
 mod local_network;
 mod sources;
 
