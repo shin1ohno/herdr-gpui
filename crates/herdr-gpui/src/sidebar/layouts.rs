@@ -3,11 +3,13 @@
 //! `RowStyle` variant.
 
 mod herdr;
+mod ipad;
 mod minimal;
 mod orca;
 mod parts;
 mod superset;
 
+pub(super) use ipad::Ipad;
 pub(super) use {herdr::Herdr, minimal::Minimal, orca::Orca, superset::Superset};
 
 use super::{cell::Fold, label_text};
@@ -24,7 +26,12 @@ impl Fold {
             collapsed,
             toggle,
         } = self;
-        let (muted, foreground) = (theme.muted, theme.foreground);
+        let muted = if crate::ipad_ui::layout() {
+            theme.subtext()
+        } else {
+            theme.muted
+        };
+        let foreground = theme.foreground;
         div()
             .id(id)
             .debug_selector(move || format!("collapse-{index}"))

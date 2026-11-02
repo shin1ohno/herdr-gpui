@@ -35,6 +35,7 @@ mod github;
 mod github_accounts;
 mod herdr_2_terminals;
 mod icon_font;
+mod ipad_activity_bar;
 mod keybindings;
 mod language;
 mod line_height;

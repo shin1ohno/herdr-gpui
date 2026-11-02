@@ -144,7 +144,7 @@ pub struct SidebarStyle {
 impl Default for SidebarStyle {
     fn default() -> Self {
         Self {
-            activity_bar: true,
+            activity_bar: !cfg!(target_os = "ios"),
             automations: true,
             change_counts: ChangeCounts::default(),
             device_footer: DeviceFooter::default(),
@@ -201,7 +201,7 @@ impl SidebarSettings {
             })
             .collect::<Result<_, Error>>()?;
         Ok(SidebarStyle {
-            activity_bar: self.activity_bar.unwrap_or(true),
+            activity_bar: self.activity_bar.unwrap_or(!cfg!(target_os = "ios")),
             automations: self.automations.unwrap_or(true),
             change_counts: self.change_counts,
             device_footer: self.device_footer,

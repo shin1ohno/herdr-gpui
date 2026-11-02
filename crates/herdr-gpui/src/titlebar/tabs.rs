@@ -276,6 +276,9 @@ impl HerdrWindow {
 /// The strip height that lines up with the traffic lights when the strip
 /// stands in for the header.
 pub(crate) fn strip_height(base: f32, merged: bool) -> f32 {
+    if crate::ipad_ui::layout() {
+        return crate::ipad_ui::metrics::TAB_STRIP;
+    }
     if merged { base.max(HEIGHT) } else { base }
 }
 

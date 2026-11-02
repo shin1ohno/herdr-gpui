@@ -666,3 +666,5 @@ mod curved;
 
 /// Where the agent buttons draw, and what a click on one starts.
 mod launcher;
+
+mod ipad;

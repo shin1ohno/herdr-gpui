@@ -1,6 +1,8 @@
 //! The host header row of the spaces list, and the copy of it pinned over the
 //! top of a scrolled list.
 
+mod ipad;
+
 use super::{
     HOST_ARROW_WIDTH, STATUS_WIDTH,
     cell::RowState,
@@ -56,6 +58,9 @@ impl HerdrWindow {
         pinned: bool,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
+        if crate::ipad_ui::layout() {
+            return self.ipad_host_row(endpoint, selected, look, width, pinned, cx);
+        }
         let font = &self.config.sidebar;
         let theme = &self.theme;
         let layout = look.density;

@@ -5,6 +5,7 @@
 
 mod curved;
 mod dividers;
+mod ipad;
 mod launcher;
 
 use super::{HerdrWindow, tab_drag::StripDrag};
@@ -18,7 +19,6 @@ use crate::{
     controls::Command,
     fonts::StyledFont,
     herdr_settings::TabBarPosition,
-    icons::AgentIcon,
     sidebar::Indicators,
     tab_layout::{Lead, Mark, Probe, TabContext, TabFace, TabLayout, TabShape, TabState},
     titlebar::Ends,
@@ -28,6 +28,8 @@ use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 
 pub(super) use dividers::{Reach, native_page};
+#[cfg(test)]
+use ipad::herdr_mark;
 
 /// How tall the thumb along a scrolling strip's foot draws.
 const THUMB_HEIGHT: f32 = 4.;
@@ -46,15 +48,22 @@ impl HerdrWindow {
     }
 
     /// What every tab of `slot`'s strip shares.
-    pub(crate) fn tab_context(&self, slot: Slot, indicators: Indicators) -> TabContext<'_> {
+    pub(crate) fn tab_context(
+        &self,
+        slot: Slot,
+        indicators: Indicators,
+        window: &Window,
+    ) -> TabContext<'_> {
         TabContext {
+            hardware: self.ipad.keyboard.hardware(window),
+            style: self.config.shortcut_style,
             theme: &self.theme,
             font: &self.config.tabs,
             indicators,
             fill: self.fill(),
             slot,
             ring: (self.chrome_region == Some(crate::window::chrome_focus::Region::TitleBar))
-                .then(|| self.theme.primary()),
+                .then(|| crate::ipad_ui::accent(&self.theme)),
         }
     }
 
@@ -82,20 +91,7 @@ impl HerdrWindow {
         indicators: Indicators,
         window: &Window,
     ) -> f32 {
-        let run = TextRun {
-            len: label.len(),
-            font: self.config.tabs.font(),
-            color: black(),
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        };
-        let text = f32::from(
-            window
-                .text_system()
-                .shape_line(label.clone(), px(self.config.tabs.size), &[run], None)
-                .width,
-        );
+        let text = ipad::text_width(label, &self.config.tabs, window);
         // GPUI rounds the text element's intrinsic width up during layout.
         self.tab_layout()
             .width(text.ceil(), shape, &self.config.tabs, indicators)
@@ -125,6 +121,9 @@ impl HerdrWindow {
 
     /// Height of a group's tab strip, which grows with the tab font.
     pub(crate) fn tab_strip_height(&self) -> f32 {
+        if crate::ipad_ui::layout() {
+            return crate::ipad_ui::metrics::TAB_STRIP;
+        }
         crate::titlebar::strip_height(
             (self.config.tabs.size * 1.6 + 4.).max(TAB_HEIGHT),
             self.tab_bar_position() == TabBarPosition::Top,
@@ -141,6 +140,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Div {
         let pick = self.group_pick(slot.id);
+        let numbered = self.ipad_numbered_tabs(cx);
         let indicators = Indicators::new(
             self.settings.shared.as_ref(),
             self.config.status_icons,
@@ -164,7 +164,7 @@ impl HerdrWindow {
         // What the strip lists, measured, so the ones that just opened grow
         // in and the ones that just closed shrink out where they stood.
         let now = crate::motion::now();
-        let herdr: Vec<((Pick, SharedString), Lead, bool, bool)> = self
+        let herdr: Vec<_> = self
             .live
             .snapshot
             .as_ref()
@@ -174,6 +174,12 @@ impl HerdrWindow {
                     .iter()
                     .filter(|t| Some(&t.workspace_id) == snapshot.focused_workspace_id.as_ref())
                     .map(|t| {
+                        let mark = self.ipad_herdr_mark(snapshot, t, &numbered, window);
+                        let extra = if crate::ipad_ui::layout() {
+                            crate::tab_layout::ipad::extra_width(&mark)
+                        } else {
+                            0.
+                        };
                         (
                             (
                                 Pick::Herdr(t.tab_id.clone()),
@@ -181,9 +187,10 @@ impl HerdrWindow {
                                     herdr_client::text::tab_label(snapshot, t).to_owned(),
                                 ),
                             ),
-                            herdr_mark(snapshot, t).lead(),
+                            mark.lead(),
                             t.zoomed,
                             silenced.tab(&t.tab_id),
+                            extra,
                         )
                     })
                     .collect()
@@ -191,13 +198,12 @@ impl HerdrWindow {
             .unwrap_or_default();
         let listed: Vec<Listed> = herdr
             .into_iter()
-            .chain(
-                self.browser_tab_labels(cx)
-                    .into_iter()
-                    .map(|entry| (entry, Lead::Icon, false, false)),
-            )
-            .filter(|((pick, _), _, _, _)| self.group_lists(slot.id, pick))
-            .map(|((tab, label), lead, zoomed, muted)| {
+            .chain(self.browser_tab_labels(cx).into_iter().map(|entry| {
+                let extra = self.ipad_page_extra(&entry.0, &numbered, window);
+                (entry, Lead::Icon, false, false, extra)
+            }))
+            .filter(|((pick, _), _, _, _, _)| self.group_lists(slot.id, pick))
+            .map(|((tab, label), lead, zoomed, muted, extra)| {
                 let shape = TabShape {
                     lead,
                     zoomed,
@@ -205,7 +211,7 @@ impl HerdrWindow {
                     selected: pick.as_ref() == Some(&tab),
                 };
                 Listed {
-                    width: self.tab_width(&label, shape, indicators, window),
+                    width: self.tab_width(&label, shape, indicators, window) + extra,
                     pick: tab,
                     label,
                 }
@@ -225,7 +231,7 @@ impl HerdrWindow {
         let (body, body_placer) = self
             .tab_body(slot, pick.as_ref(), self.strip_side(), window)
             .unzip();
-        let faces = self.tab_context(slot, indicators);
+        let faces = self.tab_context(slot, indicators, window);
         let mut built: Vec<(Pick, Stateful<Div>)> = Vec::new();
         let mut tabs = div()
             .id(SharedString::from(slot.selector("tabs")))
@@ -269,7 +275,7 @@ impl HerdrWindow {
                     label: herdr_client::text::tab_label(snapshot, tab)
                         .to_owned()
                         .into(),
-                    mark: herdr_mark(snapshot, tab),
+                    mark: self.ipad_herdr_mark(snapshot, tab, &numbered, window),
                     zoomed: tab.zoomed,
                     muted,
                     probe: Probe::Herdr(id.clone()),
@@ -310,7 +316,7 @@ impl HerdrWindow {
             _ => None,
         };
         built.extend(
-            self.browser_tab_entries(slot, shown, &faces, cx)
+            self.touch_browser_tab_entries(slot, shown, &faces, &numbered, window, cx)
                 .into_iter()
                 .map(|(id, tab)| (Pick::Page(id), tab)),
         );
@@ -389,6 +395,9 @@ impl HerdrWindow {
                     .h(px(THUMB_HEIGHT))
                     // The wheel still scrolls the strip over the thumb.
                     .block_mouse_except_scroll()
+                    .when(crate::ipad_ui::layout(), |thumb| {
+                        thumb.bg(thumb_color(THUMB_ALPHA))
+                    })
                     .group_hover(hover_group, |s| s.bg(thumb_color(THUMB_ALPHA)))
                     .hover(|s| s.bg(thumb_color(THUMB_ALPHA)))
                     .active(|s| s.bg(thumb_color(THUMB_HELD_ALPHA)))
@@ -413,13 +422,17 @@ impl HerdrWindow {
                 ends.filter(|ends| ends.leading)
                     .and_then(|_| self.strip_leading(window, cx)),
             )
-            .children(self.strip_launcher(slot, launcher::Spot::Leading, cx))
+            .children(
+                (!crate::ipad_ui::layout())
+                    .then(|| self.strip_launcher(slot, launcher::Spot::Leading, cx))
+                    .flatten(),
+            )
             // Tabs size to their content and shrink when the row is full, so
             // the button sits after the last tab instead of at the far right
             // of the window.
             .child(scroller)
             .child(
-                self.strip_new_tab(
+                self.touch_strip_new_tab(
                     slot,
                     div()
                         .id(SharedString::from(slot.selector("new-tab")))
@@ -453,13 +466,23 @@ impl HerdrWindow {
                 ),
             )
             .child(self.strip_room(ends, window))
-            .children(self.strip_launcher(slot, launcher::Spot::Trailing, cx))
+            .children(
+                (!crate::ipad_ui::layout())
+                    .then(|| self.strip_launcher(slot, launcher::Spot::Trailing, cx))
+                    .flatten(),
+            )
             .child(self.strip_button(
                 slot,
                 ("split-editor", fl!("tab-strip-split")),
                 "icons/split.svg",
                 cx,
-                move |this, _, window, cx| this.split_group(slot.id, window, cx),
+                move |this, _, window, cx| {
+                    if crate::ipad_ui::layout() {
+                        this.command(Command::SplitRight, window, cx);
+                    } else {
+                        this.split_group(slot.id, window, cx);
+                    }
+                },
             ))
             .child(self.strip_button(
                 slot,
@@ -619,8 +642,16 @@ impl HerdrWindow {
             .role(Role::Button)
             .aria_label(label)
             .map(|control| self.chrome_stop(crate::window::chrome_focus::Region::TitleBar, control))
-            .w(px(30.))
-            .min_h(px(TAB_HEIGHT))
+            .w(px(if crate::ipad_ui::layout() {
+                crate::ipad_ui::metrics::STRIP_BUTTON
+            } else {
+                30.
+            }))
+            .min_h(px(if crate::ipad_ui::layout() {
+                crate::ipad_ui::metrics::TAB_STRIP
+            } else {
+                TAB_HEIGHT
+            }))
             .flex_none()
             .flex()
             .items_center()
@@ -908,24 +939,6 @@ impl HerdrWindow {
             )
             .child(div().flex_1().bg(self.fill().ground()))
             .into_any_element()
-    }
-}
-
-/// What leads a Herdr tab: its status, and the agent running in it, the
-/// focused one when several do.
-fn herdr_mark(
-    snapshot: &herdr_client::protocol::ClientShellSnapshot,
-    tab: &herdr_client::protocol::ClientShellTab,
-) -> Mark {
-    let agent: Option<AgentIcon> = snapshot
-        .agents
-        .iter()
-        .filter(|agent| agent.tab_id == tab.tab_id)
-        .max_by_key(|agent| agent.focused)
-        .map(crate::icons::of_agent);
-    Mark::Herdr {
-        status: tab.agent_status,
-        agent,
     }
 }
 

@@ -6,7 +6,7 @@ use super::{
     DEVICE_FOOTER_HEIGHT, STATUS_WIDTH, SidebarDrag,
     agents::Indicators,
     agents_sort,
-    cell::{Cell, Fold, RowContext, RowData, WorkspaceRow, layout_for},
+    cell::{Cell, Fold, IpadMeta, RowContext, RowData, WorkspaceRow, layout_for},
     label_text, layout, line_height,
     reorder::{self, Plan},
     row::{RowIcon, RowLift, RowTree},
@@ -28,6 +28,7 @@ mod agent_rows;
 mod device_tree;
 mod edges;
 mod header;
+mod ipad_footer;
 mod nested_agents;
 
 pub(super) use header::header;
@@ -56,7 +57,11 @@ impl HerdrWindow {
         let theme = &self.theme;
         // The field is the heading, so it takes the heading's face.
         self.sidebar_search.input.update(cx, |input, cx| {
-            input.set_appearance(font.clone(), theme.clone(), cx);
+            let mut search_theme = theme.clone();
+            if crate::ipad_ui::layout() {
+                search_theme.muted = theme.subtext();
+            }
+            input.set_appearance(font.clone(), search_theme, cx);
         });
         // The Devices layout heads every device, even a lone one, and lists
         // its agents under it in place of its workspaces. Its own field
@@ -69,6 +74,7 @@ impl HerdrWindow {
         let search = (searchable && self.sidebar_search.query().is_some()).then(|| {
             self.sidebar_search_results(self.sidebar_search_hits(cx), indicators, look, cx)
         });
+        let heading_in_list = crate::ipad_ui::layout() && search.is_none();
         let mut spaces = div()
             .id("spaces-scroll")
             .debug_selector(|| "spaces-scroll".into())
@@ -97,7 +103,7 @@ impl HerdrWindow {
         spaces = spaces.track_scroll(&self.sidebar_scroll[0]);
         agents = agents.track_scroll(&self.sidebar_scroll[1]);
         let multi = self.endpoints.len() > 1;
-        let headed = multi || devices;
+        let headed = multi || devices || crate::ipad_ui::layout();
         let placement = self
             .config
             .show_agents
@@ -156,6 +162,15 @@ impl HerdrWindow {
                     cx,
                 );
                 space_rows += 1;
+                if heading_in_list && space_rows == 1 {
+                    spaces = spaces.child(self.spaces_header(
+                        (devices, searchable, tree_search),
+                        look,
+                        window,
+                        cx,
+                    ));
+                    space_rows += 1;
+                }
             }
             if device_plan.is_some() {
                 continue;
@@ -236,7 +251,7 @@ impl HerdrWindow {
             // the linked worktrees under it. Reset per host.
             let mut previous_indented = None;
             for (position, (index, indented, group)) in entries.into_iter().enumerate() {
-                if multi && endpoint.collapsed {
+                if headed && endpoint.collapsed {
                     break;
                 }
                 let workspace = &snapshot.workspaces[index];
@@ -339,6 +354,11 @@ impl HerdrWindow {
                     }
                     + indicators.width(font)
                     + layout.gap();
+                let under_left = if crate::ipad_ui::layout() {
+                    super::layouts::Ipad::label_start(tree, &row_cx)
+                } else {
+                    under_left
+                };
                 let note = workspace_note(
                     workspace,
                     crate::worktree_notes::Notes::of(cx),
@@ -437,6 +457,11 @@ impl HerdrWindow {
                         lines,
                     }),
                     &row_cx,
+                )
+                .ipad(
+                    crate::ipad_ui::layout().then(|| {
+                        IpadMeta::Space(self.ipad_space_meta(selected, snapshot, workspace))
+                    }),
                 )
                 .selected(selected && workspace.focused)
                 .highlighted(selected && menu_target == Some(id.as_str()))
@@ -688,7 +713,11 @@ impl HerdrWindow {
             agents = agents.child(
                 div()
                     .px(px(content_x))
-                    .text_color(rgb(theme.muted))
+                    .text_color(rgb(if crate::ipad_ui::layout() {
+                        theme.subtext()
+                    } else {
+                        theme.muted
+                    }))
                     .truncate()
                     .child(label_text(&if filtered {
                         fl!("sidebar-no-matching-agents")
@@ -731,20 +760,14 @@ impl HerdrWindow {
                     .min_h_0()
                     .overflow_hidden()
                     // With search on, the heading is its field.
-                    .child(
-                        searchable
-                            .then_some(super::search::Heading::Spaces)
-                            .or(tree_search.then_some(super::search::Heading::DeviceTree))
-                            .and_then(|heading| self.search_heading(heading, look, window, cx))
-                            .unwrap_or_else(|| {
-                                let (key, label) = if devices {
-                                    ("devices", fl!("sidebar-header-devices"))
-                                } else {
-                                    ("spaces", fl!("sidebar-header-spaces"))
-                                };
-                                header(key, &label, font, theme, look)
-                            }),
-                    )
+                    .when(!heading_in_list, |section| {
+                        section.child(self.spaces_header(
+                            (devices, searchable, tree_search),
+                            look,
+                            window,
+                            cx,
+                        ))
+                    })
                     // The wrapper clips the pinned header as the next host's
                     // pushes it up, so it never paints over the title above.
                     .child(
@@ -762,48 +785,53 @@ impl HerdrWindow {
                                     .children(pinned_host.map(crate::mark_layer::covering)),
                             }),
                     )
-                    .child(
-                        div()
-                            .flex_none()
-                            .h(px(line_height(font) + 2. * layout.footer_padding()))
-                            .px(px(content_x))
-                            .row()
-                            .items_center()
-                            // Menu hugs the sidebar's edge, as in the terminal client.
-                            .justify_between()
-                            .text_color(rgb(theme.muted))
-                            .gap(px(20.))
-                            .child(
-                                div()
-                                    .id("new-workspace")
-                                    .map(|button| {
-                                        self.sidebar_button(button, fl!("sidebar-new-workspace"))
-                                    })
-                                    .cursor_pointer()
-                                    .hover(|s| s.text_color(rgb(theme.foreground)))
-                                    .child(fl!("sidebar-new"))
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.command(Command::Workspace, window, cx)
-                                    })),
-                            )
-                            .child(
-                                div()
-                                    .id("sidebar-menu")
-                                    .debug_selector(|| "sidebar-menu".into())
-                                    .map(|button| {
-                                        self.sidebar_button(button, fl!("sidebar-menu-label"))
-                                    })
-                                    .cursor_pointer()
-                                    .hover(|s| s.text_color(rgb(theme.foreground)))
-                                    .child(label_text(&fl!("sidebar-menu")))
-                                    .on_click(cx.listener(
-                                        |this, event: &ClickEvent, window, cx| {
-                                            this.menu.anchor = event.position();
-                                            this.open_menu(window, cx);
-                                        },
-                                    )),
-                            ),
-                    ),
+                    .when(!crate::ipad_ui::layout(), |section| {
+                        section.child(
+                            div()
+                                .flex_none()
+                                .h(px(line_height(font) + 2. * layout.footer_padding()))
+                                .px(px(content_x))
+                                .row()
+                                .items_center()
+                                // Menu hugs the sidebar's edge, as in the terminal client.
+                                .justify_between()
+                                .text_color(rgb(theme.muted))
+                                .gap(px(20.))
+                                .child(
+                                    div()
+                                        .id("new-workspace")
+                                        .map(|button| {
+                                            self.sidebar_button(
+                                                button,
+                                                fl!("sidebar-new-workspace"),
+                                            )
+                                        })
+                                        .cursor_pointer()
+                                        .hover(|s| s.text_color(rgb(theme.foreground)))
+                                        .child(fl!("sidebar-new"))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.command(Command::Workspace, window, cx)
+                                        })),
+                                )
+                                .child(
+                                    div()
+                                        .id("sidebar-menu")
+                                        .debug_selector(|| "sidebar-menu".into())
+                                        .map(|button| {
+                                            self.sidebar_button(button, fl!("sidebar-menu-label"))
+                                        })
+                                        .cursor_pointer()
+                                        .hover(|s| s.text_color(rgb(theme.foreground)))
+                                        .child(label_text(&fl!("sidebar-menu")))
+                                        .on_click(cx.listener(
+                                            |this, event: &ClickEvent, window, cx| {
+                                                this.menu.anchor = event.position();
+                                                this.open_menu(window, cx);
+                                            },
+                                        )),
+                                ),
+                        )
+                    }),
             )
             .when(agents_panel, |sidebar| {
                 sidebar.child(self.sidebar_split_edge(theme, cx)).child(
@@ -824,7 +852,16 @@ impl HerdrWindow {
                             section.child(
                                 header("agents", &fl!("sidebar-header-agents"), font, theme, look)
                                     .justify_between()
-                                    .child(agents_sort(self, cx)),
+                                    .child(agents_sort(self, cx).when(
+                                        crate::ipad_ui::layout(),
+                                        |sort| {
+                                            sort.min_h(px(crate::ipad_ui::metrics::TOUCH))
+                                                .min_w(px(crate::ipad_ui::metrics::TOUCH))
+                                                .flex()
+                                                .items_center()
+                                                .text_color(rgb(theme.subtext()))
+                                        },
+                                    )),
                             )
                         })
                         .child(agents)
@@ -832,6 +869,9 @@ impl HerdrWindow {
                 )
             })
             .children(self.render_mod_sidebar_sections(cx))
+            .when(crate::ipad_ui::layout(), |sidebar| {
+                sidebar.child(self.ipad_sidebar_footer(window, cx))
+            })
             .map(|sidebar| {
                 if self.device_footer_shown() {
                     sidebar.child(self.render_device_footer(cx))

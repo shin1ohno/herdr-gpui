@@ -19,6 +19,7 @@ use herdr_client::protocol::AgentStatus;
 
 /// How wide the strip that drags a split is, whatever its gutter.
 const GRAB: f32 = 6.;
+const FOCUS_FRAME: f32 = 2.;
 
 /// What drawing one tab's panes shares.
 struct Draw<'a> {
@@ -40,6 +41,53 @@ pub(crate) struct SplitDrag {
 }
 
 impl HerdrWindow {
+    /// A Core pane owns its own input handler and focus; the Herdr 1 surface
+    /// behind its page must never receive the keyboard button's focus.
+    pub(crate) fn request_core_terminal_keyboard(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let page = self
+            .active_group()
+            .and_then(|group| match self.group_shown(group, cx) {
+                crate::browser::Shown::Page(id) => Some(id),
+                _ => None,
+            });
+        if page.is_some_and(|id| {
+            !cx.try_global::<Store>()
+                .and_then(|store| store.get(id))
+                .is_some_and(|tab| {
+                    matches!(
+                        tab.location,
+                        Some(crate::browser::Location::CoreTerminal { .. })
+                    )
+                })
+        }) {
+            return false;
+        }
+        let view = page
+            .and_then(|id| self.core_pane_view(id))
+            .cloned()
+            .or_else(|| {
+                self.core_terminals
+                    .shown()
+                    .find(|view| view.read(cx).focus_handle().is_focused(window))
+                    .cloned()
+            });
+        let Some(view) = view else {
+            return page.is_some();
+        };
+        let focus = view.read(cx).focus_handle().clone();
+        window.focus(&focus, cx);
+        view.update(cx, |view, cx| {
+            if view.accepts_text_input(window, cx) {
+                window.request_virtual_keyboard();
+            }
+        });
+        true
+    }
+
     pub(crate) fn render_core_terminal_tab(
         &mut self,
         _slot: Slot,
@@ -266,7 +314,32 @@ impl HerdrWindow {
                 .map(|size| format!("{}\u{d7}{}", size.cols(), size.rows()).into()),
             active: is_active,
         };
-        chrome.pane(face, view.clone().into_any_element(), &draw.panes)
+        let cells = chrome.pane(face, view.clone().into_any_element(), &draw.panes);
+        if !crate::ipad_ui::layout() {
+            return cells;
+        }
+        let selector = format!("core-pane-{}-{terminal}", u64::from(tab));
+        let frame = format!("core-focus-frame-{}-{terminal}", u64::from(tab));
+        div()
+            .debug_selector(move || selector.clone())
+            .relative()
+            .flex()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .child(cells)
+            // Paint inside the existing pane without changing cell or IME bounds.
+            .when(is_active, |pane| {
+                pane.child(
+                    div()
+                        .debug_selector(move || frame.clone())
+                        .absolute()
+                        .inset_0()
+                        .border(px(FOCUS_FRAME))
+                        .border_color(rgb(crate::ipad_ui::accent(&self.theme))),
+                )
+            })
+            .into_any_element()
     }
 
     /// What a pane is called and how its program is doing, as its chrome
