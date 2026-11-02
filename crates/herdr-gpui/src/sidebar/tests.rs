@@ -36,6 +36,7 @@ mod ipad_accent;
 mod ipad_en_xa;
 mod ipad_layout;
 mod ipad_meta;
+mod ipad_narrow;
 mod ipad_width;
 mod pane_names;
 mod row_text;

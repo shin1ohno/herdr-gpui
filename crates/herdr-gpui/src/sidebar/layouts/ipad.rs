@@ -29,6 +29,13 @@ const GAP: f32 = 6.;
 
 pub(in crate::sidebar) struct Ipad;
 
+#[derive(Debug)]
+pub(in crate::sidebar) struct SpaceWidths {
+    pub(in crate::sidebar) name: f32,
+    pub(in crate::sidebar) badge: Option<f32>,
+    pub(in crate::sidebar) count: Option<f32>,
+}
+
 fn label(key: String, text: String, width: f32) -> Div {
     // i18n: data
     div()
@@ -71,6 +78,31 @@ fn shell(key: &str, height: f32, indent: f32, state: RowState, cx: &RowContext<'
 }
 
 impl Ipad {
+    /// The name, badge, and count arguments are natural widths. Reserve a name
+    /// floor for identification, then favor attention badges over tab counts.
+    pub(in crate::sidebar) fn space_widths(
+        width: f32,
+        name: f32,
+        badge: Option<f32>,
+        count: f32,
+    ) -> SpaceWidths {
+        let mut remaining = (width - DOT - GAP).max(0.);
+        let floor = name.min(remaining / 2.);
+        let badge = badge.filter(|badge| *badge + GAP <= remaining - floor);
+        if let Some(badge) = badge {
+            remaining -= badge + GAP;
+        }
+        let count = (count + GAP <= remaining - floor).then_some(count);
+        if let Some(count) = count {
+            remaining -= count + GAP;
+        }
+        SpaceWidths {
+            name: remaining,
+            badge,
+            count,
+        }
+    }
+
     fn indent(tree: RowTree, cx: &RowContext<'_>) -> f32 {
         cx.nest
             + if tree == RowTree::None {
@@ -109,13 +141,14 @@ impl Ipad {
         let count = fl!("ipad-sidebar-tabs", count = meta.tab_count);
         let badge = meta.needs_you.then(|| fl!("ipad-sidebar-needs-you"));
         let small = 11. * scale;
-        let count_width = (count.chars().count() as f32 * small * 0.62 + 2.).min(width * 0.25);
-        let badge_width = badge.as_ref().map_or(0., |text| {
-            (text.chars().count() as f32 * small * 0.62 + 10.).min(width * 0.4)
-        });
-        let name_width =
-            (width - DOT - count_width - badge_width - GAP * if badge.is_some() { 3. } else { 2. })
-                .max(0.);
+        let widths = Self::space_widths(
+            width,
+            row.label.chars().count() as f32 * 14. * scale * 0.62,
+            badge
+                .as_ref()
+                .map(|text| text.chars().count() as f32 * small * 0.62 + 10.),
+            count.chars().count() as f32 * small * 0.62 + 2.,
+        );
         let id = &row.workspace.workspace_id;
         let first = div()
             .row()
@@ -132,7 +165,7 @@ impl Ipad {
                 label(
                     format!("ipad-space-name-{id}"),
                     row.label.to_owned(),
-                    name_width,
+                    widths.name,
                 )
                 .text_size(px(14. * scale))
                 .font_weight(if state.selected {
@@ -141,13 +174,13 @@ impl Ipad {
                     FontWeight::NORMAL
                 }),
             )
-            .child(
-                label(format!("ipad-tab-count-{id}"), count, count_width)
+            .children(widths.count.map(|width| {
+                label(format!("ipad-tab-count-{id}"), count, width)
                     .text_size(px(small))
-                    .text_color(rgb(theme.subtext())),
-            )
-            .children(badge.map(|text| {
-                label(format!("ipad-needs-you-{id}"), text, badge_width)
+                    .text_color(rgb(theme.subtext()))
+            }))
+            .children(badge.zip(widths.badge).map(|(text, width)| {
+                label(format!("ipad-needs-you-{id}"), text, width)
                     .px(px(4.))
                     .text_size(px(small))
                     .font_weight(FontWeight::BOLD)
@@ -253,8 +286,18 @@ impl Ipad {
             needs_you: false,
         });
         let glyph = 12. * scale * 0.62;
-        let meta_width = (meta.text.chars().count() as f32 * glyph).min(width * 0.42);
-        let name_width = (width - DOT - AGENT_ICON - 5. - 2. * GAP - meta_width).max(0.);
+        let available = (width - DOT - AGENT_ICON - 5. - 2. * GAP).max(0.);
+        // Keep the name's natural width up to half the room after the dot and icon.
+        let floor = (row.name.chars().count() as f32 * glyph).min(available / 2.);
+        let natural = meta.text.chars().count() as f32 * glyph;
+        let fitted = natural.min(available - floor);
+        // Short metadata must fit whole; longer text needs at least two glyphs.
+        let meta_width = if natural > 0. && fitted < natural.min(2. * glyph) {
+            None
+        } else {
+            Some(fitted)
+        };
+        let name_width = meta_width.map_or(available + GAP, |meta| available - meta);
         shell(&row.key, AGENT_ROW, 0., state, cx)
             .row()
             .items_center()
@@ -271,24 +314,20 @@ impl Ipad {
                     .flex_none()
                     .overflow_hidden(),
             )
-            .child(
-                label(
-                    format!("ipad-agent-meta-{}", row.key),
-                    meta.text,
-                    meta_width,
-                )
-                .text_size(px(12. * scale))
-                .font_weight(if meta.needs_you {
-                    FontWeight::BOLD
-                } else {
-                    FontWeight::NORMAL
-                })
-                .text_color(rgb(if meta.needs_you {
-                    theme.ink(theme.palette[3])
-                } else {
-                    theme.subtext()
-                })),
-            )
+            .children(meta_width.map(|width| {
+                label(format!("ipad-agent-meta-{}", row.key), meta.text, width)
+                    .text_size(px(12. * scale))
+                    .font_weight(if meta.needs_you {
+                        FontWeight::BOLD
+                    } else {
+                        FontWeight::NORMAL
+                    })
+                    .text_color(rgb(if meta.needs_you {
+                        theme.ink(theme.palette[3])
+                    } else {
+                        theme.subtext()
+                    }))
+            }))
     }
 }
 

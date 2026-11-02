@@ -5,6 +5,10 @@
 mod ipad;
 
 #[cfg(test)]
+#[path = "status_bar/tests/ipad_narrow.rs"]
+mod ipad_narrow;
+
+#[cfg(test)]
 #[path = "status_bar/tests/ipad.rs"]
 mod ipad_tests;
 

@@ -30,6 +30,7 @@ use herdr_client::protocol::AgentStatus;
 pub(super) use dividers::{Reach, native_page};
 #[cfg(test)]
 use ipad::herdr_mark;
+pub(super) use ipad::text_width;
 
 /// How tall the thumb along a scrolling strip's foot draws.
 const THUMB_HEIGHT: f32 = 4.;
@@ -91,7 +92,7 @@ impl HerdrWindow {
         indicators: Indicators,
         window: &Window,
     ) -> f32 {
-        let text = ipad::text_width(label, &self.config.tabs, window);
+        let text = text_width(label, &self.config.tabs, window);
         // GPUI rounds the text element's intrinsic width up during layout.
         self.tab_layout()
             .width(text.ceil(), shape, &self.config.tabs, indicators)

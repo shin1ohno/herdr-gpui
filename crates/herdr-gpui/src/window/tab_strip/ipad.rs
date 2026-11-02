@@ -3,7 +3,11 @@ use super::*;
 use crate::{config::FontConfig, tab_layout::ipad::TabHint};
 use herdr_client::protocol::{ClientShellSnapshot, ClientShellTab};
 
-pub(super) fn text_width(text: &SharedString, font: &FontConfig, window: &Window) -> f32 {
+pub(in crate::window) fn text_width(
+    text: &SharedString,
+    font: &FontConfig,
+    window: &Window,
+) -> f32 {
     let run = TextRun {
         len: text.len(),
         font: font.font(),

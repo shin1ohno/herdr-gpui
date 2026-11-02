@@ -5,9 +5,14 @@ use crate::{
     controls::Command,
     fonts::StyledFont,
     ipad_ui::{kbd, metrics::TOUCH},
+    window::tab_strip::text_width,
 };
 
 pub(super) const STATUS_BAR: f32 = 44.;
+
+const HOST_FLOOR: f32 = 96.;
+// Status dot 8 + gap 8 + HOST_FLOOR + gap 8 + STATUS_GLYPH.
+const HOST_GROUP_MIN: f32 = 8. + 8. + HOST_FLOOR + 8. + STATUS_GLYPH;
 
 impl HerdrWindow {
     pub(super) fn render_ipad_status_bar(&self, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -17,6 +22,11 @@ impl HerdrWindow {
             herdr_backend::Generation::Herdr1 => 1,
             herdr_backend::Generation::Herdr2 => 2,
         };
+        let host = fl!(
+            "ipad-chrome-status-host",
+            host = endpoint.label.as_str(),
+            generation = generation
+        );
         let status = (!connected || self.local_error.is_some() || self.live.error.is_some())
             .then(|| self.selected_connection_text());
         let prefix = self
@@ -48,7 +58,7 @@ impl HerdrWindow {
                     .items_center()
                     .gap(px(8.))
                     .flex_1()
-                    .min_w_0()
+                    .min_w(px(HOST_GROUP_MIN))
                     .overflow_hidden()
                     .child(
                         div()
@@ -66,18 +76,11 @@ impl HerdrWindow {
                                 dot.bg(rgb(self.theme.ink(self.theme.palette[2])))
                             }),
                     )
-                    .child(
-                        div()
-                            .debug_selector(|| "ipad-status-host".into())
-                            .min_w_0()
-                            .flex_shrink_1()
-                            .truncate()
-                            .child(fl!(
-                                "ipad-chrome-status-host",
-                                host = endpoint.label.as_str(),
-                                generation = generation
-                            )),
-                    )
+                    .child(HostLabel {
+                        text: host.into(),
+                        view: cx.entity(),
+                        yield_to_status: status.is_some() || prefix.is_some(),
+                    })
                     .child(Hardware { view: cx.entity() })
                     .children(prefix.map(|prefix| {
                         kbd(prefix, &self.theme, &self.config.ui)
@@ -123,27 +126,40 @@ impl HerdrWindow {
                 .aria_label(fl!("status-bar-shortcuts")),
         )
         .flex()
+        .flex_wrap()
+        .content_start()
         .items_center()
-        .gap(px(12.))
         .h_full()
         .min_w_0()
         .flex_shrink_1()
         .overflow_hidden()
         .whitespace_nowrap()
         .cursor_pointer()
-        .children(actions.into_iter().map(|(command, label)| {
-            div()
-                .debug_selector(move || format!("ipad-legend-{command:?}"))
-                .flex_none()
-                .flex()
-                .items_center()
-                .gap(px(5.))
-                .children(self.shortcut_hint(command).map(|hint| {
-                    kbd(hint, &self.theme, &self.config.ui)
-                        .debug_selector(move || format!("ipad-legend-shortcut-{command:?}"))
-                }))
-                .child(label)
-        }))
+        // An oversized first pair must wrap too, so an empty item holds the
+        // full-height first line. Pairs space themselves with a leading
+        // margin rather than a gap: a gap after the empty item, or a negative
+        // margin cancelling it, would widen the legend's intrinsic width.
+        .child(div().w(px(0.)).h(px(STATUS_BAR)).flex_none())
+        .children(
+            actions
+                .into_iter()
+                .enumerate()
+                .map(|(index, (command, label))| {
+                    div()
+                        .debug_selector(move || format!("ipad-legend-{command:?}"))
+                        .when(index > 0, |pair| pair.ml(px(12.)))
+                        .h(px(STATUS_BAR))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .children(self.shortcut_hint(command).map(|hint| {
+                            kbd(hint, &self.theme, &self.config.ui)
+                                .debug_selector(move || format!("ipad-legend-shortcut-{command:?}"))
+                        }))
+                        .child(label)
+                }),
+        )
         .on_click(cx.listener(|this, _, window, cx| this.command(Command::Keybinds, window, cx)))
     }
 
@@ -179,6 +195,30 @@ impl HerdrWindow {
 }
 
 #[derive(IntoElement)]
+struct HostLabel {
+    text: SharedString,
+    view: Entity<HerdrWindow>,
+    yield_to_status: bool,
+}
+
+impl RenderOnce for HostLabel {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let view = self.view.read(cx);
+        let minimum = if self.yield_to_status {
+            0.
+        } else {
+            text_width(&self.text, &view.config.ui, window).min(HOST_FLOOR)
+        };
+        div()
+            .debug_selector(|| "ipad-status-host".into())
+            .min_w(px(minimum))
+            .flex_shrink_1()
+            .truncate()
+            .child(self.text)
+    }
+}
+
+#[derive(IntoElement)]
 struct Hardware {
     view: Entity<HerdrWindow>,
 }
@@ -188,13 +228,21 @@ impl RenderOnce for Hardware {
         let view = self.view.read(cx);
         div().when(view.ipad.keyboard.hardware(window), |row| {
             row.debug_selector(|| "ipad-status-hardware".into())
-                .flex_none()
+                .min_w(px(STATUS_GLYPH))
+                .flex_shrink_1()
+                .overflow_hidden()
                 .flex()
                 .items_center()
                 .gap(px(5.))
                 .whitespace_nowrap()
                 .child(glyph("icons/keyboard.svg", view.theme.subtext()))
-                .child(fl!("ipad-chrome-status-hardware-keyboard"))
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_shrink_1()
+                        .truncate()
+                        .child(fl!("ipad-chrome-status-hardware-keyboard")),
+                )
         })
     }
 }
