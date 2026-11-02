@@ -234,12 +234,14 @@ impl HerdrWindow {
                                 .child(format!("\u{b7} {detail}"))
                         })),
                 )
-                .child(
-                    div()
-                        .flex_none()
-                        .text_color(rgb(theme.muted))
-                        .child(row.elapsed.clone()),
-                )
+                .when(!crate::ipad_ui::layout(), |row_view| {
+                    row_view.child(
+                        div()
+                            .flex_none()
+                            .text_color(rgb(theme.muted))
+                            .child(row.elapsed.clone()),
+                    )
+                })
                 .child(
                     div()
                         .flex_none()
@@ -268,7 +270,9 @@ impl HerdrWindow {
                     .text_size(px(size - 1.))
                     .child(div().flex_none().w(px(size)))
                     .child(div().flex_1().child(header(fl!("chat-running-what"))))
-                    .child(header(fl!("chat-running-time")))
+                    .when(!crate::ipad_ui::layout(), |row| {
+                        row.child(header(fl!("chat-running-time")))
+                    })
                     .child(
                         div()
                             .w(status)

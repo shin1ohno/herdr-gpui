@@ -128,6 +128,14 @@ impl Transcript {
             .find(|activity| activity.call_id == call_id)
     }
 
+    /// The tool call a permission or activity refers to.
+    pub fn tool(&self, call_id: &str) -> Option<&Tool> {
+        self.entries.iter().find_map(|entry| match &entry.kind {
+            EntryKind::Tool(tool) if tool.call_id == call_id => Some(tool),
+            _ => None,
+        })
+    }
+
     pub(crate) fn position(&self, id: EntryId) -> Option<usize> {
         self.entries
             .binary_search_by_key(&id, |entry| entry.id)

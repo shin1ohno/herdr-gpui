@@ -5,7 +5,57 @@ use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_client::HostKeyFingerprint;
 
+/// Keep renderer choice, internal actions, and footer removal in agreement.
+pub(super) fn ipad_host_key() -> bool {
+    cfg!(target_os = "ios") || crate::ipad_ui::layout()
+}
+
 impl HerdrWindow {
+    pub(super) fn render_ipad_host_key_card(
+        &self,
+        target: &str,
+        keys: &[HostKeyFingerprint],
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let card = self.render_ipad_host_key(target, keys);
+        if !ipad_host_key() {
+            return card;
+        }
+        card.when(crate::ipad_ui::layout(), |card| {
+            card.p(px(12.))
+                .border_1()
+                .border_color(crate::menu::colors::tint(&self.theme, 3))
+                .rounded(px(crate::config::corners::CONTROL))
+        })
+        .child(
+            div()
+                .debug_selector(|| "device-setup-host-key-actions".into())
+                .flex_none()
+                .flex()
+                .flex_wrap()
+                .justify_end()
+                .gap(px(8.))
+                .child(
+                    self.device_action_button(
+                        "device-setup-key-cancel",
+                        fl!("add-device-cancel"),
+                        true,
+                        false,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| this.cancel_device_step(cx))),
+                )
+                .child(
+                    self.device_action_button(
+                        "device-setup-trust",
+                        fl!("add-device-trust-key"),
+                        true,
+                        true,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| this.trust_host_key(cx))),
+                ),
+        )
+    }
+
     pub(super) fn render_ipad_host_key(&self, target: &str, keys: &[HostKeyFingerprint]) -> Div {
         let theme = &self.theme;
         let mut fingerprints = div()
@@ -32,7 +82,11 @@ impl HerdrWindow {
                     .child(
                         div()
                             .flex_none()
-                            .text_color(rgb(theme.muted))
+                            .text_color(rgb(if crate::ipad_ui::layout() {
+                                theme.subtext()
+                            } else {
+                                theme.muted
+                            }))
                             .child(key_label(key)),
                     )
                     .child(
@@ -69,7 +123,11 @@ impl HerdrWindow {
                     .min_w_0()
                     .w_full()
                     .whitespace_normal()
-                    .text_color(rgb(theme.muted))
+                    .text_color(rgb(if crate::ipad_ui::layout() {
+                        theme.subtext()
+                    } else {
+                        theme.muted
+                    }))
                     .child(key_check(keys)),
             )
     }

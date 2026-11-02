@@ -3,13 +3,16 @@
 
 use super::{Page, discover::Discovery, setup};
 
+mod actions;
 #[cfg(target_os = "ios")]
 mod device_key;
 mod host_key;
 mod host_key_code;
 mod offer;
 mod probe;
+mod render;
 mod save;
+mod sheet;
 
 #[cfg(test)]
 mod tests;
@@ -114,7 +117,17 @@ impl HerdrWindow {
         let fields = std::array::from_fn(|index| {
             let input = cx.new(SearchInput::new);
             input.update(cx, |input, cx| {
-                input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
+                let font = if crate::ipad_ui::layout() && index == 0 {
+                    self.config.terminal.clone()
+                } else {
+                    self.config.ui.clone()
+                };
+                let mut theme = self.theme.clone();
+                if crate::ipad_ui::layout() {
+                    theme.muted = theme.subtext();
+                    input.set_frameless(cx);
+                }
+                input.set_appearance(font, theme, cx);
                 match index {
                     0 => input.set_placeholder_with(
                         || {
@@ -245,263 +258,6 @@ impl HerdrWindow {
             _ => return false,
         }
         true
-    }
-
-    pub(in crate::menu) fn render_add_device(
-        &self,
-        compact: bool,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let theme = &self.theme;
-        let frame = |pane: Div, cx: &mut Context<Self>| {
-            self.add_device_frame(
-                "device-setup-dialog",
-                "device-setup-close",
-                compact,
-                pane,
-                cx,
-            )
-            // On iPad the overlay caps the panel to the visible viewport,
-            // including keyboard insets, and only the body may overflow that
-            // allocation. The desktop dialog keeps its own sizing.
-            .when(crate::ipad_ui::active(), |frame| {
-                frame.max_h_full().overflow_hidden()
-            })
-        };
-        let Some(setup) = &self.menu.device_setup else {
-            return frame(div(), cx);
-        };
-        if let Step::SavedWarning(warning) = setup.step {
-            return frame(self.render_device_saved_warning(warning, cx), cx);
-        }
-        let ghost = matches!(setup.step, Step::Form)
-            .then(|| {
-                let text = setup.fields[0].read(cx).text().to_owned();
-                self.device_completion(setup, &text).ghost(&text)
-            })
-            .flatten();
-        setup.fields[0].update(cx, |field, cx| field.set_completion(ghost, cx));
-        let mut body = div()
-            .id("device-setup-body")
-            .debug_selector(|| "device-setup-body".into())
-            .flex_1()
-            .min_h_0()
-            // The body takes the pane's width and wraps its prose. A zero
-            // minimum width would also make taffy measure every truncated row
-            // at its min-content first, shaping device names cut to a letter.
-            .when(crate::ipad_ui::active(), |body| {
-                body.w_full().whitespace_normal()
-            })
-            .overflow_y_scroll()
-            .p(px(16.))
-            .flex()
-            .flex_col()
-            .gap(px(12.))
-            .child(div().flex_none().text_color(rgb(theme.subtext())).child(
-                if cfg!(target_os = "ios") {
-                    fl!("add-device-ipad-intro")
-                } else {
-                    fl!("add-device-intro")
-                },
-            ));
-        for (index, (label, field)) in [
-            fl!("add-device-target"),
-            fl!("add-device-label"),
-            fl!("add-device-session"),
-        ]
-        .into_iter()
-        .zip(&setup.fields)
-        .enumerate()
-        {
-            body = body.child(
-                div()
-                    .flex_none()
-                    .flex()
-                    .flex_col()
-                    .gap(px(6.))
-                    .child(label)
-                    .child(field.clone()),
-            );
-            // Suggestions fill the target, so they sit right under it, and
-            // only while the form can still take one.
-            if index == 0
-                && matches!(setup.step, Step::Form)
-                && let Some(discovery) = &setup.discovery
-            {
-                body = body.child(self.render_device_suggestions(setup, discovery, cx));
-            }
-        }
-        // iPadOS verifies every host key, and its own key must be on the host.
-        #[cfg(not(target_os = "ios"))]
-        {
-            body = body.child(self.render_host_key_choice(setup, cx));
-        }
-        #[cfg(target_os = "ios")]
-        {
-            body = body.child(self.render_device_key(setup, cx));
-        }
-        if crate::ipad_ui::active() {
-            body = body.child(self.render_device_host_key_code(setup, cx));
-        }
-        if let Some(error) = &setup.error {
-            body = body.child(
-                div()
-                    .flex_none()
-                    .text_color(crate::menu::danger(theme))
-                    .child(error.clone()),
-            );
-        }
-        let status = match &setup.step {
-            Step::Form => None,
-            Step::Checking(request) => Some(fl!("add-device-checking", target = request.target())),
-            Step::AwaitingLocalNetwork(request) => {
-                Some(super::local_network::waiting_status(request.target()))
-            }
-            Step::Saving(request, HostProbe::Stopped) => {
-                Some(fl!("add-device-starting", target = request.target()))
-            }
-            Step::Saving(request, _) => Some(fl!("add-device-saving", target = request.target())),
-            Step::Saved | Step::SavedWarning(_) => None,
-            Step::KeyCodeRefused => None,
-            Step::FetchingKey(request) => {
-                Some(fl!("add-device-fetching-key", target = request.target()))
-            }
-            Step::TrustKey(request, key) => {
-                body = if cfg!(target_os = "ios") {
-                    body.child(self.render_ipad_host_key(request.target(), &key.fingerprints))
-                } else {
-                    body.child(self.render_host_key(request.target(), key))
-                };
-                None
-            }
-            Step::Confirm(request, offer) => Some(offer.question(
-                request.target(),
-                setup.claim.as_ref().map(setup::Claim::user),
-            )),
-            Step::Verifying(request, _) => {
-                Some(fl!("add-device-verifying", target = request.target()))
-            }
-            Step::Activating(..) | Step::Opening(..) => Some(fl!("add-device-opening")),
-        };
-        if let Some(status) = status {
-            body = body.child(
-                div()
-                    .debug_selector(|| "device-setup-status".into())
-                    .flex_none()
-                    .text_color(rgb(theme.muted))
-                    .child(status),
-            );
-        }
-        let button = |id: &'static str, label: SharedString, enabled: bool| {
-            div()
-                .id(id)
-                .debug_selector(move || id.into())
-                .p(px(8.))
-                .rounded(px(crate::config::corners::CONTROL))
-                .bg(rgb(theme.active))
-                .when(enabled, |button| {
-                    button.cursor_pointer().hover(|s| {
-                        s.bg(rgb(theme.active).blend(rgba((theme.foreground << 8) | 0x20)))
-                    })
-                })
-                .when(!enabled, |button| button.text_color(rgb(theme.muted)))
-                .child(label)
-        };
-        let mut footer = div()
-            .debug_selector(|| "device-setup-footer".into())
-            .flex_none()
-            .p(px(16.))
-            .border_t_1()
-            .border_color(rgb(theme.active))
-            .flex()
-            .when(crate::ipad_ui::active(), |footer| footer.flex_wrap())
-            .justify_end()
-            .gap(px(8.));
-        let cancel = button("device-setup-cancel", fl!("add-device-cancel").into(), true)
-            .on_click(cx.listener(|this, _, _, cx| this.cancel_device_step(cx)));
-        footer = match &setup.step {
-            #[cfg(target_os = "ios")]
-            Step::Confirm(_, Offer::CoreAvailable | Offer::OutdatedCoreAvailable) => footer
-                .child(cancel)
-                .child(
-                    button(
-                        "device-setup-check-again",
-                        fl!("add-device-check-again").into(),
-                        true,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| this.recheck_device(cx))),
-                )
-                .child(
-                    button(
-                        "device-setup-add-core",
-                        fl!("add-device-core-add").into(),
-                        true,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| this.confirm_core_device(cx))),
-                ),
-            Step::Confirm(..) if cfg!(any(windows, target_os = "ios")) => {
-                let footer = footer.child(cancel);
-                #[cfg(target_os = "ios")]
-                let footer = footer.child(
-                    button(
-                        "device-setup-check-again",
-                        fl!("add-device-check-again").into(),
-                        true,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| this.recheck_device(cx))),
-                );
-                footer
-            }
-            Step::Confirm(_, offer) => footer.child(cancel).child(
-                button("device-setup-submit", offer.action().into(), true)
-                    .on_click(cx.listener(|this, _, _, cx| this.open_setup_space(cx))),
-            ),
-            Step::AwaitingLocalNetwork(_) => footer
-                .children(self.local_network_settings_button("device-setup-settings", cx))
-                .child(cancel),
-            Step::KeyCodeRefused => footer.child(cancel),
-            // Enter does not trust a key: only this button does.
-            Step::TrustKey(..) => footer.child(cancel).child(
-                button(
-                    "device-setup-trust",
-                    fl!("add-device-trust-key").into(),
-                    true,
-                )
-                .on_click(cx.listener(|this, _, _, cx| this.trust_host_key(cx))),
-            ),
-            step => {
-                // A host key code waiting for confirmation blocks submission,
-                // but nothing is being checked yet.
-                let form = matches!(step, Step::Form);
-                let ready = form && !setup.host_key_code.needs_confirmation();
-                footer.child(
-                    button(
-                        "device-setup-submit",
-                        if form {
-                            fl!("add-device-submit")
-                        } else {
-                            fl!("add-device-submit-checking")
-                        }
-                        .into(),
-                        ready,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| this.submit_device_setup(cx))),
-                )
-            }
-        };
-        frame(
-            div()
-                .flex_1()
-                .min_h_0()
-                .when(crate::ipad_ui::active(), |pane| {
-                    pane.max_h_full().overflow_hidden()
-                })
-                .flex()
-                .flex_col()
-                .child(body)
-                .child(footer),
-            cx,
-        )
     }
 
     /// Refuse a host already in the catalog. Checked again before each step

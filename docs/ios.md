@@ -519,6 +519,16 @@ status bar with the host, a keyboard button, and a legend of four shortcuts.
 Hover-only controls have a touch replacement, and the activity bar is off by
 default on iOS. On a Nord theme the iPad accent is the theme's nord8.
 
+Under `layout()` the SSH source of Add Device is a 620 pt sheet: a 60 pt header
+carries Cancel, the title, and the primary action, so the QR confirmation and
+"Trust key" buttons no longer sit below the fold. The nearby-device list has
+56 pt rows with a check on the highlighted one, the fields are 48 pt, and the
+host key confirmation is a card with its own Cancel and Trust key. The sheet
+backdrop is 66 % of the theme background. Agent chats use the reading width of
+760 pt, and on iOS the default chat layout is Bubbles. A permission request is a
+card with 48 pt Allow, Always allow, and Deny buttons, and the composer's attach
+and send buttons are 44 pt.
+
 ## Remaining platform work
 
 The real application builds and renders in the iPad simulator. GPUI's menus

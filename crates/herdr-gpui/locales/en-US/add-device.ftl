@@ -98,3 +98,6 @@ add-device-core-available = Herdr 2 is installed on { $target }. Add it as a Her
 add-device-outdated-core-available = Herdr 1 on { $target } is too old for this app, and Herdr 2 is installed. Add it as a Herdr 2 host, or update Herdr 1 from that computer and choose Check again. Starting a terminal remains a separate action.
 add-device-core-add = Add Herdr 2 host
 add-device-check-again = Check again
+
+add-device-ipad-key-row = Add this iPad's key to ~/.ssh/authorized_keys on the computer.
+add-device-ipad-key-copy-short = Copy key

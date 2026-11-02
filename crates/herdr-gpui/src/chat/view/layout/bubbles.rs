@@ -25,10 +25,20 @@ impl ChatLayout for Bubbles {
 
     fn composer(&self, parts: ComposerParts, look: &Look<'_>) -> Div {
         let theme = look.theme;
+        let ipad = crate::ipad_ui::layout();
+        let (inside, below) = if ipad {
+            (Some(parts.attach), None)
+        } else {
+            (None, Some(parts.attach))
+        };
         let field = div()
+            .debug_selector(|| "chat-composer-frame".into())
             .flex()
             .flex_col()
             .rounded(px(corners::PANEL + 4.))
+            .when(ipad, |field| {
+                field.rounded(px(crate::ipad_ui::metrics::COMPOSER_RADIUS))
+            })
             .border_1()
             .border_color(rgb(mix(theme.background, theme.foreground, 24)))
             .bg(rgb(mix(theme.background, theme.foreground, 4)))
@@ -41,6 +51,7 @@ impl ChatLayout for Bubbles {
                     .pl(px(14.))
                     .pr(px(8.))
                     .py(px(8.))
+                    .children(inside)
                     .child(parts.draft.flex_1().min_w_0().py(px(2.)))
                     .child(parts.send),
             );
@@ -52,7 +63,7 @@ impl ChatLayout for Bubbles {
                 .items_center()
                 .gap(px(6.))
                 .px(px(4.))
-                .child(parts.attach)
+                .children(below)
                 .children(parts.settings)
                 .child(div().flex_1())
                 .children(parts.usage),

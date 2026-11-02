@@ -70,7 +70,11 @@ impl HerdrWindow {
                 .id(id)
                 .debug_selector(move || id.into())
                 .flex_none()
-                .size(px(28.))
+                .size(px(if crate::ipad_ui::layout() {
+                    crate::ipad_ui::metrics::TOUCH
+                } else {
+                    28.
+                }))
                 .flex()
                 .items_center()
                 .justify_center()
