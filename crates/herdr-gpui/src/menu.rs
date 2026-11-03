@@ -29,6 +29,7 @@ mod settings;
 mod shortcut_editor;
 #[cfg(all(feature = "integration-test", target_os = "linux"))]
 pub(crate) use shortcut_editor::verify_native as verify_shortcut_editor;
+mod row_menu;
 mod state;
 mod teleport;
 mod version_mismatch;
@@ -40,6 +41,9 @@ mod worktree_open;
 mod worktree_render;
 mod worktree_shortcut;
 mod worktree_source;
+
+#[cfg(test)]
+mod tests;
 
 #[cfg(test)]
 mod announcement_tests;

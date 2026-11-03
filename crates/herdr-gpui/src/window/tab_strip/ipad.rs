@@ -26,6 +26,73 @@ pub(in crate::window) fn text_width(
 }
 
 impl HerdrWindow {
+    pub(super) fn ipad_rail_crumb(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+        if !crate::ipad_ui::layout() || self.sidebar_mode() != crate::sidebar::SidebarMode::Rail {
+            return None;
+        }
+        let snapshot = self.live.snapshot.as_deref()?;
+        let workspace = snapshot
+            .workspaces
+            .iter()
+            .find(|workspace| {
+                snapshot.focused_workspace_id.as_deref() == Some(workspace.workspace_id.as_str())
+            })
+            .or_else(|| {
+                snapshot
+                    .workspaces
+                    .iter()
+                    .find(|workspace| workspace.focused)
+            })?;
+        let label = crate::sidebar::workspace_label(workspace, false);
+        let ring = rgb(crate::ipad_ui::accent(&self.theme));
+        Some(
+            self.chrome_stop(
+                crate::window::chrome_focus::Region::TitleBar,
+                div()
+                    .id("ipad-rail-crumb")
+                    .debug_selector(|| "ipad-rail-crumb".into())
+                    .role(Role::Button)
+                    .aria_label(label.to_owned()),
+            )
+            .flex()
+            .items_center()
+            .gap(px(6.))
+            .min_h(px(crate::ipad_ui::metrics::TOUCH))
+            .min_w(px(crate::ipad_ui::metrics::TOUCH))
+            .max_w(px(180.))
+            .flex_shrink_1()
+            .overflow_hidden()
+            .px(px(8.))
+            .cursor_pointer()
+            .focus_visible(move |style| {
+                style.shadow(vec![BoxShadow {
+                    color: ring.into(),
+                    offset: point(px(0.), px(0.)),
+                    blur_radius: px(0.),
+                    spread_radius: px(2.),
+                    inset: true,
+                }])
+            })
+            .child(
+                self.ipad_rail_dot(workspace.agent_status, crate::ipad_ui::metrics::DOT)
+                    .flex_none(),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "ipad-rail-crumb-label".into())
+                    .min_w_0()
+                    .truncate()
+                    .child(label.to_owned()),
+            )
+            .child(div().flex_none().child("▾"))
+            .on_click(
+                cx.listener(|this, _, window, cx| {
+                    this.command(Command::WorkspacePicker, window, cx)
+                }),
+            ),
+        )
+    }
+
     /// Compose the existing listing APIs: group_tabs applies hidden-tab policy,
     /// open_workspace_tabs supplies the global order used by TabNumber.
     pub(super) fn ipad_numbered_tabs(&self, cx: &App) -> Vec<Pick> {
@@ -45,7 +112,8 @@ impl HerdrWindow {
     }
 
     fn ipad_tab_hint(&self, pick: &Pick, numbered: &[Pick], window: &Window) -> Option<TabHint> {
-        if !crate::ipad_ui::layout() || !self.ipad.keyboard.hardware(window) {
+        if !crate::ipad_ui::layout() || self.ipad_compact() || !self.ipad.keyboard.hardware(window)
+        {
             return None;
         }
         let index = numbered.iter().position(|tab| tab == pick)?;

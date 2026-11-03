@@ -19,6 +19,7 @@ pub(in crate::menu) fn leaves(page: Page) -> bool {
             | Page::PrComment
             | Page::PrMerge
             | Page::RemoteControl
+            | Page::RowMenu(_)
     )
 }
 
@@ -31,6 +32,7 @@ pub(in crate::menu) struct Kept {
     merge_method: Option<crate::pull_request::MergeMethod>,
     merge_target: Option<crate::pr_actions::Target>,
     remote_pairing: Option<crate::remote::PairingDialog>,
+    row_menu: Option<super::super::row_menu::State>,
     /// The device All Devices showed unfolded, so it leaves as it was.
     unfolded_device: Option<String>,
 }
@@ -55,6 +57,7 @@ impl Kept {
         std::mem::swap(&mut self.merge_method, &mut menu.merge_method);
         std::mem::swap(&mut self.merge_target, &mut menu.merge_target);
         std::mem::swap(&mut self.remote_pairing, &mut menu.remote_pairing);
+        std::mem::swap(&mut self.row_menu, &mut menu.row_menu);
         std::mem::swap(&mut self.unfolded_device, &mut menu.unfolded_device);
     }
 }

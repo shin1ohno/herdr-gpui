@@ -52,6 +52,7 @@ impl Cover {
 
 pub(crate) struct MenuState {
     pub page: Option<Page>,
+    pub(super) row_menu: Option<super::row_menu::State>,
     pub(crate) settings: Option<Entity<crate::settings_window::SettingsWindow>>,
     pub(crate) application: Option<crate::menus::in_window::OpenMenu>,
     pub(crate) application_bar: crate::menus::in_window::Geometry,
@@ -350,6 +351,7 @@ impl MenuState {
         Self {
             settings: None,
             page: None,
+            row_menu: None,
             application: None,
             application_bar: Default::default(),
             appear: Default::default(),
@@ -494,6 +496,7 @@ impl MenuState {
         self.gitlab.form = false;
         self.gitlab.stop_lookups();
         self.page = None;
+        self.row_menu = None;
         if let Some(palette) = self.palette.take() {
             self.palette_resume = Some(palette.resume());
         }

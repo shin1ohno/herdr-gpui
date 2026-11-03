@@ -643,6 +643,8 @@ impl HerdrWindow {
                 Some(_) => panel.child(self.render_session_edit(cx)),
                 None => panel.child(self.render_devices(cx)),
             };
+        } else if let Page::RowMenu(target) = page {
+            panel = self.render_row_menu(panel, target, window, cx);
         } else if let Page::Usage(provider) = page {
             panel = panel.child(self.render_usage_panel(provider, cx));
         } else if page == Page::AddDevice {

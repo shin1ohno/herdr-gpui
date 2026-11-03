@@ -110,6 +110,7 @@ pub(crate) enum Page {
     /// Asks whether to trust a repository's worktree script before it runs.
     WorktreeScript,
     // keep-sorted end
+    RowMenu(super::row_menu::RowTarget),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -186,6 +187,7 @@ impl Page {
                 | Self::PrReview
                 | Self::PrComment
                 | Self::PrMerge
+                | Self::RowMenu(_)
         )
     }
 

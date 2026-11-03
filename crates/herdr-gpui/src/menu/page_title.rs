@@ -19,6 +19,7 @@ impl Page {
             | Self::Pane
             | Self::Tab
             | Self::Workspace => Role::Menu,
+            Self::RowMenu(_) => Role::Menu,
             _ => Role::Dialog,
         }
     }
@@ -97,6 +98,7 @@ impl Page {
             Self::VersionMismatch => fl!("menu-page-version-mismatch"),
             Self::Workspace => fl!("menu-page-workspace"),
             Self::WorktreeScript => fl!("menu-page-trust-worktree-script"),
+            Self::RowMenu(_) => fl!("ipad-rail-row-menu-title"),
         })
     }
 }

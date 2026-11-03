@@ -431,6 +431,7 @@ impl HerdrWindow {
             // Tabs size to their content and shrink when the row is full, so
             // the button sits after the last tab instead of at the far right
             // of the window.
+            .children(self.ipad_rail_crumb(cx))
             .child(scroller)
             .child(
                 self.touch_strip_new_tab(
