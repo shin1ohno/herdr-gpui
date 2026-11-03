@@ -520,7 +520,10 @@ impl SettingsWindow {
         self.cloud_source_changed(&source, cx);
         #[cfg(not(feature = "cloud"))]
         let _ = source;
-        if matches!(self.section, Section::Integrations | Section::Plugins) {
+        if matches!(
+            self.section,
+            Section::Integrations | Section::Plugins | Section::Keyboard
+        ) {
             cx.notify();
         }
         if matches!(self.section, Section::General | Section::Tabs) {

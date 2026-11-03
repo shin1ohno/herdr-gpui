@@ -298,6 +298,7 @@ impl SettingsWindow {
             Section::Indicators => self.render_indicators(cx),
             Section::General => self.render_general(cx),
             Section::Tabs => self.render_tabs(cx),
+            Section::Keyboard => self.render_keyboard(cx),
             Section::Notifications => self.render_notifications(cx),
             Section::Configuration => self.render_configuration(cx),
             Section::Theme | Section::Integrations | Section::Plugins | Section::Code => div(),

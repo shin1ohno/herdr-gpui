@@ -20,12 +20,16 @@ pub(crate) const RAIL_ICON: f32 = 20.;
 pub(crate) const RAIL_LABEL: f32 = 10.;
 pub(crate) const RAIL_RING: f32 = 2.;
 pub(crate) const READING_WIDTH: f32 = 760.;
+pub(crate) const SETTINGS_NAV: f32 = 240.;
+pub(crate) const SETTINGS_ROW: f32 = 56.;
 pub(crate) const SETTINGS_SHEET_HEIGHT: f32 = 760.;
 pub(crate) const SETTINGS_SHEET_WIDTH: f32 = 1000.;
 pub(crate) const SHEET_RADIUS: f32 = 18.;
 pub(crate) const SHEET_WIDTH: f32 = 620.;
+pub(crate) const SHORTCUT_ROW: f32 = 36.;
 pub(crate) const SIDEBAR: f32 = 300.;
 pub(crate) const STRIP_BUTTON: f32 = 52.;
+pub(crate) const STYLE_ROW: f32 = 64.;
 pub(crate) const TAB_STRIP: f32 = 52.;
 pub(crate) const TOUCH: f32 = 44.;
 // keep-sorted end

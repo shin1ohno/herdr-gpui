@@ -157,8 +157,12 @@ impl Row {
             .row()
             .items_center()
             .gap(px(16.))
-            .min_h(px(ROW_HEIGHT))
-            .py(px(6.))
+            .min_h(px(if crate::ipad_ui::layout() {
+                crate::ipad_ui::metrics::SETTINGS_ROW
+            } else {
+                ROW_HEIGHT
+            }))
+            .py(px(if crate::ipad_ui::layout() { 5.5 } else { 6. }))
             .border_b_1()
             .border_color(rgb(theme.active))
             .child(super::search::track_bounds(tracked))

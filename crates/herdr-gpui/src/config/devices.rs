@@ -103,6 +103,20 @@ impl Config {
             .unwrap_or_default()
     }
 
+    /// The next choice for a saved SSH device. Callers persist it through
+    /// their background save path; local and cloud endpoints have no profile.
+    pub(crate) fn toggle_keybinding_source(
+        &self,
+        endpoint_id: &str,
+    ) -> Option<(String, KeybindingSource)> {
+        let profile = crate::endpoint::saved_profile_id(endpoint_id)?;
+        let source = match self.keybinding_source(endpoint_id) {
+            KeybindingSource::Local => KeybindingSource::Server,
+            KeybindingSource::Server => KeybindingSource::Local,
+        };
+        Some((profile.to_owned(), source))
+    }
+
     /// The terminal theme the endpoint's device sets, or `None` for the app
     /// theme.
     pub(crate) fn device_theme(&self, endpoint_id: &str) -> Option<&str> {

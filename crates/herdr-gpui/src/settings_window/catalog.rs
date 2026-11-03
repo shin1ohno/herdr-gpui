@@ -444,6 +444,41 @@ pub(super) const CATALOG: &[Entry] = &[
         "settings-tabs-pane-history-description",
     ),
     entry(
+        Section::Keyboard,
+        "keyboard-style-ipad",
+        "ipad-keyboard-style-ipad",
+        "ipad-keyboard-style-description",
+    )
+    .only(Availability::Ipad),
+    entry(
+        Section::Keyboard,
+        "keyboard-style-herdr-prefix",
+        "ipad-keyboard-style-herdr-prefix",
+        "ipad-keyboard-style-description",
+    )
+    .only(Availability::Ipad),
+    entry(
+        Section::Keyboard,
+        "keyboard-prefix",
+        "ipad-keyboard-prefix-key",
+        "ipad-keyboard-prefix-default",
+    )
+    .only(Availability::Ipad),
+    entry(
+        Section::Keyboard,
+        "keyboard-server",
+        "ipad-keyboard-server-keybindings",
+        "ipad-keyboard-server-keybindings-note",
+    )
+    .only(Availability::Ipad),
+    entry(
+        Section::Keyboard,
+        "keyboard-shortcuts",
+        "ipad-keyboard-shortcuts-heading",
+        "",
+    )
+    .only(Availability::Ipad),
+    entry(
         Section::Code,
         "code-mode",
         "settings-code-mode",
@@ -615,6 +650,10 @@ pub(super) fn search(query: &str) -> Vec<usize> {
     CATALOG
         .iter()
         .enumerate()
+        .filter(|(_, entry)| {
+            entry.section != Section::Keyboard
+                || Section::shown().any(|section| section == entry.section)
+        })
         .filter(|(_, entry)| {
             [entry.title, entry.description, entry.section.message()]
                 .iter()
