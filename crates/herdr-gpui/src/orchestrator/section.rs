@@ -5,8 +5,7 @@
 //! narrowed to one workspace's project.
 
 use super::{List, OrchestratorView, ViewId};
-use crate::i18n::fl;
-use crate::{HerdrWindow, browser::OrchestratorRepo, sidebar::ActivityPanel};
+use crate::{HerdrWindow, browser::OrchestratorRepo, i18n::fl, sidebar::ActivityPanel};
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
@@ -65,7 +64,10 @@ impl HerdrWindow {
     /// Shows the focused workspace's issues.
     pub(crate) fn open_orchestrator(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((_, workspace)) = self.browser_key() else {
-            self.show_flash(crate::window::Flash::warning("Open a workspace first"), cx);
+            self.show_flash(
+                crate::window::Flash::warning(fl!("orchestrator-no-workspace")),
+                cx,
+            );
             return;
         };
         self.open_orchestrator_in(workspace, None, window, cx);
@@ -91,16 +93,14 @@ impl HerdrWindow {
         // The sections are the bar's: without it there is nowhere to show them.
         if !self.activity_bar_shown() {
             self.show_flash(
-                crate::window::Flash::warning(
-                    "Pull requests and issues show in the activity bar, which is turned off",
-                ),
+                crate::window::Flash::warning(fl!("orchestrator-activity-bar-off")),
                 cx,
             );
             return;
         }
         if !self.orchestrator_host() {
             self.show_flash(
-                crate::window::Flash::warning("Pull requests and issues need a local or SSH host"),
+                crate::window::Flash::warning(fl!("orchestrator-needs-host")),
                 cx,
             );
             return;
@@ -194,9 +194,9 @@ impl HerdrWindow {
             .iter()
             .any(|endpoint| super::host::scripts_run_on(&endpoint.connection.target))
         {
-            "Opening the repositories…".into()
+            fl!("orchestrator-opening")
         } else {
-            "Pull requests and issues need a local or SSH host".into()
+            fl!("orchestrator-needs-host")
         }
     }
 }

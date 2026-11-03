@@ -5,7 +5,11 @@
 //! items do.
 
 use super::{Action, HostState, Look, Mode, Opened, Read, format, model};
-use crate::{HerdrWindow, config::corners};
+use crate::{
+    HerdrWindow,
+    config::corners,
+    i18n::{Localize, fl},
+};
 use gpui::{prelude::*, *};
 use herdr_automation::report::{ScriptStatus, Status};
 
@@ -66,11 +70,12 @@ impl HerdrWindow {
     fn automations_header(&self, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let font = &self.config.ui;
-        let toggle = |mode: Mode, label: &'static str, cx: &mut Context<Self>| {
+        let toggle = |mode: Mode, cx: &mut Context<Self>| {
             let on = self.automations.mode == mode;
+            let key = mode.key();
             div()
-                .id(label)
-                .debug_selector(move || format!("automations-mode-{}", label.to_lowercase()))
+                .id(key)
+                .debug_selector(move || format!("automations-mode-{key}"))
                 .px(px(10.))
                 .h(px(22.))
                 .flex()
@@ -83,7 +88,7 @@ impl HerdrWindow {
                         .font_weight(FontWeight::SEMIBOLD)
                 })
                 .when(!on, |el| el.text_color(rgb(theme.subtext())))
-                .child(label)
+                .child(mode.title())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.automations.mode = mode;
                     this.automations.opened = None;
@@ -104,7 +109,7 @@ impl HerdrWindow {
                 div()
                     .text_size(px(font.size + 3.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Automations"),
+                    .child(fl!("automations-title")),
             )
             .child(
                 div()
@@ -113,8 +118,8 @@ impl HerdrWindow {
                     .gap(px(2.))
                     .rounded(px(corners::CONTROL))
                     .bg(rgb(theme.active))
-                    .child(toggle(Mode::Hosts, "Hosts", cx))
-                    .child(toggle(Mode::Timeline, "Timeline", cx)),
+                    .child(toggle(Mode::Hosts, cx))
+                    .child(toggle(Mode::Timeline, cx)),
             )
             .child(div().flex_1())
             .children(self.automations_meter())
@@ -123,9 +128,9 @@ impl HerdrWindow {
                     "automations-refresh",
                     "icons/refresh.svg",
                     if self.automations.busy() {
-                        "Updating…"
+                        fl!("automations-updating")
                     } else {
-                        "Refresh"
+                        fl!("automations-refresh")
                     },
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -186,10 +191,10 @@ impl HerdrWindow {
                                 .bg(rgb(fill)),
                         ),
                 )
-                .child(format!(
-                    "{} / {} tokens today",
-                    format::tokens(used),
-                    format::tokens(cap)
+                .child(fl!(
+                    "automations-meter",
+                    used = format::tokens(used),
+                    cap = format::tokens(cap)
                 )),
         )
     }
@@ -201,7 +206,7 @@ impl HerdrWindow {
                 div()
                     .debug_selector(|| "automations-empty".into())
                     .text_color(rgb(self.theme.muted))
-                    .child("No host is connected."),
+                    .child(fl!("automations-no-hosts")),
             );
         }
         for (index, host) in self.automations.hosts.iter().enumerate() {
@@ -252,16 +257,12 @@ impl HerdrWindow {
                     .children(self.automation_host_controls(index, host, cx)),
             );
         let note = match &host.read {
-            Read::Unread => Some(("Reading…".to_owned(), theme.muted)),
-            Read::Missing if host.machine.is_local() => Some((
-                "herdr-automate is not installed here, and this app does not ship it.".to_owned(),
-                theme.muted,
-            )),
-            Read::Missing => Some((
-                "herdr-automate is not installed on this host.".to_owned(),
-                theme.muted,
-            )),
-            Read::Failed { error, .. } => Some((error.to_string(), theme.ink(theme.palette[3]))),
+            Read::Unread => Some((fl!("automations-reading"), theme.muted)),
+            Read::Missing if host.machine.is_local() => {
+                Some((fl!("automations-missing-here"), theme.muted))
+            }
+            Read::Missing => Some((fl!("automations-missing-host"), theme.muted)),
+            Read::Failed { error, .. } => Some((error.localize(), theme.ink(theme.palette[3]))),
             Read::Ready(_) => None,
         };
         if let Some((text, color)) = note {
@@ -289,10 +290,7 @@ impl HerdrWindow {
                     .border_color(rgb(theme.active))
                     .text_size(small)
                     .text_color(rgb(theme.muted))
-                    .child(
-                        "No scripts yet. Put one in .herdr/automations/ of a repository, \
-                         check it with `herdr-automate check`, then approve it here.",
-                    ),
+                    .child(fl!("automations-no-scripts")),
             );
         }
         let now = format::now();
@@ -324,7 +322,7 @@ impl HerdrWindow {
                     self.automation_button(
                         format!("automations-enable-{index}"),
                         "icons/plus.svg",
-                        "Enable automations",
+                        fl!("automations-enable"),
                     )
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.ask_to_enable_automations(&machine, false, window, cx);
@@ -339,7 +337,7 @@ impl HerdrWindow {
                         self.automation_button(
                             format!("automations-update-{index}"),
                             "icons/refresh.svg",
-                            format!("Update to {version}"),
+                            fl!("automations-update-to", version = version.as_str()),
                         )
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.ask_to_enable_automations(&machine, true, window, cx);
@@ -349,23 +347,26 @@ impl HerdrWindow {
                 }
                 if status.daemon.running {
                     controls.push(
-                        self.automation_chip("Daemon up", theme.ink(theme.palette[2]))
-                            .into_any_element(),
+                        self.automation_chip(
+                            fl!("automations-daemon-up"),
+                            theme.ink(theme.palette[2]),
+                        )
+                        .into_any_element(),
                     );
                 } else {
                     controls.push(self.automation_action_button(
                         format!("automations-start-{index}"),
                         "icons/play.svg",
-                        "Start daemon",
+                        fl!("automations-start-daemon"),
                         host,
                         Action::Start,
                         cx,
                     ));
                 }
                 let (label, action) = if status.daemon.paused_all {
-                    ("Resume all", Action::ResumeAll)
+                    (fl!("automations-resume-all"), Action::ResumeAll)
                 } else {
-                    ("Pause all", Action::PauseAll)
+                    (fl!("automations-pause-all"), Action::PauseAll)
                 };
                 controls.push(self.automation_action_button(
                     format!("automations-pause-all-{index}"),
@@ -514,7 +515,7 @@ impl HerdrWindow {
         &self,
         id: impl Into<SharedString>,
         icon: &'static str,
-        label: &'static str,
+        label: String,
         host: &HostState,
         action: Action,
         cx: &mut Context<Self>,
@@ -558,18 +559,21 @@ fn host_detail(host: &HostState) -> String {
         let daemon = &status.daemon;
         let version = daemon.version.as_deref().unwrap_or(&status.version);
         if daemon.running {
-            parts.push(format!("daemon {version}"));
+            parts.push(fl!("automations-daemon-version", version = version));
             if let Some(started) = daemon.started_at {
-                parts.push(format!("up {}", format::span(format::now() - started)));
+                parts.push(fl!(
+                    "automations-daemon-uptime",
+                    duration = format::span(format::now() - started)
+                ));
             }
         } else {
-            parts.push(format!(
-                "herdr-automate {} · daemon not running",
-                status.version
+            parts.push(fl!(
+                "automations-daemon-stopped",
+                version = status.version.as_str()
             ));
         }
         if daemon.paused_all {
-            parts.push("paused".to_owned());
+            parts.push(fl!("automations-all-paused"));
         }
     }
     parts.join(" · ")

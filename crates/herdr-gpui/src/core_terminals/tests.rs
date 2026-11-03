@@ -1,3 +1,4 @@
+mod chats;
 mod focus;
 mod focus_frame;
 mod keys;

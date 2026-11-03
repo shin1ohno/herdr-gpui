@@ -2,9 +2,11 @@
 //! preference the user already expressed there, never written and never used
 //! to change daemon behavior. Managed defaults are refreshed from the binary;
 //! `config-gpui.local.toml` holds persistent user overrides.
+// i18n: migrated
 use crate::{
     Result,
     contrast::Contrast,
+    i18n::fl,
     keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
 };
 mod accent;
@@ -82,7 +84,7 @@ pub(crate) use devices::{DeviceSettings, KeybindingSource};
 pub(crate) use edit::{Layer, parse_value};
 pub(crate) use error::{Error, ThemeParseError};
 pub use features::{Feature, Features};
-use files::write_config;
+use files::{read_text, write_config};
 pub use font_weight::bold as bold_font_weight;
 pub(crate) use fonts::FontFace;
 use fonts::FontSettings;
@@ -113,8 +115,6 @@ pub(crate) use herdr_remote::config::OpenSandboxFields;
 pub use herdr_remote::config::SpritesConfig;
 #[cfg(feature = "sprites")]
 pub(crate) use herdr_remote::config::SpritesFields;
-#[cfg(target_os = "ios")]
-use ipad_storage::read_text;
 pub use layout::{Density, Layout, LayoutMode, Style};
 pub(crate) use notifications::NotificationDelivery;
 pub use notifications::{
@@ -136,8 +136,6 @@ pub use sidebar_style::{SelectMode, SidebarOverrides, SidebarStyle};
 pub use ssh_hosts::SshConfig;
 pub use status_bar::StatusBar;
 pub use status_icons::StatusIcons;
-#[cfg(not(target_os = "ios"))]
-use std::fs::read_to_string as read_text;
 use std::{
     collections::BTreeMap,
     fs,
@@ -157,6 +155,7 @@ const MANAGED_HEADER: &str = "# DO NOT EDIT -- WILL BE OVERWRITTEN";
 /// Seeds the overrides file on first launch only. Existing overrides and
 /// migrated personal configs are never rewritten, so settings placed here
 /// reach new installs without changing what current users see.
+// i18n: data
 const LOCAL_CONFIG: &str = "# Herdr UI overrides. Saved changes reload automatically.\n# Unset keys inherit config-gpui.toml; tables merge key by key.\n\n# New installs start with the roomy rounded sidebar. Remove this line for\n# the managed default, or pick another layout listed in config-gpui.toml.\nlayout = \"comfortable-rounded\"\n";
 
 /// Shared logical-pixel radii for native-style chrome, independent of the
@@ -492,7 +491,7 @@ impl Default for Config {
             tabs: font(monospace, 12.0),
             terminal: font(monospace, 14.0),
             terminal_padding: Padding::default(),
-            theme: "Default".into(),
+            theme: "Default".into(), // i18n: data
             ui: font(ui, 12.0),
             unknown_keys: Vec::new(),
             updates: UpdatesConfig::default(),
@@ -639,36 +638,33 @@ impl Config {
     }
 
     /// Warnings naming the keys this build ignored and the configured fonts
-    /// that are not installed, one line each, if any.
+    /// that are not installed, one line each, if any. Keys and families come
+    /// from the user's file, so each loses the characters untrusted text
+    /// does before it joins a message.
     pub(crate) fn diagnostic(&self) -> Option<String> {
         const LISTED: usize = 5;
+        const MAX_ITEM_CHARS: usize = 80;
         let list = |items: &[String]| {
-            let listed = items[..items.len().min(LISTED)].join(", ");
-            match items.len().saturating_sub(LISTED) {
-                0 => listed,
-                more => format!("{listed} and {more} more"),
-            }
+            let listed: Vec<_> = items
+                .iter()
+                .take(LISTED)
+                .map(|item| herdr_client::text::safe_text(item, MAX_ITEM_CHARS))
+                .collect();
+            (listed.join(", "), items.len().saturating_sub(LISTED))
         };
         let mut lines = Vec::new();
         #[cfg(any(test, target_os = "ios"))]
-        if let Some(warning) = self
-            .migration_warning
-            .as_ref()
-            .and_then(|warning| warning.diagnostic())
-        {
-            lines.push(warning);
-        }
+        ipad_storage::append_migration_warning(self, &mut lines);
         if !self.unknown_keys.is_empty() {
-            lines.push(format!(
-                "config-gpui.local.toml: ignoring unknown keys {}",
-                list(&self.unknown_keys)
+            let (keys, more) = list(&self.unknown_keys);
+            lines.push(fl!(
+                "config-diagnostic-unknown-keys",
+                keys = keys,
+                more = more
             ));
         }
         if self.layout.legacy_sidebar_gap.is_some() {
-            lines.push(
-                "config-gpui.local.toml: layout.sidebar_gap is deprecated; use terminal.padding_x"
-                    .to_owned(),
-            );
+            lines.push(fl!("config-diagnostic-sidebar-gap"));
         }
         if !self.missing_fonts.is_empty() {
             let fonts: Vec<String> = self
@@ -676,13 +672,18 @@ impl Config {
                 .iter()
                 .map(|family| format!("\"{family}\""))
                 .collect();
-            lines.push(format!("Configured fonts not installed: {}", list(&fonts)));
+            let (fonts, more) = list(&fonts);
+            lines.push(fl!(
+                "config-diagnostic-missing-fonts",
+                fonts = fonts,
+                more = more
+            ));
         }
         if let Some(missing) = &self.missing_weight {
-            lines.push(format!(
-                "\"{}\" has no {} face; using its nearest weight",
-                missing.family,
-                font_weight::describe(missing.weight)
+            lines.push(fl!(
+                "config-diagnostic-missing-weight",
+                family = herdr_client::text::safe_text(&missing.family, MAX_ITEM_CHARS),
+                weight = font_weight::describe(missing.weight)
             ));
         }
         (!lines.is_empty()).then(|| lines.join("\n"))
@@ -739,10 +740,7 @@ impl Config {
             .map_err(|error| error.at_path(&local))?
             .with_desktop_theme(&text);
         #[cfg(any(test, target_os = "ios"))]
-        let config = Self {
-            migration_warning: ipad_storage::warning_for(path),
-            ..config
-        };
+        let config = ipad_storage::with_migration_warning(config, path);
         Ok(config)
     }
 

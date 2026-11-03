@@ -102,11 +102,11 @@ impl HerdrWindow {
         };
         if shown.panes.len() == 1 {
             let key = (tab.id, shown.panes.first().clone());
-            let Some(view) = self.core_terminals.views.get(&key) else {
+            let Some(view) = self.core_terminals.views.get(&key).cloned() else {
                 return self.core_placeholder(tab, cx);
             };
             view.update(cx, |view, _| view.set_pane(None));
-            return view.clone().into_any_element();
+            return self.core_pane_body(key.0, &key.1, &view, cx);
         }
         let zoom = shown
             .zoom_at(crate::motion::now())
@@ -314,7 +314,9 @@ impl HerdrWindow {
                 .map(|size| format!("{}\u{d7}{}", size.cols(), size.rows()).into()),
             active: is_active,
         };
-        let cells = chrome.pane(face, view.clone().into_any_element(), &draw.panes);
+        let view = view.clone();
+        let body = self.core_pane_body(tab, terminal, &view, cx);
+        let cells = chrome.pane(face, body, &draw.panes);
         if !crate::ipad_ui::layout() {
             return cells;
         }

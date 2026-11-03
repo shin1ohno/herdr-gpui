@@ -1,7 +1,7 @@
 // i18n: migrated
 use crate::{
     APP_VERSION, HerdrWindow,
-    i18n::fl,
+    i18n::{Localize, fl},
     menu::Page,
     progress::{self, Progress},
     updater::State,
@@ -267,9 +267,10 @@ impl HerdrWindow {
             // iPadOS installs updates through the App Store or Xcode, which
             // the app says itself rather than through the updater's reason.
             State::Disabled(_) if cfg!(target_os = "ios") => (fl!("update-panel-ipad"), None),
-            State::Disabled(reason) => {
-                (fl!("update-panel-disabled", reason = reason.as_str()), None)
-            }
+            State::Disabled(reason) => (
+                fl!("update-panel-disabled", reason = reason.localize()),
+                None,
+            ),
             State::Idle => (fl!("update-panel-idle"), Some(UpdateAction::Check)),
             State::Checking => (fl!("update-panel-checking"), Some(UpdateAction::Cancel)),
             State::Current => (fl!("update-panel-current"), Some(UpdateAction::Check)),
@@ -309,7 +310,7 @@ impl HerdrWindow {
             State::Restarting => (fl!("update-panel-restarting"), None),
             State::Cancelling => (fl!("update-panel-cancelling"), None),
             State::Error(error) => (
-                fl!("update-panel-failed", error = error.to_string()),
+                fl!("update-panel-failed", error = error.localize()),
                 Some(UpdateAction::Check),
             ),
         };

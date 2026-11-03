@@ -13,6 +13,7 @@ mod backdrop;
 mod close_window;
 mod detach;
 mod en_xa;
+mod en_xa_input;
 mod en_xa_notices;
 mod ipad_chrome_en_xa;
 mod keyboard_state;

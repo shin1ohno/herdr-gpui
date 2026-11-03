@@ -294,7 +294,7 @@ impl HerdrWindow {
         {
             self.displayed_connection_status(endpoint).label()
         } else {
-            endpoint.status().to_owned()
+            endpoint.status_label()
         }
     }
 

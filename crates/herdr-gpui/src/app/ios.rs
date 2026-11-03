@@ -15,6 +15,7 @@ const BACKGROUND_FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub(crate) fn run() -> std::process::ExitCode {
     if let Err(error) = diagnostics::init(crate::log_targets::LOG_TARGETS) {
+        // i18n: data
         eprintln!("Unable to initialize diagnostics: {error}");
         return std::process::ExitCode::FAILURE;
     }
@@ -28,6 +29,7 @@ pub(crate) fn run() -> std::process::ExitCode {
     let notification_mutes = crate::notification_mutes::Mutes::load();
     let palette_frecency = crate::palette::Frecency::load();
     let dispatch_history = crate::dispatch::History::load();
+    let worktree_landing = crate::worktree_landing::Remembered::load();
     let fan_out_journal = crate::fan_out::Journal::load();
     let keychain_grants = crate::usage::KeychainGrants::load();
     let window_state = crate::window_state::WindowState::load();
@@ -44,6 +46,7 @@ pub(crate) fn run() -> std::process::ExitCode {
         notification_mutes.install(cx);
         palette_frecency.install(cx);
         dispatch_history.install(cx);
+        worktree_landing.install(cx);
         // These stores restore client-local presentation/history only. Their
         // constructors do not dispatch work, read sign-ins, or start a daemon.
         fan_out_journal.install(cx);
@@ -122,6 +125,7 @@ fn flush_for_background(cx: &AsyncApp) {
     // Held until the Settings drafts and the stores are written, or the
     // flush's deadline passes: the platform's own task ends when this handler
     // returns.
+    // i18n: data
     let task = BackgroundTask::begin("Saving state");
     let flush = cx.update(|cx| state_file::background::flush(cx, BACKGROUND_FLUSH_TIMEOUT));
     cx.foreground_executor()

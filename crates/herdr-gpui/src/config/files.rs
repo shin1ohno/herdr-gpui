@@ -1,11 +1,15 @@
 //! The config files on disk: locking, migration, managed defaults refresh,
 //! and targeted edits to the local overrides file.
 use super::Error;
+#[cfg(target_os = "ios")]
+pub(super) use super::ipad_storage::read_text;
 use super::{
     Config, DEFAULT_CONFIG, Daemon, FONT_SIZE_RANGE, FontFace, LOCAL_CONFIG, LayoutMode,
-    MANAGED_HEADER, read_text,
+    MANAGED_HEADER,
 };
 use crate::{Result, contrast::Contrast};
+#[cfg(not(target_os = "ios"))]
+pub(super) use std::fs::read_to_string as read_text;
 use std::{
     fs,
     io::{ErrorKind, Write},

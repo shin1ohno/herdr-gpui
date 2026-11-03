@@ -3,7 +3,7 @@
 //! existing config lock and retains the original files.
 
 use super::{Config, Daemon, Error, LOCAL_CONFIG, MANAGED_HEADER};
-use crate::Result;
+use crate::{Result, i18n::fl};
 use std::{
     collections::VecDeque,
     fmt,
@@ -29,6 +29,7 @@ impl fmt::Debug for MigrationWarning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Config's Debug must not reveal paths or parser excerpts from the
         // preserved legacy files. The cause is formatted only for the user.
+        // i18n: data
         f.debug_tuple("MigrationWarning")
             .field(&warning_kind(&self.error))
             .finish()
@@ -39,6 +40,21 @@ impl MigrationWarning {
     pub(super) fn diagnostic(&self) -> Option<String> {
         (!self.shown.swap(true, Ordering::Relaxed)).then(|| self.error.to_string())
     }
+}
+
+pub(super) fn append_migration_warning(config: &Config, lines: &mut Vec<String>) {
+    if let Some(warning) = config
+        .migration_warning
+        .as_ref()
+        .and_then(|warning| warning.diagnostic())
+    {
+        lines.push(warning);
+    }
+}
+
+pub(super) fn with_migration_warning(mut config: Config, path: &Path) -> Config {
+    config.migration_warning = warning_for(path);
+    config
 }
 
 #[derive(Debug)]
@@ -80,13 +96,13 @@ impl MigrationWarnings {
 fn warning_kind(error: &crate::Error) -> &'static str {
     match error {
         crate::Error::Path { source, .. } => warning_kind(source),
-        crate::Error::Settings(Error::MigrationConflict { .. }) => "MigrationConflict",
-        crate::Error::Settings(_) => "Settings",
-        crate::Error::ConfigFile { .. } => "ConfigFile",
-        crate::Error::Toml(_) => "Toml",
-        crate::Error::Io(error) if error.kind() == ErrorKind::FileTooLarge => "FileTooLarge",
-        crate::Error::Io(_) => "Io",
-        _ => "Other",
+        crate::Error::Settings(Error::MigrationConflict { .. }) => "MigrationConflict", // i18n: data
+        crate::Error::Settings(_) => "Settings", // i18n: data
+        crate::Error::ConfigFile { .. } => "ConfigFile", // i18n: data
+        crate::Error::Toml(_) => "Toml",         // i18n: data
+        crate::Error::Io(error) if error.kind() == ErrorKind::FileTooLarge => "FileTooLarge", // i18n: data
+        crate::Error::Io(_) => "Io", // i18n: data
+        _ => "Other",                // i18n: data
     }
 }
 
@@ -125,7 +141,7 @@ pub(super) fn read_text(path: &Path) -> io::Result<String> {
     if text.len() as u64 > MAX_CONFIG_BYTES {
         return Err(io::Error::new(
             ErrorKind::FileTooLarge,
-            "configuration exceeds 1 MiB",
+            fl!("error-config-size"),
         ));
     }
     Ok(text)
@@ -215,6 +231,10 @@ mod tests;
 #[cfg(test)]
 #[path = "ipad_storage/tests/bounded_reads.rs"]
 mod bounded_reads;
+
+#[cfg(test)]
+#[path = "ipad_storage/tests/en_xa.rs"]
+mod en_xa;
 
 #[cfg(test)]
 #[path = "ipad_storage/tests/recovery.rs"]

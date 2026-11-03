@@ -127,6 +127,8 @@ mod update_notes_scrollbar;
 #[cfg(test)]
 mod update_panel;
 #[cfg(test)]
+mod upstream;
+#[cfg(test)]
 mod workspace_click_hover;
 #[cfg(test)]
 mod workspace_menu;
@@ -728,6 +730,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         cell_width: 9.,
         hovered_terminal_link: false,
         pressed_terminal_link: None,
+        #[cfg(not(target_os = "ios"))]
+        link_complaint: None,
         links: Default::default(),
         terminal_mouse: None,
         #[cfg(feature = "cloud")]
@@ -743,6 +747,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         held_keys: Default::default(),
         // No AppKit event to read; a test that needs one supplies its own.
         key_press: || None,
+        landing_launch: None,
         key_layout: |_| None,
         file_transfer: None,
         presentation: Default::default(),

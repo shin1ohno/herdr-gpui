@@ -7,6 +7,7 @@ mod endpoint;
 mod event;
 mod frame;
 mod hello;
+mod labels;
 mod live;
 mod transport;
 

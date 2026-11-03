@@ -146,6 +146,7 @@ fn ipad_chat_reason_reads_first_permission_only_from_the_selected_matching_endpo
                 existing: None,
                 pane_id: "p0".into(),
                 route: crate::chat::Route::Local,
+                surface: crate::chat::Surface::Herdr,
             }],
             crate::motion::now(),
             &mut |_, _, _| Err(crate::chat::Error::NotAttached),

@@ -35,6 +35,7 @@ error-config-key-not-table = { $key }: a part of this key holds a value, not a t
 # $original is the old config file; $local is the local file it moves into.
 error-config-migration-conflict = Cannot migrate { $original }: { $local } already contains different settings. Merge your old settings into the local file, then remove the old config; it will be regenerated.
 error-config-preferences-not-object = preferences must be an object
+error-config-size = configuration exceeds 1 MiB
 # A line of a terminal theme file. $line is its number, $key the color it sets.
 error-config-theme-line = line { $line }: { $key }: { $error }
 # $name is the theme's name, quoted; $directories lists the folders searched.

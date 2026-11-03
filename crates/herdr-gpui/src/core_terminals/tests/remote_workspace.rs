@@ -109,10 +109,13 @@ fn a_backend_change_retires_pending_terminal_work_without_starting_another(
         let scope = view.core_terminals.scope.clone().unwrap();
         let (late, pending) = std::sync::mpsc::sync_channel(1);
         view.core_terminals.workspace = Some("old".into());
-        view.core_terminals.wanted = Some(crate::core_terminals::Purpose::Tab {
-            scope: scope.clone(),
-            workspace: "old".into(),
-        });
+        view.core_terminals.wanted = Some((
+            crate::core_terminals::Purpose::Tab {
+                scope: scope.clone(),
+                workspace: "old".into(),
+            },
+            herdr_backend::Spawn::default(),
+        ));
         view.core_terminals.starting = Some((
             crate::core_terminals::Purpose::Tab {
                 scope,
