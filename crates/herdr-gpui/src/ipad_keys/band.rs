@@ -86,6 +86,11 @@ impl HerdrWindow {
             _ => false,
         };
         let label = key.label();
+        let foreground = if latched {
+            self.theme.text_on(self.theme.primary())
+        } else {
+            self.theme.foreground
+        };
         let mut button = div()
             .id(SharedString::from(format!("ipad-key-{key:?}")))
             .debug_selector(move || format!("ipad-key-{key:?}"))
@@ -99,11 +104,7 @@ impl HerdrWindow {
             .items_center()
             .justify_center()
             .text_size(px(12.))
-            .text_color(rgb(if latched {
-                self.theme.text_on(self.theme.primary())
-            } else {
-                self.theme.foreground
-            }))
+            .text_color(rgb(foreground))
             .when(latched, |button| button.bg(rgb(self.theme.primary())))
             .cursor_pointer()
             .on_mouse_down(MouseButton::Left, |_, window, cx| {
@@ -114,9 +115,12 @@ impl HerdrWindow {
                 cx.stop_propagation();
                 this.ipad_key(key, window, cx);
             }));
+        // GPUI paints an svg only with its own text color; it inherits none,
+        // so the icon takes the label's color, latched or not.
+        let icon = |path| svg().path(path).size(px(20.)).text_color(rgb(foreground));
         button = match key {
-            Key::Hide => button.child(svg().path("icons/keyboard.svg").size(px(20.))),
-            Key::More => button.child(svg().path("icons/more.svg").size(px(20.))),
+            Key::Hide => button.child(icon("icons/keyboard.svg")),
+            Key::More => button.child(icon("icons/more.svg")),
             _ => button.child(label),
         };
         button

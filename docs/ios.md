@@ -123,6 +123,14 @@ module reconciles them:
 `Info.plist` declares `UIApplicationSceneManifest` with
 `UIApplicationSupportsMultipleScenes = true` and no storyboard.
 
+On iPadOS 26, window controls can overlap the top of a window without changing
+its plain safe area. The compact bar pads its content by
+`herdr_uikit::window_control_insets`, the cached difference between UIKit's
+horizontally corner-adapted safe area and its plain safe area. These are physical
+edges, including for right-to-left text. The bar's background and the terminal
+keep their full width. Layout and scene geometry changes refresh the values
+before the synchronous resize frame; earlier iPadOS versions use zero.
+
 ### Going to the background
 
 iPadOS suspends an app soon after its last scene leaves the screen and may

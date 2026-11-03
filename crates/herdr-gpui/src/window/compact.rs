@@ -79,6 +79,8 @@ impl HerdrWindow {
             self.theme_light,
             &self.theme,
         );
+        let controls = crate::window::viewport::window_controls(window);
+        // Controls cover the bar's leading corner; its background may run underneath.
         let bar = div()
             .debug_selector(|| "ipad-compact-top-bar".into())
             .flex_none()
@@ -87,7 +89,8 @@ impl HerdrWindow {
             .row()
             .items_center()
             .gap(px(4.))
-            .px(px(4.))
+            .pl(px(4.) + controls.left)
+            .pr(px(4.) + controls.right)
             .bg(rgb(self.theme.surface))
             .border_b_1()
             .border_color(rgb(self.theme.active))
@@ -128,7 +131,8 @@ impl HerdrWindow {
                         svg()
                             .path("icons/chevron-down.svg")
                             .size(px(14.))
-                            .flex_none(),
+                            .flex_none()
+                            .text_color(rgb(self.theme.foreground)),
                     )
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.set_ipad_overlay(false, cx);
@@ -180,7 +184,13 @@ impl HerdrWindow {
             .justify_center()
             .rounded(px(8.))
             .cursor_pointer()
-            .child(svg().path(icon).size(px(20.)))
+            // GPUI paints an svg only with its own text color; it inherits none.
+            .child(
+                svg()
+                    .path(icon)
+                    .size(px(20.))
+                    .text_color(rgb(self.theme.foreground)),
+            )
             .on_mouse_down(MouseButton::Left, |_, window, cx| {
                 window.prevent_default();
                 cx.stop_propagation();

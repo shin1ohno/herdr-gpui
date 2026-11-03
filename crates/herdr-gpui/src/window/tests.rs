@@ -27,6 +27,7 @@ mod settings_prefix_replay;
 mod settings_sheet;
 mod sound_volume;
 mod visible_viewport;
+mod window_controls;
 // keep-sorted end
 
 fn main_windows(cx: &mut gpui::App) -> Vec<gpui::WindowHandle<HerdrWindow>> {
