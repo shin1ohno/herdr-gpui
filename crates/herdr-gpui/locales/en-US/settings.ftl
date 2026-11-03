@@ -76,6 +76,7 @@ settings-section-indicators = Indicators
 settings-section-fonts = Fonts
 settings-section-status-bar = Status bar
 settings-section-tabs-and-panes = Tabs & panes
+settings-section-keyboard = Keyboard
 settings-section-code = Code
 settings-section-notifications = Notifications
 settings-section-integrations = Integrations

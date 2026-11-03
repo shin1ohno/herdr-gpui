@@ -15,6 +15,8 @@ mod gpu_settings;
 #[cfg(not(target_os = "ios"))]
 mod host_key_code;
 mod ipad_key;
+mod keyboard;
+mod keyboard_en_xa;
 mod language_picker;
 mod language_reload;
 #[cfg(windows)]

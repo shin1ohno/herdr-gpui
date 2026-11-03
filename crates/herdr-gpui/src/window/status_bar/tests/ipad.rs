@@ -77,7 +77,7 @@ fn ipad_status_excludes_desktop_items_but_keeps_prefix_and_error(cx: &mut TestAp
     let legend = cx.debug_bounds("status-keybinds").unwrap();
     cx.simulate_click(legend.center(), Modifiers::default());
     view.read_with(cx, |view, _| {
-        assert_eq!(view.menu.page, Some(crate::menu::Page::Keybinds))
+        assert_eq!(view.menu.page, Some(crate::menu::Page::Settings))
     });
 }
 

@@ -16,7 +16,7 @@ impl SettingsWindow {
                 if self.viewport_width < sheet::COMPACT_BELOW {
                     self.viewport_width
                 } else {
-                    240.
+                    crate::ipad_ui::metrics::SETTINGS_NAV
                 }
             } else {
                 self.navigation_width.width(self.viewport_width)
@@ -120,6 +120,12 @@ impl SettingsWindow {
     ) -> Stateful<Div> {
         let theme = &self.theme;
         let selected = self.section == section;
+        let accent = crate::ipad_ui::accent(theme);
+        let selected_wash = if crate::ipad_ui::layout() {
+            mix(theme.surface, accent, 22)
+        } else {
+            theme.primary_wash()
+        };
         div()
             .id(("settings-section", index))
             .role(Role::Tab)
@@ -137,21 +143,19 @@ impl SettingsWindow {
             .gap(px(10.))
             .px(px(10.))
             .py(px(6.))
-            .when(self.shell == Shell::Sheet, |row| row.min_h(px(56.)))
+            .when(self.shell == Shell::Sheet, |row| {
+                row.min_h(px(crate::ipad_ui::metrics::SETTINGS_ROW))
+            })
             .rounded(px(corners::CONTROL))
             .cursor_pointer()
-            .when(selected, |el| el.bg(rgb(theme.primary_wash())))
+            .when(selected, |el| el.bg(rgb(selected_wash)))
             .hover(|el| el.bg(rgb(theme.active)))
             .child(
                 svg()
                     .path(section.icon())
                     .size(px(17.))
                     .flex_none()
-                    .text_color(rgb(if selected {
-                        theme.primary()
-                    } else {
-                        theme.subtext()
-                    })),
+                    .text_color(rgb(if selected { accent } else { theme.subtext() })),
             )
             .child(section.label())
             .on_click(

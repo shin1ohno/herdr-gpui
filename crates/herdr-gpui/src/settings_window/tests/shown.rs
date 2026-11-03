@@ -16,7 +16,7 @@ fn shown_hides_desktop_connection_sections_in_ipad_layout() {
     assert!(!shown.contains(&Section::RemoteControl));
     #[cfg(feature = "cloud")]
     assert!(!shown.contains(&Section::CloudDevices));
-    let expected = Section::ALL
+    let mut expected = Section::ALL
         .iter()
         .copied()
         .filter(|section| match section {
@@ -26,6 +26,11 @@ fn shown_hides_desktop_connection_sections_in_ipad_layout() {
             _ => true,
         })
         .collect::<Vec<_>>();
+    let tabs = expected
+        .iter()
+        .position(|section| *section == Section::Tabs)
+        .unwrap();
+    expected.insert(tabs + 1, Section::Keyboard);
     assert_eq!(shown, expected);
     let mut item = 0;
     for group in std::iter::once(None).chain(Group::ALL.map(Some)) {

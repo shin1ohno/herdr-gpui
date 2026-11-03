@@ -562,6 +562,16 @@ space picker, and the status bar names the shortcut that expands the sidebar.
 The tab strip's numbered shortcut hints are not shown in the compact layout,
 which has no tab strip.
 
+Settings has a Keyboard page on the iPad (the section is not shown on desktop):
+a choice between two shortcut styles, "iPad" (glyphs such as `⌘⇧P`, and the
+default on iOS) and "Herdr prefix" (the host's prefix keys, such as `⌃B c`),
+with a sample of each; the resolved prefix key and where it comes from ("From
+the host's Herdr config" when a server profile is in use, otherwise "Herdr's
+default"); a switch for using the server's keybindings, which is also in the
+device menu and is disabled for local and cloud devices; and a table of the
+shortcuts for the selected style. The status bar's legend opens this page. The
+`shortcut_style` setting is stored at the top level of the config file.
+
 ## Remaining platform work
 
 The real application builds and renders in the iPad simulator. GPUI's menus

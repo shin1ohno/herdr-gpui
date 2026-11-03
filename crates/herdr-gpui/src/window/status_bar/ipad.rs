@@ -201,7 +201,13 @@ impl HerdrWindow {
                         .child(label)
                 }),
         )
-        .on_click(cx.listener(|this, _, window, cx| this.command(Command::Keybinds, window, cx)))
+        .on_click(cx.listener(|_, _, _, cx| {
+            crate::settings_window::open_at(
+                cx.weak_entity(),
+                Some(crate::settings_window::Section::Keyboard),
+                cx,
+            )
+        }))
     }
 
     pub(super) fn ipad_keyboard_button(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {

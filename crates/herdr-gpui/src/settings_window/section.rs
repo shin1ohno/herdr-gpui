@@ -14,6 +14,7 @@ pub(crate) enum Section {
     Fonts,
     StatusBar,
     Tabs,
+    Keyboard,
     Code,
     Notifications,
     Integrations,
@@ -67,17 +68,25 @@ impl Group {
 impl Section {
     /// Sections this presentation can show. Desktop keeps the complete list.
     pub(super) fn shown() -> impl Iterator<Item = Self> {
-        Self::ALL.iter().copied().filter(|section| {
-            if !crate::ipad_ui::layout() {
-                return true;
-            }
-            match section {
-                Self::RemoteControl => false,
-                #[cfg(feature = "cloud")]
-                Self::CloudDevices => false,
-                _ => true,
-            }
-        })
+        Self::ALL
+            .iter()
+            .copied()
+            .flat_map(|section| {
+                std::iter::once(section).chain(
+                    (section == Self::Tabs && crate::ipad_ui::layout()).then_some(Self::Keyboard),
+                )
+            })
+            .filter(|section| {
+                if !crate::ipad_ui::layout() {
+                    return true;
+                }
+                match section {
+                    Self::RemoteControl => false,
+                    #[cfg(feature = "cloud")]
+                    Self::CloudDevices => false,
+                    _ => true,
+                }
+            })
     }
 
     /// The section list's order: General first, outside every group, as the
@@ -116,6 +125,7 @@ impl Section {
             Self::StatusBar => "settings-section-status-bar",
             Self::General => "settings-section-general",
             Self::Tabs => "settings-section-tabs-and-panes",
+            Self::Keyboard => "settings-section-keyboard",
             Self::Code => "settings-section-code",
             Self::Notifications => "settings-section-notifications",
             Self::Integrations => "settings-section-integrations",
@@ -141,7 +151,7 @@ impl Section {
             Self::CloudDevices => "settings-lead-cloud-devices",
             Self::RemoteControl => "settings-lead-remote-control",
             Self::Configuration => "settings-lead-configuration",
-            Self::General | Self::Tabs | Self::Notifications => return None,
+            Self::General | Self::Tabs | Self::Keyboard | Self::Notifications => return None,
         };
         Some(i18n::message(id, &[]))
     }
@@ -154,7 +164,9 @@ impl Section {
             Self::Theme | Self::Sidebar | Self::Indicators | Self::Fonts | Self::StatusBar => {
                 Some(Group::Appearance)
             }
-            Self::Tabs | Self::Code | Self::Notifications => Some(Group::Behaviour),
+            Self::Tabs | Self::Keyboard | Self::Code | Self::Notifications => {
+                Some(Group::Behaviour)
+            }
             Self::Integrations | Self::Plugins => Some(Group::Connect),
             #[cfg(feature = "cloud")]
             Self::CloudDevices => Some(Group::Connect),
@@ -172,6 +184,7 @@ impl Section {
             Self::StatusBar => "icons/status-bar.svg",
             Self::General => "icons/settings.svg",
             Self::Tabs => "icons/tabs.svg",
+            Self::Keyboard => "icons/keyboard.svg",
             Self::Code => "icons/vscode.svg",
             Self::Notifications => "icons/bell.svg",
             Self::Integrations => "icons/agent-generic.svg",

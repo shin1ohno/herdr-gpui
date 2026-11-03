@@ -50,6 +50,7 @@ mod px0;
 mod remote;
 mod repository_icons;
 mod shortcut_style;
+mod shortcut_style_preference;
 mod sidebar_scope;
 mod sidebar_search;
 mod sidebar_settings;

@@ -260,18 +260,11 @@ impl HerdrWindow {
     /// Saves the other choice. The reload that follows the save applies it, in
     /// every window, so a save that could not start changes nothing.
     fn toggle_server_keybindings(&mut self, cx: &mut Context<Self>) {
-        let Some(HostMenu {
-            id,
-            saved: Saved::Ssh { profile },
-            ..
-        }) = &self.menu.host
-        else {
+        let Some(host) = &self.menu.host else {
             return;
         };
-        let profile = profile.clone();
-        let source = match self.config.keybinding_source(id) {
-            KeybindingSource::Local => KeybindingSource::Server,
-            KeybindingSource::Server => KeybindingSource::Local,
+        let Some((profile, source)) = self.config.toggle_keybinding_source(&host.id) else {
+            return;
         };
         self.save_preference(
             move || Config::save_device_keybindings(&profile, source),

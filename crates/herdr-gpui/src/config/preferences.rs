@@ -35,6 +35,13 @@ pub(crate) enum Preference {
     StatusIcons(StatusIcons),
     /// `tab_layout`: how tab strips draw their tabs.
     TabLayout(TabLayoutMode),
+    /// `shortcut_style`: which resolved bindings iPad shortcut hints show.
+    ShortcutStyle(ShortcutStyle),
+    /// The saved SSH device's keybinding source, shared with its host menu.
+    DeviceKeybindings {
+        profile: String,
+        source: KeybindingSource,
+    },
     /// `edge_rail`: the bar on busy and finished rows.
     EdgeRail(bool),
     ShowDeviceIcons(bool),
@@ -182,6 +189,12 @@ impl Config {
                 }
                 Preference::EdgeRail(value) => (None, "edge_rail", Some(value.into())),
                 Preference::TabLayout(mode) => (None, "tab_layout", Some(mode.name().into())),
+                Preference::ShortcutStyle(style) => {
+                    (None, "shortcut_style", Some(style.name().into()))
+                }
+                Preference::DeviceKeybindings { profile, source } => {
+                    return Self::save_device_keybindings_path(&profile, source, path);
+                }
                 Preference::FocusFollowsMouse(value) => {
                     (None, "focus_follows_mouse", Some(value.into()))
                 }
@@ -367,7 +380,10 @@ impl Config {
             }
             write_config(path, &document.to_string())
         })();
-        result.map_err(|error| error.at_path(path))
+        result.map_err(|error| match error {
+            crate::Error::Path { .. } => error,
+            error => error.at_path(path),
+        })
     }
 }
 
