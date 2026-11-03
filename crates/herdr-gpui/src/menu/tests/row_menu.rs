@@ -348,6 +348,7 @@ fn row_menu_open_chat_focuses_the_existing_native_chat(cx: &mut TestAppContext) 
             existing: None,
             pane_id: "p0".into(),
             route: crate::chat::Route::Local,
+            surface: crate::chat::Surface::Herdr,
         };
         view.chats
             .reconcile(vec![target], std::time::Instant::now(), &mut |_, _, _| {
