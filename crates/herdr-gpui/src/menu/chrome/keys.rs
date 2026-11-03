@@ -33,12 +33,16 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn menu_key_down(
+    pub(in crate::menu) fn menu_key_down(
         &mut self,
         event: &KeyDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.menu.page == Some(Page::Settings) {
+            self.settings_sheet_key(event, window, cx);
+            return;
+        }
         if self.shortcut_editor_key(event, window, cx) {
             return;
         }

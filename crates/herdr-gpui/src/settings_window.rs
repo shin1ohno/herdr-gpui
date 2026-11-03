@@ -8,7 +8,7 @@ mod cloud_devices;
 #[cfg(feature = "cloud")]
 // Add Device records the request instead in unit tests.
 #[cfg_attr(test, allow(dead_code, unused_imports))]
-pub(crate) use cloud_devices::open as open_cloud;
+use cloud_devices::open as open_cloud_window;
 mod controls;
 #[cfg(any(target_os = "ios", test))]
 pub(crate) mod device_key;
@@ -27,7 +27,13 @@ mod remote_history;
 mod scrollbar;
 mod search;
 mod section;
-use section::{Group, Section};
+use section::Group;
+pub(crate) use section::Section;
+mod sheet;
+pub(crate) use sheet::sheet_size;
+use sheet::{Sheet, Shell};
+#[cfg(test)]
+pub(crate) use tests::sheet::Fixture as SheetFixture;
 mod sidebar;
 #[cfg(test)]
 use persistence::SizeIo;
@@ -76,7 +82,14 @@ struct SettingsWindowHandle {
 }
 impl Global for SettingsWindowHandle {}
 
-pub(crate) fn open(source: WeakEntity<HerdrWindow>, cx: &mut App) {
+pub(crate) fn open_at(source: WeakEntity<HerdrWindow>, section: Option<Section>, cx: &mut App) {
+    open(source, cx);
+    if let Some(section) = section {
+        cx.defer(move |cx| sheet::select_open_section(section, cx));
+    }
+}
+
+fn open(source: WeakEntity<HerdrWindow>, cx: &mut App) {
     cx.defer(move |cx| {
         open_with(source, cx, |view, window, cx| {
             view.initialize_theme_browser(window, cx);
@@ -85,8 +98,21 @@ pub(crate) fn open(source: WeakEntity<HerdrWindow>, cx: &mut App) {
             view.refresh_launch_at_login(None, cx);
             view.reload(cx);
             view.watch_config(cx);
-        })
+        });
     });
+}
+
+#[cfg(feature = "cloud")]
+pub(crate) fn open_cloud(
+    source: WeakEntity<HerdrWindow>,
+    provider: Option<crate::cloud::CloudProvider>,
+    cx: &mut App,
+) {
+    if crate::ipad_ui::layout() {
+        open_at(source, Some(Section::General), cx);
+    } else {
+        open_cloud_window(source, provider, cx);
+    }
 }
 
 /// Writes the open Settings window's unsaved drafts, as its "Save now" does,
@@ -111,6 +137,10 @@ fn open_with(
     cx: &mut App,
     initialize: impl FnOnce(&mut SettingsWindow, &mut Window, &mut Context<SettingsWindow>) + 'static,
 ) {
+    if crate::ipad_ui::layout() {
+        sheet::open_with(source, cx, initialize);
+        return;
+    }
     if let Some(handle) = cx.default_global::<SettingsWindowHandle>().window
         && handle
             .update(cx, |view, window, cx| {
@@ -170,7 +200,9 @@ fn open_with(
     }
 }
 
-struct SettingsWindow {
+pub(crate) struct SettingsWindow {
+    shell: Shell,
+    sheet: Sheet,
     caption: crate::caption::Caption,
     config: Config,
     /// The config as the last successful load read it, which sidebar saves
@@ -338,9 +370,12 @@ impl SettingsWindow {
             |this, input, _: &crate::search_input::Changed, cx| {
                 let query = input.read(cx).text().to_owned();
                 this.set_search_query(&query, cx);
+                this.filter_sheet_search();
             },
         );
         Self {
+            shell: Shell::Window,
+            sheet: Sheet::default(),
             caption: Default::default(),
             loaded_config: config.clone(),
             config,
@@ -470,6 +505,17 @@ impl SettingsWindow {
     }
 
     fn source_changed(&mut self, source: Entity<HerdrWindow>, cx: &mut Context<Self>) {
+        if self.shell == Shell::Sheet
+            && !self.busy()
+            && !self.theme_dirty()
+            && !self.theme_hovered()
+            && self.theme != source.read(cx).theme
+        {
+            self.theme = source.read(cx).theme.clone();
+            self.sync_theme_browser(cx);
+            self.sync_controls(cx);
+            cx.notify();
+        }
         #[cfg(feature = "cloud")]
         self.cloud_source_changed(&source, cx);
         #[cfg(not(feature = "cloud"))]
@@ -657,7 +703,9 @@ impl SettingsWindow {
     }
 
     pub(super) fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.should_close(window, cx) {
+        if self.shell == Shell::Sheet {
+            self.request_sheet_dismiss(window, cx);
+        } else if self.should_close(window, cx) {
             window.remove_window();
         }
     }
@@ -683,9 +731,7 @@ impl SettingsWindow {
             && !self.sidebar_dirty()
             && let Some(handle) = self.closing.take()
         {
-            cx.defer(move |cx| {
-                let _ = handle.update(cx, |_, window, _| window.remove_window());
-            });
+            self.finish_shell_close(handle, cx);
         }
     }
 
@@ -708,6 +754,10 @@ impl SettingsWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let section = self.shown_section(section);
+        if self.shell == Shell::Sheet {
+            self.sheet.page = true;
+        }
         self.hover_theme(None, cx);
         self.drop_number_preview(cx);
         if !self.finish_number_edit(true, cx) {
@@ -764,6 +814,9 @@ impl SettingsWindow {
 
 impl Render for SettingsWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.shell == Shell::Sheet {
+            return self.render_sheet(window, cx).into_any_element();
+        }
         self.caption.sync(window, &self.theme);
         let searching = self.search_results.clone();
         let heading = if searching.is_some() {
@@ -871,7 +924,7 @@ impl Render for SettingsWindow {
             .child(self.footer(cx))
             .children(font_picker);
         let border = self.theme.active;
-        crate::titlebar::frame(window, border, root)
+        crate::titlebar::frame(window, border, root).into_any_element()
     }
 }
 

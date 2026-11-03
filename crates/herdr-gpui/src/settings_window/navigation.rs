@@ -12,7 +12,15 @@ impl SettingsWindow {
             .role(Role::Navigation)
             .aria_label(fl!("settings-sections-label"))
             .relative()
-            .w(px(self.navigation_width.width(self.viewport_width)))
+            .w(px(if self.shell == Shell::Sheet {
+                if self.viewport_width < sheet::COMPACT_BELOW {
+                    self.viewport_width
+                } else {
+                    240.
+                }
+            } else {
+                self.navigation_width.width(self.viewport_width)
+            }))
             .on_drag_move(
                 cx.listener(|this, event: &DragMoveEvent<PanelDrag>, _, cx| {
                     if *event.drag(cx) == PanelDrag::SettingsNavigation
@@ -26,15 +34,18 @@ impl SettingsWindow {
                     }
                 }),
             )
-            .child(handle(
-                "settings-navigation-resize",
-                Side::start(),
-                PanelDrag::SettingsNavigation,
-                cx.listener(|this, _, _, cx| {
-                    this.navigation_width.reset();
-                    cx.notify();
-                }),
-            ))
+            .when(self.shell == Shell::Window, |nav| {
+                nav.child(handle(
+                    "settings-navigation-resize",
+                    Side::start(),
+                    PanelDrag::SettingsNavigation,
+                    cx.listener(|this, _, _, cx| {
+                        this.navigation_width.reset();
+                        cx.notify();
+                    }),
+                ))
+            })
+            .when(self.shell == Shell::Sheet, |nav| nav.max_w_full())
             .h_full()
             .flex_none()
             .flex()
@@ -74,9 +85,7 @@ impl SettingsWindow {
                                     .map(|group| self.group_label(group).into_any_element())
                                     .into_iter()
                                     .chain(
-                                        Section::ALL
-                                            .iter()
-                                            .copied()
+                                        Section::shown()
                                             .enumerate()
                                             .filter(move |(_, section)| section.group() == group)
                                             .map(|(index, section)| {
@@ -128,6 +137,7 @@ impl SettingsWindow {
             .gap(px(10.))
             .px(px(10.))
             .py(px(6.))
+            .when(self.shell == Shell::Sheet, |row| row.min_h(px(56.)))
             .rounded(px(corners::CONTROL))
             .cursor_pointer()
             .when(selected, |el| el.bg(rgb(theme.primary_wash())))

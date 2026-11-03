@@ -19,6 +19,7 @@ mod keyboard_state;
 mod padding;
 mod report_issue;
 mod rtl;
+mod settings_sheet;
 mod sound_volume;
 mod visible_viewport;
 // keep-sorted end

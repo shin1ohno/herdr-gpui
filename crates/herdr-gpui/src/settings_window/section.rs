@@ -5,7 +5,7 @@ use crate::i18n;
 /// One Settings page. `ALL` is the section list's order: General alone at the
 /// top, then group by group.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) enum Section {
+pub(crate) enum Section {
     General,
     #[default]
     Theme,
@@ -65,6 +65,21 @@ impl Group {
 }
 
 impl Section {
+    /// Sections this presentation can show. Desktop keeps the complete list.
+    pub(super) fn shown() -> impl Iterator<Item = Self> {
+        Self::ALL.iter().copied().filter(|section| {
+            if !crate::ipad_ui::layout() {
+                return true;
+            }
+            match section {
+                Self::RemoteControl => false,
+                #[cfg(feature = "cloud")]
+                Self::CloudDevices => false,
+                _ => true,
+            }
+        })
+    }
+
     /// The section list's order: General first, outside every group, as the
     /// catch-all people look in when they do not know where a setting lives;
     /// then each group's pages together, groups in [`Group::ALL`] order. Users
@@ -181,8 +196,8 @@ impl Section {
             if group.is_some() {
                 item += 1;
             }
-            for section in Self::ALL.iter().filter(|section| section.group() == group) {
-                if *section == self {
+            for section in Self::shown().filter(|section| section.group() == group) {
+                if section == self {
                     return item;
                 }
                 item += 1;

@@ -45,6 +45,9 @@ impl HerdrWindow {
     }
 
     pub(crate) fn dismiss_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.menu.page == Some(Page::Settings) && !self.flush_settings_sheet(window, cx) {
+            return;
+        }
         if !self.cancel_theme_preview(cx) {
             return;
         }
@@ -253,6 +256,9 @@ impl HerdrWindow {
     ) -> Stateful<Div> {
         let font = &self.config.ui;
         let theme = &self.theme;
+        if page == Page::Settings {
+            return self.render_settings_sheet(leaving, window, cx);
+        }
         let visible = window.fully_visible_bounds();
         let viewport = visible.size;
         let session_modal = page == Page::Devices && self.menu.session_edit.is_some();
