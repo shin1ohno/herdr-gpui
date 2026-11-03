@@ -69,6 +69,7 @@ pub(crate) struct Appear {
     backdrop: Toggle,
     /// Retained while the last dialog's dimming fades after menu reset.
     sheet_backdrop: bool,
+    settings: Option<gpui::Entity<crate::settings_window::SettingsWindow>>,
     /// Unit tests lay menus out where they settle unless one asks to see
     /// them move, so geometry checks need not wait out the motion.
     #[cfg(test)]
@@ -79,7 +80,8 @@ impl Appear {
     fn observe(&mut self, shown: Option<Shown>, page: Option<Page>, now: Instant) {
         let last = std::mem::replace(&mut self.page, page);
         if shown == Some(Shown::Dialog) {
-            self.sheet_backdrop = crate::ipad_ui::layout() && page == Some(Page::AddDevice);
+            self.sheet_backdrop =
+                crate::ipad_ui::layout() && matches!(page, Some(Page::AddDevice | Page::Settings));
         }
         if shown == self.shown {
             return;
@@ -93,9 +95,14 @@ impl Appear {
         // sinking into the footer in the form's place.
         let form = self.shown == Some(Shown::Dialog) && last == Some(Page::Devices);
         self.leaving = match (shown, last) {
-            (None, Some(page)) if !still && !form && leaves(page) => Some((page, now)),
+            (None, Some(page)) if !still && !form && (leaves(page) || page == Page::Settings) => {
+                Some((page, now))
+            }
             _ => None,
         };
+        if self.leaving.map(|(page, _)| page) != Some(Page::Settings) {
+            self.settings = None;
+        }
         // Only the page that just closed keeps what it read; anything else
         // drops it, cancelling nothing more since closing did that.
         if self.leaving.map(|(page, _)| page) != self.kept.as_ref().map(|(page, _)| *page) {
@@ -135,15 +142,28 @@ impl Appear {
         self.kept = Some((page, kept));
     }
 
+    pub(in crate::menu) fn keep_settings(
+        &mut self,
+        model: gpui::Entity<crate::settings_window::SettingsWindow>,
+    ) {
+        self.settings = Some(model);
+    }
+
     /// How much of the dimming behind a dialog shows at `now`, from 0 to 1.
     /// It keeps fading for a moment after the dialog has gone.
-    pub(super) fn backdrop(&self, now: Instant) -> f32 {
+    pub(crate) fn backdrop(&self, now: Instant) -> f32 {
         self.backdrop.shown(now)
     }
 
     /// The page sinking away after it closed, and how much of it is left.
-    pub(super) fn leaving(&self, now: Instant) -> Option<(Page, f32)> {
+    pub(crate) fn leaving(&self, now: Instant) -> Option<(Page, f32)> {
         let (page, since) = self.leaving?;
+        if page == Page::Settings {
+            return self
+                .backdrop
+                .moving(now)
+                .then(|| (page, self.backdrop.shown(now)));
+        }
         motion::progress(since, now, LEAVE).map(|k| (page, 1. - k))
     }
 
@@ -152,6 +172,7 @@ impl Appear {
         if self.leaving.is_some() && self.leaving(now).is_none() {
             self.leaving = None;
             self.kept = None;
+            self.settings = None;
         }
     }
 
@@ -165,6 +186,13 @@ impl HerdrWindow {
     /// or the dimming a closed dialog leaves, still moves.
     pub(crate) fn tick_menu_appear(&mut self, window: &mut Window) {
         let now = motion::now();
+        self.tick_menu_appear_at(now);
+        if self.menu.appear.moving(now) {
+            window.request_animation_frame();
+        }
+    }
+
+    pub(crate) fn tick_menu_appear_at(&mut self, now: Instant) {
         // The application menu bar's menus draw their own way.
         let shown = self
             .menu
@@ -176,9 +204,6 @@ impl HerdrWindow {
             });
         self.menu.appear.observe(shown, self.menu.page, now);
         self.menu.appear.settle(now);
-        if self.menu.appear.moving(now) {
-            window.request_animation_frame();
-        }
     }
 }
 
@@ -225,6 +250,10 @@ impl HerdrWindow {
         let page = leaving.map(|(page, left)| {
             // Drawn as it was: its own fields and page back in the menu for
             // the length of this one draw, which only reads them.
+            let mut settings = self.menu.appear.settings.take();
+            if page == Page::Settings {
+                std::mem::swap(&mut settings, &mut self.menu.settings);
+            }
             let mut kept = self.menu.appear.kept.take();
             if let Some((_, kept)) = &mut kept {
                 kept.swap(&mut self.menu);
@@ -238,6 +267,10 @@ impl HerdrWindow {
                 kept.swap(&mut self.menu);
             }
             self.menu.appear.kept = kept;
+            if page == Page::Settings {
+                std::mem::swap(&mut settings, &mut self.menu.settings);
+            }
+            self.menu.appear.settings = settings;
             element
         });
         fade.into_iter().chain(page).collect()

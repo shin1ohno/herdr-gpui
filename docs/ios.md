@@ -529,6 +529,16 @@ backdrop is 66 % of the theme background. Agent chats use the reading width of
 card with 48 pt Allow, Always allow, and Deny buttons, and the composer's attach
 and send buttons are 44 pt.
 
+Settings opens as a sheet over the main view under `layout()`, not as a second
+window: iPadOS would present a second window as a second scene. The sheet hosts
+the same editor as the desktop Settings window, so drafts, saving, and the
+config watcher are unchanged. A header with Done closes it, and so do Escape and
+a tap on the backdrop; each saves the open drafts first and then closes, and a
+failed save keeps the sheet open with the error shown. The sheet is at most
+1000 x 760 pt, shrinks with the window and the soft keyboard, and below 560 pt
+it shows the section list first and the page second. Remote control and Cloud
+devices are not shown on the iPad; their deep links open General instead.
+
 ## Remaining platform work
 
 The real application builds and renders in the iPad simulator. GPUI's menus

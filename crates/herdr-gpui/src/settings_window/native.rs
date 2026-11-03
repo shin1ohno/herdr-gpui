@@ -97,6 +97,10 @@ pub(crate) async fn verify_native(
     source: WindowHandle<HerdrWindow>,
     cx: &mut AsyncApp,
 ) -> Result<()> {
+    ensure!(
+        !crate::ipad_ui::layout(),
+        "native Settings checks require desktop layout"
+    );
     #[cfg(feature = "mockup")]
     let capture = std::env::var_os("HERDR_TEST_SETTINGS_CAPTURE").map(std::path::PathBuf::from);
     let before = source.update(cx, |view, _, _| view.input_probe)?;
@@ -150,7 +154,7 @@ pub(crate) async fn verify_native(
                 .timer(Duration::from_millis(10))
                 .await;
         }
-        for (index, section) in Section::ALL.iter().copied().enumerate() {
+        for (index, section) in Section::shown().enumerate() {
             // A short window scrolls the category list; bring this one into view.
             AnyWindowHandle::from(settings)
                 .update(cx, |_, window, cx| window.draw(cx).clear(cx))?;
@@ -216,7 +220,7 @@ pub(crate) async fn verify_native(
                     "Settings category list escapes the window: {list:?}"
                 );
                 let mut bottom = None;
-                for (index, bounds) in cx.global::<Layout>().0[..Section::ALL.len()]
+                for (index, bounds) in cx.global::<Layout>().0[..Section::shown().count()]
                     .iter()
                     .enumerate()
                 {
@@ -383,7 +387,7 @@ pub(crate) async fn verify_native(
     eprintln!(
         // i18n: data
         "SIDEBAR native standalone settings PASS: all {} category clicks and bounds at 680x560/960x780, 2/4-column theme grid, native Nord search {filtered}/{unfiltered} and clear, native Nord card click, singleton Cmd-comma, isolated Cmd-W; theme draft live across windows without config writes; final theme persisted on close in sandbox",
-        Section::ALL.len()
+        Section::shown().count()
     );
     Ok(())
 }

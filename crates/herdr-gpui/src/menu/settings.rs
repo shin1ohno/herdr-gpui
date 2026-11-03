@@ -2,6 +2,9 @@
 //! load is a cancellable background task: config parsing never runs on the UI
 //! thread, and a superseded load cannot overwrite a newer one.
 
+#[path = "settings_sheet.rs"]
+mod settings_sheet;
+
 // i18n: migrated
 use super::{Page, accent};
 use crate::i18n::fl;
@@ -121,8 +124,12 @@ impl HerdrWindow {
         if self.theme_save_in_flight() {
             return;
         }
-        self.dismiss_menu(window, cx);
-        crate::settings_window::open(cx.weak_entity(), cx);
+        if crate::ipad_ui::layout() {
+            crate::settings_window::open_at(cx.weak_entity(), None, cx);
+        } else {
+            self.dismiss_menu(window, cx);
+            crate::settings_window::open_at(cx.weak_entity(), None, cx);
+        }
     }
 
     pub(crate) fn reload_gui_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
