@@ -539,6 +539,18 @@ failed save keeps the sheet open with the error shown. The sheet is at most
 it shows the section list first and the page second. Remote control and Cloud
 devices are not shown on the iPad; their deep links open General instead.
 
+While the soft keyboard is up, a 76 pt key band sits right above it: esc, tab,
+ctrl, alt, the arrows, `| ~ / -`, Paste, and Hide. ctrl and alt latch: the next
+single character becomes `ctrl-<c>` or `alt-<c>`, and the latch clears. The
+band's own keystrokes do not count as evidence of a hardware keyboard. On a
+Herdr 2 host the focused pane is zoomed on the client while the keyboard is up,
+and a pager (dots or a one-finger swipe) pages over the panes; on a Herdr 1 host
+zoom is daemon state, so the pager only moves focus. In a window narrower than
+560 pt (Stage Manager, and Slide Over where iPadOS still offers it) the
+sidebar column and the tab strip give way to a 52 pt top bar with a menu that
+slides the sidebar over the terminal, a tab switcher, and the group menu, a
+pager row, and a scrolling key row, and the terminal font is 13 px.
+
 ## Remaining platform work
 
 The real application builds and renders in the iPad simulator. GPUI's menus

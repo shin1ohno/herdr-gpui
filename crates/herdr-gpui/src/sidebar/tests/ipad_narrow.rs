@@ -1,6 +1,9 @@
 use super::*;
 use crate::{HerdrWindow, config::AgentsPlacement, ipad_ui::metrics::DOT};
-use gpui::{Context, TestAppContext, Window, px, size};
+use gpui::{
+    AppContext, Context, Entity, IntoElement, Render, TestAppContext, VisualTestContext, Window,
+    px, size,
+};
 use std::sync::Arc;
 
 #[test]
@@ -77,6 +80,26 @@ fn fixture(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {
     view
 }
 
+struct NarrowSidebar(Entity<HerdrWindow>);
+
+impl Render for NarrowSidebar {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.0.update(cx, |view, cx| {
+            let indicators = Indicators::new(None, StatusIcons::Dots, false, false, &view.theme);
+            view.render_sidebar(indicators, window, cx)
+        })
+    }
+}
+
+// These tests measure narrow sidebar rows independently of the compact shell,
+// which replaces the inline column below 560pt.
+fn narrow_sidebar(cx: &mut TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
+    let (surface, cx) =
+        cx.add_window_view(|window, cx| NarrowSidebar(cx.new(|cx| fixture(window, cx))));
+    let view = surface.read_with(cx, |surface, _| surface.0.clone());
+    (view, cx)
+}
+
 #[gpui::test]
 fn ipad_narrow_long_blocked_space_keeps_both_extras_at_default_width(cx: &mut TestAppContext) {
     let _ipad = crate::ipad_ui::ipad_layout();
@@ -131,7 +154,7 @@ fn ipad_narrow_one_character_agent_meta_is_rendered_when_whole(cx: &mut TestAppC
 #[gpui::test]
 fn ipad_narrow_space_name_keeps_its_floor_and_extras_stay_inside(cx: &mut TestAppContext) {
     let _ipad = crate::ipad_ui::ipad_layout();
-    let (view, cx) = cx.add_window_view(fixture);
+    let (view, cx) = narrow_sidebar(cx);
     cx.simulate_resize(size(px(375.), px(834.)));
     cx.update(|window, cx| layout_tests::full_draw(window, cx).clear(cx));
     assert_eq!(cx.debug_bounds("sidebar").unwrap().size.width, px(135.));
@@ -159,7 +182,7 @@ fn ipad_narrow_space_name_keeps_its_floor_and_extras_stay_inside(cx: &mut TestAp
 #[gpui::test]
 fn ipad_narrow_agent_names_keep_their_floor(cx: &mut TestAppContext) {
     let _ipad = crate::ipad_ui::ipad_layout();
-    let (view, cx) = cx.add_window_view(fixture);
+    let (view, cx) = narrow_sidebar(cx);
     cx.simulate_resize(size(px(375.), px(834.)));
     cx.update(|window, cx| layout_tests::full_draw(window, cx).clear(cx));
     let (glyph, floors) = view.read_with(cx, |view, _| {
@@ -203,7 +226,7 @@ fn ipad_narrow_agent_names_keep_their_floor(cx: &mut TestAppContext) {
 #[gpui::test]
 fn ipad_narrow_agent_meta_under_two_glyphs_is_not_rendered(cx: &mut TestAppContext) {
     let _ipad = crate::ipad_ui::ipad_layout();
-    let (_view, cx) = cx.add_window_view(fixture);
+    let (_view, cx) = narrow_sidebar(cx);
     cx.simulate_resize(size(px(320.), px(834.)));
     cx.update(|window, cx| layout_tests::full_draw(window, cx).clear(cx));
     assert!(cx.debug_bounds("ipad-agent-meta-agent-p0").is_none());

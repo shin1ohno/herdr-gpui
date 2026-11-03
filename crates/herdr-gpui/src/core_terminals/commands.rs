@@ -17,6 +17,9 @@ use crate::{
 use gpui::{Context, Window};
 use herdr_backend::TerminalId;
 
+#[path = "pager.rs"]
+mod pager;
+
 impl HerdrWindow {
     /// Runs `command` on the focused herdr-core tab's panes. False when no
     /// herdr-core pane has the keyboard or the command is not a pane's, so
@@ -50,6 +53,13 @@ impl HerdrWindow {
             _ => None,
         };
         match command {
+            Command::NextPane | Command::PreviousPane if crate::ipad_ui::active() => {
+                let page = match command {
+                    Command::NextPane => crate::ipad_keys::Page::Next,
+                    _ => crate::ipad_keys::Page::Previous,
+                };
+                self.ipad_core_page(tab, page, window, cx);
+            }
             Command::SplitRight | Command::SplitDown => {
                 let axis = match command {
                     Command::SplitRight => Axis::Row,

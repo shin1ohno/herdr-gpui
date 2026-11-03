@@ -80,6 +80,7 @@ mod icon_font_notice;
 mod icons;
 mod input;
 mod integrations;
+mod ipad_keys;
 mod ipad_ui;
 #[cfg(windows)]
 mod jump_list;

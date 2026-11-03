@@ -931,15 +931,17 @@ impl Render for HerdrWindow {
             // Text sets from the side it starts, the right in Hebrew; the
             // terminal paints its own cells and never follows.
             .text_start()
-            .when(crate::menus::IN_WINDOW && !zen, |root| {
-                root.child(self.render_application_bar(window, cx))
-            })
-            .when(!merged && !zen, |root| {
+            .when(
+                crate::menus::IN_WINDOW && !zen && !self.ipad_compact(),
+                |root| root.child(self.render_application_bar(window, cx)),
+            )
+            .when(!merged && !zen && !self.ipad_compact(), |root| {
                 root.child(self.render_titlebar(window, cx))
             })
             .when(zen, |root| {
                 root.children(crate::titlebar::zen_inset(fill.ground(), window))
             })
+            .children(self.ipad_compact_header(window, cx))
             .child(
                 div()
                     .debug_selector(|| "window-body".into())
@@ -975,6 +977,7 @@ impl Render for HerdrWindow {
             // At the window's foot in every layout: under the traffic lights
             // it would hide them, and one place is easier to find.
             .when(!zen, |root| root.children(self.render_worktree_banner()))
+            .children(self.ipad_layers(window, cx))
             .children(self.render_tab_ghost(cx))
             .children(self.render_toasts(window, cx))
             .children(self.render_file_transfer(window, cx))
