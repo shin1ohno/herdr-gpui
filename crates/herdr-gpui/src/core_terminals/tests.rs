@@ -1,6 +1,7 @@
 mod focus;
 mod focus_frame;
 mod keys;
+mod pager;
 mod panes;
 mod paste;
 mod reconnect;

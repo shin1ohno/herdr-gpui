@@ -197,6 +197,11 @@ impl EntityInputHandler for HerdrWindow {
             }
             return;
         }
+        if self.ipad_latched_text(text, window, cx) {
+            self.marked.clear();
+            self.marked_selection = None;
+            return;
+        }
         if self.copy_mode_active() {
             self.copy_mode_text(text, window, cx);
             return;

@@ -249,6 +249,9 @@ impl HerdrWindow {
     /// sidebar as its mode lays it out, with the bar's room added whenever
     /// the bar leads, even beside a hidden sidebar.
     pub(crate) fn sidebar_column_width(&self, window_width: f32) -> Option<f32> {
+        if self.ipad_compact() {
+            return None;
+        }
         if self.activity_section().is_some() || self.mod_app().is_some() {
             return Some(BAR_WIDTH);
         }

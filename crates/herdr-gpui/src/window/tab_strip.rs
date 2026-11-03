@@ -794,6 +794,7 @@ impl HerdrWindow {
     /// only while the strip would list one tab at most, browser tabs counted.
     pub(crate) fn strip_hidden(&self, group: GroupId, cx: &App) -> bool {
         self.zen_layout()
+            || self.ipad_compact()
             || self
                 .settings
                 .shared

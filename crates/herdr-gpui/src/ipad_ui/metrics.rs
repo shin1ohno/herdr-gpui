@@ -4,6 +4,7 @@
 pub(crate) const ANSWER: f32 = 48.;
 pub(crate) const BUBBLE_RADIUS: f32 = 18.;
 pub(crate) const BUBBLE_TAIL: f32 = 6.;
+pub(crate) const COMPACT_BELOW: f32 = 560.;
 pub(crate) const COMPOSER_RADIUS: f32 = 22.;
 pub(crate) const DOT: f32 = 10.;
 pub(crate) const READING_WIDTH: f32 = 760.;

@@ -3,6 +3,9 @@
 //! any number may show the same terminal, as observers.
 
 pub(super) mod keys;
+#[cfg(test)]
+#[path = "tests/latch.rs"]
+mod latch_tests;
 pub(super) mod paste;
 mod pointer;
 #[cfg(test)]
@@ -61,6 +64,8 @@ pub(crate) struct CoreTerminalView {
     /// one cell is not reported again.
     hovered: Option<Cell>,
     id: TerminalId,
+    /// Shares only the latch; committed input never re-enters the UI owner.
+    ipad_input: Option<(crate::ipad_keys::Latch, WeakEntity<crate::HerdrWindow>)>,
     link: Link,
     look: Look,
     /// Text an IME is composing; committed text goes to the terminal.
@@ -98,6 +103,7 @@ impl CoreTerminalView {
             held_keys: HeldKeys::default(),
             hovered: None,
             id,
+            ipad_input: None,
             link,
             look,
             marked: String::new(),
@@ -461,6 +467,14 @@ impl EntityInputHandler for CoreTerminalView {
         if !self.accepts_text_input(window, cx) {
             return;
         }
+        if crate::ipad_ui::active()
+            && let Some((latch, owner)) = &self.ipad_input
+            && let Some(key) = latch.take(text)
+        {
+            crate::ipad_keys::defer_key(owner.clone(), key, window, cx);
+            cx.notify();
+            return;
+        }
         if !text.is_empty() {
             self.send(ClientPaneInputEvent::TextCommit(text.into()));
         }
@@ -510,5 +524,31 @@ impl EntityInputHandler for CoreTerminalView {
         _: &mut Context<Self>,
     ) -> Option<usize> {
         None
+    }
+}
+
+impl crate::HerdrWindow {
+    pub(crate) fn bind_ipad_latch(&self, cx: &mut Context<Self>) {
+        if crate::ipad_ui::active() {
+            let owner = cx.weak_entity();
+            for view in self.core_terminals.shown() {
+                view.update(cx, |view, _| {
+                    view.ipad_input = Some((self.ipad.latch.clone(), owner.clone()));
+                });
+            }
+        }
+    }
+
+    /// Select the focused view without leasing it; a deferred symbol commit
+    /// then uses that view's normal text-input checks and shared latch.
+    pub(crate) fn ipad_core_text_target(
+        &self,
+        window: &Window,
+        cx: &App,
+    ) -> Option<Entity<CoreTerminalView>> {
+        self.core_terminals
+            .shown()
+            .find(|view| view.read(cx).focus_handle().is_focused(window))
+            .cloned()
     }
 }

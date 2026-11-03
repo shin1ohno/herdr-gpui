@@ -23,6 +23,10 @@ impl KeyboardState {
 }
 
 impl HerdrWindow {
+    pub(crate) fn ipad_soft_keyboard_shown(window: &Window) -> bool {
+        KeyboardState::soft_keyboard_shown(window)
+    }
+
     /// A passive interceptor also sees keys consumed by bindings and prefix
     /// mode. App-wide callbacks must only update their own window's evidence.
     pub(crate) fn observe_keyboard(window: &Window, cx: &mut Context<Self>) -> Subscription {

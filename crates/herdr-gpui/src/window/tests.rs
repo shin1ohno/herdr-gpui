@@ -11,10 +11,12 @@ use std::sync::Arc;
 // keep-sorted start
 mod backdrop;
 mod close_window;
+mod compact;
 mod detach;
 mod en_xa;
 mod en_xa_notices;
 mod ipad_chrome_en_xa;
+mod key_band;
 mod keyboard_state;
 mod padding;
 mod report_issue;

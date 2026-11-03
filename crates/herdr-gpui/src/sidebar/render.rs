@@ -41,7 +41,9 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let width = sidebar_width(self.sidebar_width, f32::from(window.viewport_size().width));
+        let width = self.ipad_overlay_width(window).unwrap_or_else(|| {
+            sidebar_width(self.sidebar_width, f32::from(window.viewport_size().width))
+        });
         let split = self.sidebar_split.unwrap_or(0.5).clamp(0.1, 0.9);
         let look = layout::for_config(&self.config, self.fill());
         let rows = layout_for(self.config.layout.mode);
