@@ -76,8 +76,15 @@ pub(super) fn open_with(
             cx.new(|cx| {
                 let mut view = SettingsWindow::new(source.clone(), cx);
                 view.shell = Shell::Sheet;
+                // `initialize` reloads, which reads the section it opens on.
                 view.section = Section::General;
                 initialize(&mut view, window, cx);
+                // Assigning the section skips the page's own work (General
+                // reads this iPad's key), so select it as a click would.
+                view.select_section(Section::General, window, cx);
+                // Compact sheets start on the section list until a page is
+                // chosen; a deep link selects its page after this.
+                view.sheet.page = false;
                 view
             })
         });
