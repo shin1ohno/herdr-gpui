@@ -54,6 +54,7 @@ pub(crate) struct MenuState {
     pub page: Option<Page>,
     pub(super) row_menu: Option<super::row_menu::State>,
     pub(crate) settings: Option<Entity<crate::settings_window::SettingsWindow>>,
+    pub(crate) settings_prefix: Option<crate::window::prefix::Replay>,
     pub(crate) application: Option<crate::menus::in_window::OpenMenu>,
     pub(crate) application_bar: crate::menus::in_window::Geometry,
     /// How the open popup, or the dimming a closed dialog left, moves.
@@ -350,6 +351,7 @@ impl MenuState {
     pub fn new(cx: &App) -> Self {
         Self {
             settings: None,
+            settings_prefix: None,
             page: None,
             row_menu: None,
             application: None,
@@ -447,6 +449,7 @@ impl MenuState {
 
     pub fn reset(&mut self) {
         self.settings = None;
+        self.settings_prefix = None;
         self.application = None;
         #[cfg(any(windows, test, feature = "integration-test"))]
         self.cover.set(Cover::Unknown);

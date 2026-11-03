@@ -16,15 +16,19 @@ mod detach;
 mod en_xa;
 mod en_xa_input;
 mod en_xa_notices;
+mod herdr_prefix_style;
 mod ipad_chrome_en_xa;
 mod key_band;
 mod keyboard_state;
 mod padding;
+mod prefix_ipad_style;
 mod report_issue;
 mod rtl;
+mod settings_prefix_replay;
 mod settings_sheet;
 mod sound_volume;
 mod visible_viewport;
+mod window_controls;
 // keep-sorted end
 
 fn main_windows(cx: &mut gpui::App) -> Vec<gpui::WindowHandle<HerdrWindow>> {

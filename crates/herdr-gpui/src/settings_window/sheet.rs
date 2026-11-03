@@ -162,6 +162,14 @@ impl SettingsWindow {
         self.sheet.ready
     }
 
+    pub(crate) fn sheet_generation(&self) -> u64 {
+        self.sheet.generation
+    }
+
+    pub(crate) fn sheet_dismiss_pending(&self, generation: u64) -> bool {
+        self.sheet.generation == generation && (self.sheet.ready || self.closing.is_some())
+    }
+
     /// The owner may hold a mutable lease when a backdrop/key asks to close.
     /// Defer the editor's flush, which can publish drafts back to that owner.
     pub(crate) fn flush_for_dismiss(model: Entity<Self>, handle: AnyWindowHandle, cx: &mut App) {
@@ -169,8 +177,11 @@ impl SettingsWindow {
         cx.defer(move |cx| {
             let _ = handle.update(cx, |_, window, cx| {
                 model.update(cx, |view, cx| {
-                    if view.sheet.generation == generation && view.should_close(window, cx) {
-                        view.finish_shell_close(handle, cx);
+                    if view.sheet.generation == generation {
+                        if view.should_close(window, cx) {
+                            view.finish_shell_close(handle, cx);
+                        }
+                        cx.notify();
                     }
                 })
             });
