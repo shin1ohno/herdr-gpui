@@ -99,7 +99,48 @@ impl HerdrWindow {
                     })),
             )
             .child(self.ipad_legend(cx))
+            .children(self.ipad_rail_hint(cx))
             .children(self.ipad_keyboard_button(cx))
+    }
+
+    fn ipad_rail_hint(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+        let ring = rgb(crate::ipad_ui::accent(&self.theme));
+        (self.sidebar_mode() == crate::sidebar::SidebarMode::Rail).then(|| {
+            self.chrome_stop(
+                crate::window::chrome_focus::Region::StatusBar,
+                div()
+                    .id("ipad-rail-hint")
+                    .debug_selector(|| "ipad-rail-hint".into())
+                    .role(Role::Button)
+                    .aria_label(fl!("ipad-rail-expand")),
+            )
+            .flex()
+            .items_center()
+            .gap(px(5.))
+            .h(px(TOUCH))
+            .min_w(px(TOUCH))
+            .flex_shrink_1()
+            .overflow_hidden()
+            .cursor_pointer()
+            // Keep the shared tab-stop policy with the iPad accent for focus.
+            .focus_visible(move |style| {
+                style.shadow(vec![BoxShadow {
+                    color: ring.into(),
+                    offset: point(px(0.), px(0.)),
+                    blur_radius: px(0.),
+                    spread_radius: px(2.),
+                    inset: true,
+                }])
+            })
+            .children(self.shortcut_hint(Command::ToggleSidebar).map(|hint| {
+                kbd(hint, &self.theme, &self.config.ui)
+                    .debug_selector(|| "ipad-rail-hint-shortcut".into())
+            }))
+            .child(div().min_w_0().truncate().child(fl!("ipad-rail-expand")))
+            .on_click(
+                cx.listener(|this, _, window, cx| this.command(Command::ToggleSidebar, window, cx)),
+            )
+        })
     }
 
     fn ipad_legend(&self, cx: &mut Context<Self>) -> Stateful<Div> {

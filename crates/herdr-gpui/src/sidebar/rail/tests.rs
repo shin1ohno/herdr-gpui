@@ -15,6 +15,7 @@ use gpui::{
 use herdr_client::ConnectTarget;
 use std::sync::Arc;
 
+mod ipad;
 mod mutes;
 mod omo;
 mod touch_context;

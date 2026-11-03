@@ -551,6 +551,17 @@ sidebar column and the tab strip give way to a 52 pt top bar with a menu that
 slides the sidebar over the terminal, a tab switcher, and the group menu, a
 pager row, and a scrolling key row, and the terminal font is 13 px.
 
+With the sidebar collapsed, the iPad shows a 72 pt rail: a status dot and a
+short label for the host, each space (with a count badge of its blocked
+agents), and each agent, in 64 x 56 pt buttons, and a bottom button that
+expands the sidebar. A long press on a rail item opens a 240 pt row menu with
+Open, New tab, and Open chat; the host's menu also offers Detach, which
+detaches the whole host (spaces and agents have no Detach). While the rail is
+showing, the tab strip starts with the focused space's name, which opens the
+space picker, and the status bar names the shortcut that expands the sidebar.
+The tab strip's numbered shortcut hints are not shown in the compact layout,
+which has no tab strip.
+
 ## Remaining platform work
 
 The real application builds and renders in the iPad simulator. GPUI's menus
