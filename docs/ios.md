@@ -572,6 +572,13 @@ device menu and is disabled for local and cloud devices; and a table of the
 shortcuts for the selected style. The status bar's legend opens this page. The
 `shortcut_style` setting is stored at the top level of the config file.
 
+In the iPad shortcut style the Herdr prefix is not armed: the prefix key
+reaches the terminal as an ordinary key, and prefixed custom commands cannot be
+reached until the style is switched to "Herdr prefix". With the Herdr prefix
+style, a prefix chord pressed while Settings is open as a sheet first saves
+and closes the sheet, then runs once; a chord that arrives while that save is
+still finishing is ignored.
+
 ## Remaining platform work
 
 The real application builds and renders in the iPad simulator. GPUI's menus

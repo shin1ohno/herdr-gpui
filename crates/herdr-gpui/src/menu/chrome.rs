@@ -67,6 +67,7 @@ impl HerdrWindow {
             .application
             .as_ref()
             .and_then(|menu| menu.return_focus.clone());
+        let prefix = self.take_settings_prefix(cx);
         // A page that animates out keeps what it reads from the reset.
         if let Some(page) = self.menu.page.filter(|page| super::appear::leaves(*page)) {
             let kept = super::appear::Kept::take(&mut self.menu);
@@ -76,6 +77,9 @@ impl HerdrWindow {
         self.apply_shared_theme(cx);
         window.focus(return_focus.as_ref().unwrap_or(&self.focus), cx);
         cx.notify();
+        if let Some(prefix) = prefix {
+            prefix.run(self, window, cx);
+        }
     }
 
     pub(crate) fn restore_menu_focus(&self, window: &mut Window, cx: &mut App) {

@@ -10,12 +10,14 @@
 //! every lookup has missed the key as GPUI named it.
 
 use super::HerdrWindow;
-use crate::controls::Command;
+use crate::{config::ShortcutStyle, controls::Command, menu::Page};
 use gpui::{Context, Keystroke, Subscription, Window};
 use herdr_client::protocol::ClientShellCommandAction;
 
+mod replay;
 mod shifted_keys;
 
+pub(crate) use replay::Replay;
 pub(crate) use shifted_keys::KeyChars;
 use shifted_keys::Typed;
 pub(super) use shifted_keys::current_layout;
@@ -60,6 +62,10 @@ impl HerdrWindow {
     }
 
     fn prefix_keystroke(&mut self, typed: &Typed<'_>, window: &mut Window, cx: &mut Context<Self>) {
+        if self.prefix_armed && !self.uses_prefix() {
+            self.prefix_armed = false;
+            cx.notify();
+        }
         if self.resize_mode {
             self.resize_keystroke(typed, window, cx);
             return;
@@ -106,14 +112,29 @@ impl HerdrWindow {
         cx.stop_propagation();
         // Commands wait while a menu page holds input, so the chord ends it
         // first. Run directly rather than through focus, which the menu held.
+        if self.menu.page == Some(Page::Settings)
+            && let Some(model) = self.menu.settings.clone()
+        {
+            self.defer_settings_prefix(bound, &model, cx);
+            self.dismiss_menu(window, cx);
+            return;
+        }
         if self.menu.page.is_some() {
             self.dismiss_menu(window, cx);
         }
+        self.run_prefix_bound(bound, window, cx);
+    }
+
+    fn run_prefix_bound(&mut self, bound: Bound, window: &mut Window, cx: &mut Context<Self>) {
         match bound {
             Bound::Chord(command) => self.command(command, window, cx),
             Bound::Custom(id, action) => self.invoke_custom_command(&id, action, cx),
             Bound::Prefix => {}
         }
+    }
+
+    fn uses_prefix(&self) -> bool {
+        !crate::ipad_ui::active() || self.config.shortcut_style == ShortcutStyle::HerdrPrefix
     }
 
     /// What `keystroke` is bound to: the prefix, then, after the prefix, the
@@ -122,7 +143,7 @@ impl HerdrWindow {
     fn bound(&self, keystroke: &Keystroke, armed: bool) -> Option<Bound> {
         let keymap = self.keymap();
         if keymap.is_prefix(keystroke) {
-            return Some(Bound::Prefix);
+            return self.uses_prefix().then_some(Bound::Prefix);
         }
         if armed && let Some(command) = keymap.chord(keystroke) {
             return Some(Bound::Chord(command));
