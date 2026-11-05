@@ -43,8 +43,8 @@ fn ipad_rows_have_fixed_touch_geometry_and_worktree_indent(cx: &mut TestAppConte
     }
     let parent = cx.debug_bounds("ipad-space-name-w3").unwrap();
     assert!(
-        cx.debug_bounds("host-local").unwrap().bottom()
-            <= cx.debug_bounds("header-spaces").unwrap().top()
+        cx.debug_bounds("header-spaces").unwrap().bottom()
+            <= cx.debug_bounds("host-local").unwrap().top()
     );
     let child = cx.debug_bounds("ipad-space-name-w4").unwrap();
     assert_eq!(child.left() - parent.left(), px(22.));

@@ -550,6 +550,8 @@ a 52 pt tab strip whose tabs carry a 40 pt close target that is always visible
 and, with a hardware keyboard, a shortcut hint; a 2 pt frame around the focused
 pane on Herdr 2 (Herdr 1 draws its own borders into the cells); and a 44 pt
 status bar with the host, a keyboard button, and a Shortcuts button.
+The Spaces heading/search stays above the host list, including when no hosts
+are visible. Hosts retain their configured order and spaces stay under their host.
 Hover-only controls have a touch replacement, and the activity bar is off by
 default on iOS. On a Nord theme the iPad accent is the theme's nord8.
 

@@ -55,6 +55,8 @@ mod host_origin;
 #[cfg(test)]
 mod host_wash;
 #[cfg(test)]
+mod ipad_host_order;
+#[cfg(test)]
 mod layouts;
 #[cfg(test)]
 mod listening_ports;

@@ -76,7 +76,6 @@ impl HerdrWindow {
         let search = (searchable && self.sidebar_search.query().is_some()).then(|| {
             self.sidebar_search_results(self.sidebar_search_hits(cx), indicators, look, cx)
         });
-        let heading_in_list = crate::ipad_ui::layout() && search.is_none();
         let mut spaces = div()
             .id("spaces-scroll")
             .debug_selector(|| "spaces-scroll".into())
@@ -164,15 +163,6 @@ impl HerdrWindow {
                     cx,
                 );
                 space_rows += 1;
-                if heading_in_list && space_rows == 1 {
-                    spaces = spaces.child(self.spaces_header(
-                        (devices, searchable, tree_search),
-                        look,
-                        window,
-                        cx,
-                    ));
-                    space_rows += 1;
-                }
             }
             if device_plan.is_some() {
                 continue;
@@ -762,14 +752,7 @@ impl HerdrWindow {
                     .min_h_0()
                     .overflow_hidden()
                     // With search on, the heading is its field.
-                    .when(!heading_in_list, |section| {
-                        section.child(self.spaces_header(
-                            (devices, searchable, tree_search),
-                            look,
-                            window,
-                            cx,
-                        ))
-                    })
+                    .child(self.spaces_header((devices, searchable, tree_search), look, window, cx))
                     // The wrapper clips the pinned header as the next host's
                     // pushes it up, so it never paints over the title above.
                     .child(
