@@ -151,6 +151,25 @@ impl Fill {
         }
     }
 
+    /// A translucent surface needs either an app picture or a compositor
+    /// backdrop. UIKit's current window backend supplies neither on its own.
+    pub(crate) fn for_window(theme: &Theme, backdrop: &config::Backdrop, picture: bool) -> Self {
+        Self::for_surface(theme, backdrop, picture, cfg!(not(target_os = "ios")))
+    }
+
+    fn for_surface(
+        theme: &Theme,
+        backdrop: &config::Backdrop,
+        picture: bool,
+        window_transparency: bool,
+    ) -> Self {
+        let mut fill = Self::new(theme, backdrop);
+        if !window_transparency && !picture {
+            fill.alpha = 1.;
+        }
+        fill
+    }
+
     pub(crate) fn translucent(self) -> bool {
         self.alpha < 1.
     }
@@ -201,6 +220,17 @@ impl Fill {
 /// the window stays opaque and the compositor has nothing to blend. Only
 /// Windows has Mica; elsewhere the material is ignored and blur is blur.
 pub(crate) fn appearance(backdrop: &config::Backdrop, picture: bool) -> WindowBackgroundAppearance {
+    appearance_for_surface(backdrop, picture, cfg!(not(target_os = "ios")))
+}
+
+fn appearance_for_surface(
+    backdrop: &config::Backdrop,
+    picture: bool,
+    window_transparency: bool,
+) -> WindowBackgroundAppearance {
+    if !window_transparency {
+        return WindowBackgroundAppearance::Opaque;
+    }
     match (backdrop.translucent(), picture, backdrop.blur) {
         (false, ..) | (true, true, _) => WindowBackgroundAppearance::Opaque,
         (true, false, true) if cfg!(windows) && backdrop.material == config::Material::Mica => {

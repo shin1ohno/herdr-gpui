@@ -9,6 +9,7 @@ mod agent_skill;
 mod agents_header;
 mod agents_placement;
 mod backdrop;
+mod backdrop_reload;
 mod bitmap_fonts;
 mod bold_color;
 mod change_counts;

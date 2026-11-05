@@ -1328,7 +1328,7 @@ Colors** instead of the theme. It is read whenever a theme loads, so a new
 accent shows at the next theme or appearance change, or the next start. Other
 platforms keep the theme's accent.
 
-**Settings > Theme > Window** offers three backdrop tiles: **Solid** (the
+On desktop, **Settings > Theme > Window** offers three backdrop tiles: **Solid** (the
 default), **Translucent**, and **Picture**, each showing only its own controls.
 Translucent starts at 85%, and its **Background opacity** stepper moves in 5%
 steps between 10% and 100%; `[backdrop] opacity` in `config-gpui.local.toml`
@@ -1359,6 +1359,12 @@ decoded off the UI thread, scaled to at most 3840 pixels on its longest side,
 and uploaded once; files over 64 MiB are refused. A picture that cannot be read
 leaves the window translucent over the desktop and logs why; choosing one in
 Settings reports the error there.
+
+The current iPad build uses an opaque window background. Theme and terminal
+padding settings remain available; window transparency, desktop blur and the
+unavailable picture chooser are not offered. Saved backdrop values remain
+intact for desktop use. Without a loaded picture, an older translucent setting
+renders the theme's real background color instead of blending it with black.
 
 Choose the sidebar layout from **View > Layout**, which lists every layout,
 checks the one in use, switches at once, and saves the choice to

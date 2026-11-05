@@ -142,6 +142,11 @@ impl SettingsWindow {
         &self,
         cx: &mut Context<Self>,
     ) -> Div {
+        if !crate::settings_window::availability::row("theme-backdrop") {
+            return self
+                .control_note(fl!("settings-theme-backdrop-ipad"))
+                .debug_selector(|| "settings-backdrop-ipad".into());
+        }
         let backdrop = &self.config.backdrop;
         let current = Mode::of(backdrop);
         let mut tiles = div().row().flex_wrap().gap(px(10.));
