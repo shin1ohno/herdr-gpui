@@ -45,6 +45,7 @@ impl HerdrWindow {
             spaces = spaces.child(
                 button(format!("rail-host-{endpoint_id}"), selected, theme)
                     .aria_label(endpoint.label.clone())
+                    .aria_expanded(!(multi && endpoint.collapsed))
                     .child(
                         status_dot(
                             if connected {
@@ -61,6 +62,17 @@ impl HerdrWindow {
                         format!("rail-host-label-{endpoint_id}"),
                         &endpoint.label,
                     ))
+                    .when(multi && endpoint.collapsed, |row| {
+                        row.child(
+                            svg()
+                                .path("icons/chevron-right.svg")
+                                .absolute()
+                                .top(px(4.))
+                                .inset_e(px(4.))
+                                .size(px(12.))
+                                .text_color(rgb(theme.subtext())),
+                        )
+                    })
                     .map(|row| {
                         context_menu(
                             row,
@@ -76,8 +88,13 @@ impl HerdrWindow {
                         )
                     })
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.select_endpoint(&select, cx);
-                        window.focus(&this.focus, cx);
+                        // A folded host must expose its destinations from the
+                        // rail too; selection alone leaves both lists empty.
+                        if this.select_endpoint(&select, cx) {
+                            this.endpoints[this.selected_endpoint].collapsed = false;
+                            cx.notify();
+                            window.focus(&this.focus, cx);
+                        }
                     })),
             );
             if multi && endpoint.collapsed {
@@ -274,6 +291,28 @@ impl HerdrWindow {
                     })),
             )
             .child(
+                compact_control(
+                    "rail-devices",
+                    "icons/devices.svg",
+                    fl!("sidebar-devices-label"),
+                    theme,
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.command(Command::DevicesOverview, window, cx)
+                })),
+            )
+            .child(
+                compact_control(
+                    "rail-settings",
+                    "icons/settings.svg",
+                    fl!("ipad-sidebar-settings"),
+                    theme,
+                )
+                .on_click(
+                    cx.listener(|this, _, window, cx| this.command(Command::Settings, window, cx)),
+                ),
+            )
+            .child(
                 button("rail-expand".into(), false, theme)
                     .aria_label(fl!("ipad-rail-expand"))
                     .child(label_text("»"))
@@ -354,4 +393,20 @@ fn badge(id: String, count: usize, theme: &Theme) -> Stateful<Div> {
         .line_height(px(RAIL_BADGE))
         .aria_label(fl!("ipad-rail-needs-you-count", count = count))
         .child(count.to_string())
+}
+
+/// Essential destinations remain touchable when the expanded footer and the
+/// optional activity bar are absent. Reuse commands, labels, and icon assets.
+fn compact_control(id: &str, icon: &'static str, text: String, theme: &Theme) -> Stateful<Div> {
+    button(id.into(), false, theme)
+        .h(px(TOUCH))
+        .gap(px(2.))
+        .aria_label(text.clone())
+        .child(
+            svg()
+                .path(icon)
+                .size(px(RAIL_ICON))
+                .text_color(rgb(theme.subtext())),
+        )
+        .child(label(format!("{id}-label"), &text))
 }
