@@ -229,6 +229,32 @@ class BundleTests(unittest.TestCase):
         self.assertEqual(build["args"][0], "build")
         self.assertNotIn("entitlements", build)
 
+    def test_platform_examples_do_not_bundle_the_clients_fonts(self):
+        result = self.run_bundle("--example", "uikit_smoke")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        app = self.executable.parent / "uikit_smoke.app"
+        info = plistlib.loads((app / "Info.plist").read_bytes())
+        self.assertNotIn("UIAppFonts", info)
+        self.assertFalse((app / "Fonts").exists())
+
+    def test_bundle_registers_sauce_code_pro_without_system_font_privileges(self):
+        result = self.run_bundle("--package", "herdr-gpui", "--bin", "herdr-gpui")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        app = self.executable.parent / "herdr-gpui.app"
+        info = plistlib.loads((app / "Info.plist").read_bytes())
+        expected = {f"Fonts/SauceCodeProNerdFontMono-{face}.ttf"
+                    for face in ["Regular", "Bold", "Italic", "BoldItalic"]}
+        self.assertEqual(set(info["UIAppFonts"]), expected)
+        for relative in expected:
+            source = REPOSITORY / "assets/fonts/SauceCodePro" / Path(relative).name
+            self.assertEqual((app / relative).read_bytes(), source.read_bytes())
+        self.assertEqual((app / "Fonts/LICENSE.txt").read_bytes(),
+                         (REPOSITORY / "assets/fonts/SauceCodePro/LICENSE.txt").read_bytes())
+        self.assertTrue((app / "Fonts/PROVENANCE.md").is_file())
+        self.assertTrue((app / "Fonts/NERD-FONTS-LICENSE.txt").is_file())
+        for call in self.calls():
+            self.assertNotIn("com.apple.developer.user-fonts", call.get("entitlements", {}))
+
     def test_simulator_links_private_keychain_entitlements_only_into_the_executable(self):
         result = self.run_bundle(
             "--package", "herdr-gpui", "--bin", "herdr-gpui",

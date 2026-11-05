@@ -306,7 +306,7 @@ impl SettingsWindow {
         };
         let mut body = div().flex_1().min_h_0().min_w_0().row().overflow_hidden();
         if !compact || !page {
-            body = body.child(self.navigation(cx));
+            body = body.child(self.navigation(window, cx));
         }
         if page {
             let content = if self.search_results.is_some() {

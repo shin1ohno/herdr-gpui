@@ -7,11 +7,12 @@
 //! strip keeps empty room that moves the window, however many tabs it holds;
 //! more tabs than fit still scroll.
 
-use super::{
-    HEIGHT, LEADING, SIDEBAR_TOGGLE_INSET, SIDEBAR_TOGGLE_SIZE, movable, navigation::Style,
-};
+use super::{HEIGHT, SIDEBAR_TOGGLE_INSET, movable, navigation::Style, sidebar_toggle_size};
 use crate::{HerdrWindow, browser::GroupId, herdr_settings::TabBarPosition, sidebar::SidebarMode};
 use gpui::{prelude::*, *};
+
+#[cfg(test)]
+use super::{LEADING, SIDEBAR_TOGGLE_SIZE};
 
 /// Empty room a strip keeps after its tabs so the window can always be
 /// moved from it, even when its tabs overflow.
@@ -64,7 +65,9 @@ impl HerdrWindow {
         !self.activity_bar_leads()
             && self
                 .sidebar_column_width(f32::from(window.viewport_size().width))
-                .is_some_and(|width| width >= LEADING + SIDEBAR_TOGGLE_SIZE)
+                .is_some_and(|width| {
+                    width >= super::chrome::leading(window) + sidebar_toggle_size()
+                })
     }
 
     /// What the expanded header puts between the clearance and Back: the
@@ -74,7 +77,7 @@ impl HerdrWindow {
         if self.activity_bar_leads() {
             SIDEBAR_TOGGLE_INSET
         } else {
-            SIDEBAR_TOGGLE_SIZE
+            sidebar_toggle_size()
         }
     }
 
@@ -87,7 +90,11 @@ impl HerdrWindow {
             .sidebar_column_width(f32::from(window.viewport_size().width))
             .unwrap_or(0.);
         mode == SidebarMode::Expanded
-            && column >= LEADING + self.header_lead() + Style::NATIVE.width() + SIDEBAR_END
+            && column
+                >= super::chrome::leading(window)
+                    + self.header_lead()
+                    + Style::NATIVE.width()
+                    + SIDEBAR_END
     }
 
     /// The sidebar column's first row, level with the strips beside it. It
@@ -103,7 +110,12 @@ impl HerdrWindow {
             .h(px(self.tab_strip_height()))
             .overflow_hidden()
             .bg(self.fill().panel(self.theme.sidebar_background()))
-            .child(div().flex_none().w(px(LEADING)).h_full())
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(super::chrome::leading(window)))
+                    .h_full(),
+            )
             .when(self.sidebar_header_has_toggle(window), |header| {
                 header.child(self.sidebar_toggle(cx))
             })
@@ -140,6 +152,7 @@ impl HerdrWindow {
     /// The development build's worktree banner.
     pub(crate) fn render_worktree_banner(&self) -> Option<Div> {
         crate::worktree_banner::render(
+            cfg!(debug_assertions),
             env!("HERDR_BUILD_WORKTREE") == "1",
             env!("HERDR_BUILD_BRANCH"),
             env!("HERDR_BUILD_PR"),
@@ -165,6 +178,7 @@ impl HerdrWindow {
             .block_mouse_except_scroll()
             .flex()
             .flex_shrink(NAVIGATION_SHRINK)
+            .when(crate::ipad_ui::layout(), |leading| leading.flex_none())
             .min_w_0()
             .overflow_hidden()
             .items_center();
@@ -188,7 +202,7 @@ impl HerdrWindow {
                     div()
                         .flex_none()
                         .self_stretch()
-                        .w(px((LEADING - column).max(0.))),
+                        .w(px((super::chrome::leading(window) - column).max(0.))),
                     window,
                 ))
                 .map(|leading| {
@@ -220,6 +234,9 @@ impl HerdrWindow {
             // The only part of the leading controls that shrinks, so all of
             // their lost width comes out of it.
             .flex_shrink(1.)
+            .when(crate::ipad_ui::layout(), |slot| {
+                slot.min_w(px(width)).flex_none()
+            })
             .overflow_hidden()
             .child(
                 canvas(

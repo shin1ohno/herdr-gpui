@@ -3,6 +3,7 @@ use crate::window::viewport::simulate_window_controls;
 use gpui::{Edges, Modifiers, TestAppContext, VisualTestContext, px, size};
 
 mod sizes;
+mod wide;
 
 fn draw(cx: &mut VisualTestContext) {
     cx.update(|window, cx| {

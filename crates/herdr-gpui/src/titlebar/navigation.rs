@@ -39,6 +39,15 @@ impl Style {
 
     /// Each button's size and corner radius.
     pub(crate) fn button(self) -> (Size<Pixels>, f32) {
+        if crate::ipad_ui::layout() {
+            return (
+                size(
+                    px(crate::ipad_ui::metrics::TOUCH),
+                    px(crate::ipad_ui::metrics::TOUCH),
+                ),
+                corners::SMALL,
+            );
+        }
         match self {
             Self::Segmented => (size(px(30.), px(22.)), corners::SMALL + 2.),
             Self::Fluent => (size(px(32.), px(28.)), corners::SMALL),
@@ -49,7 +58,11 @@ impl Style {
     /// The pair's whole width, margins and divider included.
     pub(crate) fn width(self) -> f32 {
         let button = f32::from(self.button().0.width);
-        let pair = match self {
+        let pair = match if crate::ipad_ui::layout() {
+            Self::Adwaita
+        } else {
+            self
+        } {
             // The bezel's 1px border on each side, and the hairline.
             Self::Segmented => 2. + 1. + 2. * button,
             Self::Fluent => 4. + 2. * button,
@@ -78,7 +91,11 @@ fn wash(color: u32, alpha: u8) -> Rgba {
 
 impl HerdrWindow {
     pub(super) fn navigation(&self, cx: &mut Context<Self>) -> Div {
-        let style = Style::NATIVE;
+        let style = if crate::ipad_ui::layout() {
+            Style::Adwaita
+        } else {
+            Style::NATIVE
+        };
         let theme = &self.theme;
         let (ink, surface) = (theme.foreground, theme.surface);
         let button = |step: Step| {

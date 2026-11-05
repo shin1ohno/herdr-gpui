@@ -16,6 +16,7 @@ mod gpu_settings;
 mod host_key_code;
 mod ipad_availability;
 mod ipad_key;
+mod ipad_window_controls;
 mod keyboard;
 mod keyboard_en_xa;
 mod language_picker;
