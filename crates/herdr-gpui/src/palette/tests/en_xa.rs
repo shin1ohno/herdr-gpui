@@ -38,7 +38,7 @@ fn go_to_shows_only_translated_text_under_en_xa() {
             data.extend(snapshot.workspaces.iter().filter_map(|w| w.branch.clone()));
             // Agents' names, and the state labels their integrations report.
             for agent in &snapshot.agents {
-                data.push(crate::sidebar::agent_name(agent).to_owned());
+                data.push(crate::sidebar::agent_label(agent, snapshot));
                 data.extend(agent.state_labels.iter().map(|(_, label)| label.clone()));
             }
             data

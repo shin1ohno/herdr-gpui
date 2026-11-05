@@ -5,7 +5,7 @@ use crate::menu::{ContextMenuEvent, context_menu};
 use crate::{
     HerdrWindow, NavigationTarget,
     sidebar::{
-        Indicators, agent_name,
+        Indicators, agent_label,
         agents::{agent_place, pane_name, state_label, status_text},
         cell::{AgentRow, Cell, IpadMeta, RowContext, RowData, ipad_meta::agent_meta, layout_for},
         layout::SidebarLook,
@@ -133,13 +133,13 @@ impl HerdrWindow {
         let menu_endpoint = endpoint_id.clone();
         let menu_pane = id.clone();
         let menu_open = selected && self.pane_menu_target() == Some(id.as_str());
-        let name = agent_name(agent);
-        let pane = pane_name(agent, snapshot, name);
+        let name = agent_label(agent, snapshot);
+        let pane = pane_name(agent, snapshot, &name);
         let place = (!nested).then(|| agent_place(agent, snapshot)).flatten();
         let status = status_text(agent.agent_status);
         let state = state_label(agent, &status);
         let spoken = crate::sidebar::accessibility::agent_name(
-            name,
+            &name,
             pane.as_deref(),
             &state,
             place,
@@ -149,7 +149,7 @@ impl HerdrWindow {
             rows,
             RowData::Agent(AgentRow {
                 key: format!("agent-{id}"),
-                name,
+                name: &name,
                 icon: crate::icons::of_agent(agent),
                 status: agent.agent_status,
                 place,

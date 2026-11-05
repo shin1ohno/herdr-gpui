@@ -1,11 +1,11 @@
 //! Touch tab cells. The strip measures the same marks and chips this draws.
 use super::*;
 use crate::ipad_ui::{
-    accent, kbd,
+    kbd,
     metrics::{STRIP_BUTTON, TAB_STRIP},
 };
 
-const TAB_CLOSE: f32 = 40.;
+const TAB_CLOSE: f32 = crate::ipad_ui::metrics::TOUCH;
 const TAB_DOT: f32 = 8.;
 const TAB_ICON: f32 = 16.;
 const GAP: f32 = 8.;
@@ -62,7 +62,8 @@ impl TabLayout for Ipad {
 
     fn colors(&self, state: TabState, theme: &Theme) -> (u32, u32) {
         if state.selected {
-            (theme.active, theme.foreground)
+            let fill = theme.primary_wash();
+            (fill, crate::contrast::ink(theme.foreground, &[fill], 4.5))
         } else {
             (theme.surface, theme.subtext())
         }
@@ -168,7 +169,7 @@ impl TabLayout for Ipad {
                         .right_0()
                         .bottom_0()
                         .h(px(2.))
-                        .bg(rgb(accent(cx.theme))),
+                        .bg(rgb(selection_color(cx.theme))),
                 )
             })
     }
@@ -214,3 +215,16 @@ impl panes::PaneChrome for IpadPanes {
         cells
     }
 }
+
+/// Tab selection is separate from the iPad focus/pane accent (Nord's cyan).
+/// Keep the underline legible against both the selected fill and strip.
+fn selection_color(theme: &Theme) -> u32 {
+    crate::contrast::ink(
+        theme.primary(),
+        &[theme.primary_wash(), theme.surface],
+        theme.contrast.mark_ratio(),
+    )
+}
+
+#[cfg(test)]
+mod tests;

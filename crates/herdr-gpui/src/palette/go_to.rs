@@ -145,13 +145,7 @@ pub(super) fn go_to_entries(
                     .iter()
                     .find(|agent| agent.pane_id == pane.pane_id);
                 let name = match agent {
-                    Some(agent) => {
-                        let name = crate::sidebar::agent_name(agent);
-                        match crate::sidebar::pane_name(agent, snapshot, name) {
-                            Some(pane) => format!("{name} · {pane}"),
-                            None => name.to_owned(),
-                        }
-                    }
+                    Some(agent) => crate::sidebar::agent_label(agent, snapshot),
                     None => pane
                         .label
                         .as_deref()
@@ -176,6 +170,7 @@ pub(super) fn go_to_entries(
                     [
                         agent.agent.as_deref(),
                         agent.name.as_deref(),
+                        agent.display_agent.as_deref(),
                         Some(status_keyword(agent.agent_status)),
                         Some(badge.as_str()),
                         // i18n: data

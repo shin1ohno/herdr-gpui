@@ -1,9 +1,2 @@
 ipad-chrome-status-host = { $host } · Herdr { $generation }
 ipad-chrome-status-hardware-keyboard = Hardware keyboard
-ipad-chrome-status-show-keyboard = Show keyboard
-ipad-chrome-legend-tab = Tab
-ipad-chrome-legend-split = Split
-ipad-chrome-legend-sidebar = Sidebar
-ipad-chrome-legend-commands = Commands
-ipad-chrome-legend-close-pane = Close pane
-ipad-chrome-legend-help = Help

@@ -19,6 +19,8 @@ use herdr_client::{ConnectOptions, ConnectTarget};
 use std::sync::Arc;
 
 #[cfg(test)]
+mod agent_labels;
+#[cfg(test)]
 mod agent_menu;
 #[cfg(test)]
 mod agent_rows;
@@ -54,6 +56,8 @@ mod host_nesting;
 mod host_origin;
 #[cfg(test)]
 mod host_wash;
+#[cfg(test)]
+mod ipad_host_order;
 #[cfg(test)]
 mod layouts;
 #[cfg(test)]

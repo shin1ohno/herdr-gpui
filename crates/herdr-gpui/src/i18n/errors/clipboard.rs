@@ -6,11 +6,23 @@ use crate::{i18n::fl, window::clipboard::Error};
 impl Localize for Error {
     fn localize(&self) -> String {
         match self {
+            #[cfg(target_os = "ios")]
+            Self::Cancelled => fl!("error-clipboard-cancelled"),
             Self::Changed => fl!("error-clipboard-changed"),
             Self::Encoding(_) => fl!("error-clipboard-encoding"),
             #[cfg(target_os = "macos")]
             Self::Native(error) => error.localize(),
             Self::Process(_) => fl!("error-clipboard-process"),
+            #[cfg(target_os = "ios")]
+            Self::ImageDimensions { .. }
+            | Self::ImageObject
+            | Self::Provider(_)
+            | Self::ProviderBusy
+            | Self::ProviderClosed
+            | Self::ProviderObject
+            | Self::Providers { .. } => {
+                fl!("error-clipboard-provider")
+            }
             Self::Size { limit } => fl!("error-clipboard-size", limit = *limit),
             Self::Timeout => fl!("error-clipboard-timeout"),
             Self::Unsupported => fl!("error-clipboard-unsupported"),

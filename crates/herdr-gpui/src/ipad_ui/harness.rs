@@ -16,5 +16,10 @@ pub(crate) fn row(icon: AgentIcon, size: f32, text: SharedString, theme: &Theme)
                 .flex_none()
                 .child(icon.element(size, theme.subtext())),
         )
-        .child(div().min_w_0().truncate().child(text))
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .child(crate::sidebar::label_text(&text)),
+        )
 }

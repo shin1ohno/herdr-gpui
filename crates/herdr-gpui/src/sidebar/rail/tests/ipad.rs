@@ -146,7 +146,7 @@ fn ipad_rail_labels_ellipsis_and_expand_prose_translate() {
                 snapshot
                     .agents
                     .iter()
-                    .map(|agent| agent_name(agent).to_owned()),
+                    .map(|agent| agent_label(agent, snapshot)),
             );
             for command in [
                 Command::Tab,

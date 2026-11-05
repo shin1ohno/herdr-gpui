@@ -243,19 +243,18 @@ fn a_name_that_repeats_the_agent_is_painted_once_in_every_layout(cx: &mut gpui::
             "{mode:?} painted a pane label: {panes:?}"
         );
         assert!(probes.contains_key("grok"), "{mode:?} lost the agent name");
-        // Painted text is keyed by string, so a second "grok" would hide behind
-        // the agent name. Herdr has no pane label of its own: a pane segment on
-        // its first line would add a separator and move the segments around it,
-        // so the repeated name must paint exactly what no name paints.
-        assert_eq!(probes, baseline, "{mode:?} painted the agent name again");
+        // A GUI rename to the kind word is explicit and therefore wins;
+        // without that rename a location identifies the otherwise generic row.
+        assert!(
+            baseline.contains_key("p0 · tab 1"),
+            "{mode:?}: {baseline:?}"
+        );
     }
 }
 
-/// The single-line layouts give the agent name its room before the pane,
-/// place and status labels share the rest, so a long pane name beside a long
-/// workspace and status can cut them but not the name.
+/// A renamed primary label keeps visible room beside long place and status labels.
 #[gpui::test]
-fn the_agent_name_stays_whole_beside_long_labels(cx: &mut gpui::TestAppContext) {
+fn the_renamed_primary_keeps_room_beside_long_labels(cx: &mut gpui::TestAppContext) {
     let pane = "api-service-with-a-deliberately-long-pane-name";
     let status = "s".repeat(60);
     let mut snapshot = crowded(1, |_| Some(pane.into()));
@@ -274,15 +273,15 @@ fn the_agent_name_stays_whole_beside_long_labels(cx: &mut gpui::TestAppContext) 
         for width in [NARROWEST, 200., SIDEBAR] {
             show(&view, mode, width, cx);
             let probes = probes(cx);
-            let (bounds, rendered, _) = probes
-                .get("grok")
-                .unwrap_or_else(|| panic!("{mode:?} {width}: no agent name in {probes:?}"));
-            assert_eq!(rendered, "grok", "{mode:?} {width}: name was cut");
-            assert!(bounds.size.width > px(0.), "{mode:?} {width}: no room");
-            let (bounds, _, _) = probes
+            let (bounds, rendered, glyphs) = probes
                 .get(pane)
-                .unwrap_or_else(|| panic!("{mode:?} {width}: no pane name in {probes:?}"));
+                .unwrap_or_else(|| panic!("{mode:?} {width}: no primary name in {probes:?}"));
             assert!(bounds.size.width > px(0.), "{mode:?} {width}: pane hidden");
+            assert!(!rendered.is_empty(), "{mode:?} {width}: primary name empty");
+            assert!(
+                *glyphs <= bounds.size.width + px(1.),
+                "{mode:?} {width}: primary overflows"
+            );
         }
     }
 }

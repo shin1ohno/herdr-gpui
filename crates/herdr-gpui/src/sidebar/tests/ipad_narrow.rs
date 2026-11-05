@@ -189,15 +189,13 @@ fn ipad_narrow_agent_names_keep_their_floor(cx: &mut TestAppContext) {
         let look = super::super::layout::for_config(&view.config, view.fill());
         let room = (look.content_width(135.) - DOT - 18. - 5. - 2. * 6.).max(0.);
         let glyph = view.config.sidebar.size * 0.62;
-        let floors: Vec<_> = view
-            .live
-            .snapshot
-            .as_ref()
-            .unwrap()
+        let snapshot = view.live.snapshot.as_deref().unwrap();
+        let floors: Vec<_> = snapshot
             .agents
             .iter()
             .map(|agent| {
-                let natural = agent_name(agent).chars().count() as f32 * glyph;
+                let natural =
+                    crate::sidebar::agent_label(agent, snapshot).chars().count() as f32 * glyph;
                 (agent.pane_id.clone(), natural.min(room / 2.))
             })
             .collect();

@@ -4,6 +4,7 @@
 
 mod accessibility;
 mod activity;
+mod agent_label;
 mod agents;
 mod animated;
 mod cell;
@@ -38,7 +39,8 @@ pub(crate) mod native_tests;
 
 pub(crate) use {
     activity::{Activity, ActivityPanel, BUTTON as BAR_BUTTON, ICON as BAR_ICON},
-    agents::{Indicators, agent_name, pane_name, state_label, status_indicator, status_text},
+    agent_label::agent_label,
+    agents::{Indicators, agent_name, state_label, status_indicator, status_text},
     device_drag::DeviceDrag,
     hover::{HoverMenu, HoverRest},
     metrics::{ARROW_RESERVE, HOST_ARROW_WIDTH, HOST_GAP, ICON_RESERVE, LABEL_GAP, STATUS_WIDTH},

@@ -72,7 +72,7 @@ fn check_layouts(modes: &[crate::config::LayoutMode], cx: &mut gpui::TestAppCont
                     cx.default_global::<TextProbes>().0.clear();
                     full_draw(window, cx).clear(cx);
                     let probes = &cx.global::<TextProbes>().0;
-                    for text in ["herdr", "agent-launcher", "Claude Code"] {
+                    for text in ["herdr", "agent-launcher", "review"] {
                         assert!(probes.contains_key(text), "{context}: {text} missing");
                     }
                     for (text, (bounds, _, glyphs)) in probes {
@@ -236,7 +236,7 @@ fn sidebar_densities_keep_details_and_badges_within_their_rows(cx: &mut gpui::Te
                     for text in ["worktree/sidebar-child", "+234", "-567"] {
                         assert_eq!(probes.contains_key(text), comfortable, "{text}");
                     }
-                    for text in ["Claude Code", "#7"] {
+                    for text in ["review", "#7"] {
                         assert!(probes.contains_key(text), "{text}");
                     }
                 });

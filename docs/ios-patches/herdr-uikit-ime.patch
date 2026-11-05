@@ -1,0 +1,973 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index bf07222..e49ce9d 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -235,0 +236,19 @@ dependencies = [
++[[package]]
++name = "bit-set"
++version = "0.11.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "56d87354e4229f54a44f7bf2435906a4656dba36026ab6eaca629a2c436a691c"
++dependencies = [
++ "bit-vec",
++]
++
++[[package]]
++name = "bit-vec"
++version = "0.10.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5727b15fa97d4f4fee0a3b7c3d550ed0269f54329207b86388de918604e31269"
++dependencies = [
++ "borsh",
++ "serde",
++]
++
+@@ -283,0 +303 @@ dependencies = [
++ "borsh-derive",
+@@ -287,0 +308,13 @@ dependencies = [
++[[package]]
++name = "borsh-derive"
++version = "1.8.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "12cdfe656708a01f89b451a7d36466e6fe6c414de0aa18fc54f864f6f9ca9f56"
++dependencies = [
++ "once_cell",
++ "proc-macro-crate",
++ "proc-macro2",
++ "quote",
++ "syn 3.0.6",
++]
++
+@@ -392,0 +426,11 @@ dependencies = [
++[[package]]
++name = "chacha20"
++version = "0.10.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "65c35e4b699c7e15ccbe7ee35c005e4fc0a278d22238a2857e6ce2dadeda1b06"
++dependencies = [
++ "cfg-if",
++ "cpufeatures",
++ "rand_core 0.10.1",
++]
++
+@@ -489,0 +534,9 @@ dependencies = [
++[[package]]
++name = "convert_case"
++version = "0.11.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
++dependencies = [
++ "unicode-segmentation",
++]
++
+@@ -615,0 +669,6 @@ dependencies = [
++[[package]]
++name = "core_detect"
++version = "1.0.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
++
+@@ -624,0 +684,9 @@ dependencies = [
++[[package]]
++name = "cpufeatures"
++version = "0.3.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5ca28b0ae3115b884660db4118d803791fd6756b6e88f39c0f3f7859060d7566"
++dependencies = [
++ "libc",
++]
++
+@@ -705 +773 @@ dependencies = [
+- "convert_case",
++ "convert_case 0.10.0",
+@@ -988,0 +1057,6 @@ dependencies = [
++[[package]]
++name = "fnv"
++version = "1.0.7"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
++
+@@ -1213,0 +1288 @@ dependencies = [
++ "rand_core 0.10.1",
+@@ -1248,0 +1324 @@ dependencies = [
++ "backtrace",
+@@ -1283,0 +1360 @@ dependencies = [
++ "proptest",
+@@ -1743 +1820 @@ dependencies = [
+- "quick-error",
++ "quick-error 2.0.1",
+@@ -2626,0 +2704,33 @@ dependencies = [
++[[package]]
++name = "proptest"
++version = "1.12.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b8530004ccb15eae51c7e40009fbe317f341f804db54dc033eec1c50be28cfa0"
++dependencies = [
++ "bit-set",
++ "bit-vec",
++ "bitflags 2.13.2",
++ "chacha20",
++ "core_detect",
++ "num-traits",
++ "proptest-macro",
++ "rand 0.10.3",
++ "rand_xorshift",
++ "regex-syntax",
++ "rusty-fork",
++ "tempfile",
++ "unarray",
++]
++
++[[package]]
++name = "proptest-macro"
++version = "0.6.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e99782ea31698c2206c6887c1220d2f594b291c26cb9ec5b6d7cf175320bc212"
++dependencies = [
++ "convert_case 0.11.0",
++ "proc-macro2",
++ "quote",
++ "syn 3.0.6",
++]
++
+@@ -2664,0 +2775,6 @@ dependencies = [
++[[package]]
++name = "quick-error"
++version = "1.2.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
++
+@@ -2721,0 +2838,10 @@ dependencies = [
++[[package]]
++name = "rand"
++version = "0.10.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "65c9fb96cbc91e3478eaae79a69fcd3f1ae4ad052e471fe6732fff548984b4af"
++dependencies = [
++ "getrandom 0.4.3",
++ "rand_core 0.10.1",
++]
++
+@@ -2759,0 +2886,15 @@ dependencies = [
++[[package]]
++name = "rand_core"
++version = "0.10.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
++
++[[package]]
++name = "rand_xorshift"
++version = "0.5.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "60aa6af80be32871323012e02e6e65f8a7cc7890931ae421d217ad8fe0df2ccf"
++dependencies = [
++ "rand_core 0.10.1",
++]
++
+@@ -2804 +2945 @@ dependencies = [
+- "quick-error",
++ "quick-error 2.0.1",
+@@ -3000,0 +3142,12 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
++[[package]]
++name = "rusty-fork"
++version = "0.3.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cc6bf79ff24e648f6da1f8d1f011e9cac26491b619e6b9280f2b47f1774e6ee2"
++dependencies = [
++ "fnv",
++ "quick-error 1.2.3",
++ "tempfile",
++ "wait-timeout",
++]
++
+@@ -3572 +3725 @@ dependencies = [
+- "quick-error",
++ "quick-error 2.0.1",
+@@ -3761,0 +3915,6 @@ checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
++[[package]]
++name = "unarray"
++version = "0.1.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
++
+@@ -3932,0 +4092,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
++[[package]]
++name = "wait-timeout"
++version = "0.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "09ac3b126d3914f9849036f826e054cbabdc8519970b8998ddaf3b5bd3c65f11"
++dependencies = [
++ "libc",
++]
++
+diff --git a/Cargo.toml b/Cargo.toml
+index 8c00712..7defb11 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -9,0 +10,4 @@ version      = "0.1.0"
++[features]
++# GPUI input-handler regression tests, run inside the simulator.
++test-support = ["gpui/test-support"]
++
+diff --git a/README.md b/README.md
+index 3439693..4312c9e 100644
+--- a/README.md
++++ b/README.md
+@@ -215 +215,2 @@ than the ones it reads.
+-The tests run inside the iPad simulator. `scripts/sim-runner.sh` is a Cargo
++The tests run inside the iPad simulator. `--all-features` enables the
++`test-support` feature, including GPUI input-handler composition regressions. `scripts/sim-runner.sh` is a Cargo
+@@ -222 +223 @@ CARGO_TARGET_AARCH64_APPLE_IOS_SIM_RUNNER=scripts/sim-runner.sh \
+-  cargo test --locked --target aarch64-apple-ios-sim
++  cargo test --locked --all-features --target aarch64-apple-ios-sim
+diff --git a/src/key_routing.rs b/src/key_routing.rs
+new file mode 100644
+index 0000000..fe6fd86
+--- /dev/null
++++ b/src/key_routing.rs
+@@ -0,0 +1,34 @@
++//! Which hardware keys must reach UIKit before GPUI bindings and terminals.
++use gpui::Keystroke;
++
++pub(crate) fn uikit_first(
++    key: &Keystroke,
++    composing: impl FnOnce() -> bool,
++    prefers_composition: impl FnOnce() -> bool,
++) -> bool {
++    if is_input_source_switch(key) {
++        return true;
++    }
++    if key.modifiers.platform || key.modifiers.control {
++        return false;
++    }
++    composing()
++        || (key
++            .key_char
++            .as_deref()
++            .is_some_and(|text| !text.chars().any(char::is_control))
++            && prefers_composition())
++}
++
++/// Control-Space cycles iPadOS input sources; Shift reverses the cycle.
++/// This remains the system's key even when a terminal or custom binding wants it.
++pub(crate) fn is_input_source_switch(key: &Keystroke) -> bool {
++    key.key == "space"
++        && key.modifiers.control
++        && !key.modifiers.platform
++        && !key.modifiers.alt
++        && !key.modifiers.function
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/src/key_routing/tests.rs b/src/key_routing/tests.rs
+new file mode 100644
+index 0000000..07a12a6
+--- /dev/null
++++ b/src/key_routing/tests.rs
+@@ -0,0 +1,39 @@
++use super::*;
++use crate::menu::Shortcut;
++
++fn key(source: &str) -> Keystroke {
++    Keystroke::parse(source).unwrap_or_else(|error| panic!("{source}: {error}"))
++}
++
++#[test]
++fn language_switch_reaches_uikit_before_terminal_and_custom_bindings() {
++    for source in ["ctrl-space", "ctrl-shift-space"] {
++        for composing in [false, true] {
++            assert!(
++                uikit_first(&key(source), || composing, || false),
++                "{source}, composing={composing}"
++            );
++        }
++    }
++}
++
++#[test]
++fn language_switch_cannot_be_installed_as_a_menu_key_command() {
++    for source in ["ctrl-space", "ctrl-shift-space"] {
++        assert!(Shortcut::new(&key(source)).is_none(), "{source}");
++    }
++}
++
++#[test]
++fn terminal_controls_and_app_shortcuts_keep_their_route() {
++    for source in ["ctrl-c", "ctrl-b", "ctrl-enter", "cmd-c", "ctrl-alt-space"] {
++        assert!(!uikit_first(&key(source), || false, || false), "{source}");
++    }
++    for source in ["enter", "escape", "left", "right", "up", "down", "space"] {
++        assert!(uikit_first(&key(source), || true, || true), "{source}");
++    }
++    let mut printable = key("n");
++    printable.key_char = Some("n".into());
++    assert!(uikit_first(&printable, || false, || true));
++    assert!(!uikit_first(&printable, || false, || false));
++}
+diff --git a/src/lib.rs b/src/lib.rs
+index 5b4b39d..11217a5 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -26,0 +27 @@ mod gpui_call;
++mod key_routing;
+diff --git a/src/menu/shortcut.rs b/src/menu/shortcut.rs
+index 4a03c00..027da38 100644
+--- a/src/menu/shortcut.rs
++++ b/src/menu/shortcut.rs
+@@ -7,6 +7,5 @@
+-//! and an IME composition. Command and control keystrokes are exactly the
+-//! ones the text input view already gives to GPUI ahead of UIKit
+-//! (`keys::uikit_first`), so for them a key command changes nothing about who
+-//! sees the press first. Plain keys such as escape, return, or the arrows
+-//! stay with the text system and the IME, and their menu items show no
+-//! shortcut.
++//! and an IME composition. Command and control shortcuts normally reach GPUI
++//! before UIKit (`keys::uikit_first`). Control-Space is the exception: input
++//! source switching always belongs to UIKit, so it gets no menu key command.
++//! Plain keys such as escape, return, or the arrows stay with the text system
++//! and the IME, and their menu items show no shortcut.
+@@ -105 +104,4 @@ impl Shortcut {
+-        if !(modifiers.platform || modifiers.control) || modifiers.function {
++        if !(modifiers.platform || modifiers.control)
++            || modifiers.function
++            || crate::key_routing::is_input_source_switch(keystroke)
++        {
+diff --git a/src/menu/tests/shortcuts.rs b/src/menu/tests/shortcuts.rs
+index 4a0fe1b..103c9c0 100644
+--- a/src/menu/tests/shortcuts.rs
++++ b/src/menu/tests/shortcuts.rs
+@@ -79 +79 @@ fn keys_that_send_characters_use_them() {
+-    assert_eq!(input("ctrl-space"), Some(KeyInput::Text(" ".to_owned())));
++    assert_eq!(input("ctrl-space"), None);
+diff --git a/src/window/keyboard.rs b/src/window/keyboard.rs
+index 9cc9edc..ab848b2 100644
+--- a/src/window/keyboard.rs
++++ b/src/window/keyboard.rs
+@@ -200,0 +201,11 @@ pub(super) fn on_keyboard_event(
++            // Input-mode changes can hide and show the same native client.
++            // Once our text responder is showing again, that hide no longer
++            // represents a user's request to keep it dismissed. Otherwise a
++            // later focus reconciliation demotes the live client to key-only.
++            if event == Event::DidShow
++                && context.first_responder
++                && context.text_requested
++                && keyboard.dismissal == Dismissal::User
++            {
++                keyboard.dismissal = Dismissal::None;
++            }
+diff --git a/src/window/keyboard/tests.rs b/src/window/keyboard/tests.rs
+index 1f2aaff..9e749f2 100644
+--- a/src/window/keyboard/tests.rs
++++ b/src/window/keyboard/tests.rs
+@@ -3,0 +4 @@ mod dismissal;
++mod input_mode;
+diff --git a/src/window/keyboard/tests/input_mode.rs b/src/window/keyboard/tests/input_mode.rs
+new file mode 100644
+index 0000000..34e4957
+--- /dev/null
++++ b/src/window/keyboard/tests/input_mode.rs
+@@ -0,0 +1,55 @@
++use super::*;
++
++#[test]
++fn switching_native_input_modes_does_not_leave_text_disabled_for_the_next_focus_update() {
++    let mut keyboard = visible();
++    for event in [
++        Event::WillHide,
++        Event::DidHide,
++        Event::WillShow,
++        Event::DidShow,
++    ] {
++        keyboard = on_keyboard_event(keyboard, event, text_client());
++    }
++    keyboard.focus_changed();
++    assert_eq!(keyboard.visibility, Visibility::Visible);
++    assert!(!keyboard.minimized);
++    assert!(keyboard.dismissal.allows_text());
++}
++
++#[test]
++fn another_responder_showing_does_not_reopen_a_keyboard_the_user_dismissed() {
++    let keyboard = on_keyboard_event(visible(), Event::WillHide, text_client());
++    let other = Context {
++        first_responder: false,
++        ..text_client()
++    };
++    let keyboard = on_keyboard_event(keyboard, Event::WillShow, other);
++    let keyboard = on_keyboard_event(keyboard, Event::DidShow, other);
++    assert_eq!(keyboard.dismissal, Dismissal::User);
++}
++
++#[test]
++fn an_uncompleted_show_and_hardware_only_acquisition_preserve_user_hide() {
++    let mut keyboard = visible();
++    keyboard.resigned(keyboard.resign_context(true, true, true));
++    keyboard.acquired();
++    keyboard.focus_changed();
++    assert_eq!(keyboard.dismissal, Dismissal::User);
++    let showing = on_keyboard_event(keyboard, Event::WillShow, text_client());
++    assert_eq!(showing.dismissal, Dismissal::User);
++    let hiding = on_keyboard_event(showing, Event::WillHide, text_client());
++    let stale = on_keyboard_event(hiding, Event::DidShow, text_client());
++    assert_eq!(stale, hiding);
++    assert_eq!(stale.dismissal, Dismissal::User);
++}
++
++#[test]
++fn native_show_does_not_override_an_application_hide() {
++    let mut keyboard = visible();
++    keyboard.hide();
++    keyboard = on_keyboard_event(keyboard, Event::WillShow, text_client());
++    keyboard = on_keyboard_event(keyboard, Event::DidShow, text_client());
++    assert_eq!(keyboard.dismissal, Dismissal::Application);
++    assert!(!keyboard.dismissal.allows_text());
++}
+diff --git a/src/window/keyboard/tests/visibility.rs b/src/window/keyboard/tests/visibility.rs
+index 1361633..fff0512 100644
+--- a/src/window/keyboard/tests/visibility.rs
++++ b/src/window/keyboard/tests/visibility.rs
+@@ -11 +11 @@ fn a_never_shown_keyboard_has_no_minimize_evidence() {
+-fn minimizing_requires_positive_evidence_and_a_new_show_clears_only_that_evidence() {
++fn minimizing_requires_positive_evidence_and_our_native_show_releases_the_dismissal() {
+@@ -22 +22,8 @@ fn minimizing_requires_positive_evidence_and_a_new_show_clears_only_that_evidenc
+-        assert_eq!(shown.dismissal, Dismissal::User);
++        assert_eq!(
++            shown.dismissal,
++            if event == Event::DidShow {
++                Dismissal::None
++            } else {
++                Dismissal::User
++            }
++        );
+diff --git a/src/window/text_input/editing.rs b/src/window/text_input/editing.rs
+index 2e2dc2d..7a30ac4 100644
+--- a/src/window/text_input/editing.rs
++++ b/src/window/text_input/editing.rs
+@@ -39,8 +38,0 @@ impl GPUITextInputView {
+-        let composing = self
+-            .with_handler(|handler| handler.marked_text_range())
+-            .flatten()
+-            .is_some();
+-        if composing {
+-            self.with_handler(PlatformInputHandler::unmark_text);
+-            self.refresh_snapshot();
+-        }
+@@ -50,2 +42,13 @@ impl GPUITextInputView {
+-        if self.ivars().keys.borrow().is_forwarded(&keystroke.key) {
+-            return;
++        if keystroke.key == "escape" {
++            self.trace_escape("control-insertion");
++        }
++        let forwarded = self.ivars().keys.borrow().is_forwarded(&keystroke.key);
++        let dispatch = self
++            .with_handler(|handler| control_input(handler, &keystroke, forwarded))
++            .unwrap_or(!forwarded);
++        self.refresh_snapshot();
++        if dispatch {
++            if keystroke.key == "escape" {
++                self.trace_escape("control-keydown-dispatch");
++            }
++            self.tap_key(keystroke);
+@@ -53 +55,0 @@ impl GPUITextInputView {
+-        self.tap_key(keystroke);
+@@ -120 +122 @@ impl GPUITextInputView {
+-        self.with_handler(PlatformInputHandler::unmark_text);
++        self.with_handler(unmark_text);
+@@ -186,0 +189,45 @@ fn delete_in_marked(
++
++/// UIKit confirms a composition by unmarking it, without necessarily calling
++/// insertText. GPUI terminals keep marked text outside their document and discard
++/// it in unmark_text, so commit through the replacement path first. An earlier
++/// insertText or an emptied/cancelled composition leaves no marked range.
++pub(super) fn unmark_text(handler: &mut PlatformInputHandler) {
++    let Some(marked) = handler.marked_text_range() else {
++        return;
++    };
++    let mut adjusted = None;
++    if let Some(text) = handler.text_for_range(marked.clone(), &mut adjusted) {
++        let selection = handler.selected_text_range(false);
++        handler.replace_text_in_range(Some(adjusted.unwrap_or(marked)), &text);
++        // Unmarking ends composition without moving an ordinary document's
++        // caret or selection. Terminal handlers may ignore this setter.
++        if let Some(selection) = selection {
++            handler.set_selected_text_range(selection.range);
++        }
++    }
++}
++
++/// Resolves a UIKit control insertion before deciding whether its key still
++/// needs dispatching. A forwarded physical key and a composition are separate.
++pub(super) fn control_input(
++    handler: &mut PlatformInputHandler,
++    keystroke: &Keystroke,
++    forwarded: bool,
++) -> bool {
++    if let Some(marked) = handler.marked_text_range() {
++        match keystroke.key.as_str() {
++            "enter" => {
++                // Confirm the composition, not the program's input line. This
++                // must happen even when UIKit is acknowledging a forwarded key.
++                unmark_text(handler);
++                return false;
++            }
++            "escape" => {
++                handler.replace_text_in_range(Some(marked), "");
++                return false;
++            }
++            _ => handler.unmark_text(),
++        }
++    }
++    !forwarded
++}
+diff --git a/src/window/text_input/keys.rs b/src/window/text_input/keys.rs
+index 076db15..3af84f5 100644
+--- a/src/window/text_input/keys.rs
++++ b/src/window/text_input/keys.rs
+@@ -180,0 +181,3 @@ impl GPUITextInputView {
++            if keystroke.key == "escape" {
++                self.trace_escape("native-press");
++            }
+@@ -187,0 +191,6 @@ impl GPUITextInputView {
++            if keystroke.key == "escape" {
++                self.trace_escape(match route {
++                    Route::Gpui => "press-handled-by-gpui",
++                    Route::Forwarded => "press-forwarded-to-uikit",
++                });
++            }
+@@ -246 +255,3 @@ impl GPUITextInputView {
+-            if let Some(keystroke) = facts.keystroke {
++            if let Some(keystroke) = facts.keystroke
++                && !crate::key_routing::is_input_source_switch(&keystroke)
++            {
+@@ -261 +272 @@ impl GPUITextInputView {
+-    /// Command and control shortcuts still go to GPUI.
++    /// Input-source switching is always UIKit's. Other command and control shortcuts go to GPUI.
+@@ -263,22 +274,16 @@ impl GPUITextInputView {
+-        if keystroke.modifiers.platform || keystroke.modifiers.control {
+-            return false;
+-        }
+-        let composing = self
+-            .with_handler(|handler| handler.marked_text_range())
+-            .flatten()
+-            .is_some();
+-        if composing {
+-            return true;
+-        }
+-        let printable = keystroke
+-            .key_char
+-            .as_deref()
+-            .is_some_and(|text| !text.chars().any(char::is_control));
+-        printable
+-            && self
+-                .textInputMode()
+-                .and_then(|mode| mode.primaryLanguage())
+-                .is_some_and(|language| keymap::is_composition_language(&language.to_string()))
+-            && self
+-                .with_handler(|handler| handler.query_prefers_ime_for_printable_keys())
+-                .unwrap_or(false)
++        crate::key_routing::uikit_first(
++            keystroke,
++            || {
++                self.with_handler(|handler| handler.marked_text_range())
++                    .flatten()
++                    .is_some()
++            },
++            || {
++                self.textInputMode()
++                    .and_then(|mode| mode.primaryLanguage())
++                    .is_some_and(|language| keymap::is_composition_language(&language.to_string()))
++                    && self
++                        .with_handler(|handler| handler.query_prefers_ime_for_printable_keys())
++                        .unwrap_or(false)
++            },
++        )
+@@ -299,0 +305,3 @@ impl GPUITextInputView {
++        if keystroke.key == "escape" {
++            self.trace_escape("menu-command");
++        }
+@@ -321,0 +330,3 @@ impl GPUITextInputView {
++        if keystroke.key == "escape" {
++            self.trace_escape("gpui-keydown-dispatch");
++        }
+@@ -330,0 +342,16 @@ impl GPUITextInputView {
++    /// Opt-in routing evidence for a single known control, never text or
++    /// arbitrary keystrokes. Normal input does not enable this diagnostic.
++    pub(super) fn trace_escape(&self, stage: &'static str) {
++        if std::env::var_os("HERDR_IOS_ESCAPE_DIAGNOSTICS").is_none() {
++            return;
++        }
++        let composing = self.with_handler(|handler| handler.marked_text_range().is_some());
++        tracing::debug!(
++            stage,
++            handler_available = composing.is_some(),
++            composing = composing == Some(true),
++            first_responder = self.isFirstResponder(),
++            "Escape routing diagnostic"
++        );
++    }
++
+diff --git a/src/window/text_input/tests.rs b/src/window/text_input/tests.rs
+index 16a3dd2..1c68649 100644
+--- a/src/window/text_input/tests.rs
++++ b/src/window/text_input/tests.rs
+@@ -3,0 +4,2 @@ mod classes;
++#[cfg(feature = "test-support")]
++mod composition_commit;
+@@ -41,0 +44,3 @@ fn expected(key: &str, key_char: Option<&str>, modifiers: Modifiers) -> Option<K
++
++#[cfg(feature = "test-support")]
++mod composition_selection;
+diff --git a/src/window/text_input/tests/composition_commit.rs b/src/window/text_input/tests/composition_commit.rs
+new file mode 100644
+index 0000000..3622cc2
+--- /dev/null
++++ b/src/window/text_input/tests/composition_commit.rs
+@@ -0,0 +1,135 @@
++use super::super::editing;
++use gpui::{
++    Bounds, Context, ElementInputHandler, EntityInputHandler, IntoElement, Pixels,
++    PlatformInputHandler, Point, Render, TestAppContext, UTF16Selection, Window, div,
++};
++use std::ops::Range;
++
++#[derive(Default)]
++struct Terminal {
++    marked: String,
++    commits: Vec<String>,
++}
++impl Render for Terminal {
++    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
++        div()
++    }
++}
++impl EntityInputHandler for Terminal {
++    fn text_for_range(
++        &mut self,
++        range: Range<usize>,
++        adjusted: &mut Option<Range<usize>>,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) -> Option<String> {
++        assert_eq!(range, 0..self.marked.encode_utf16().count());
++        *adjusted = Some(range);
++        Some(self.marked.clone())
++    }
++    fn selected_text_range(
++        &mut self,
++        _: bool,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) -> Option<UTF16Selection> {
++        let end = self.marked.encode_utf16().count();
++        Some(UTF16Selection {
++            range: end..end,
++            reversed: false,
++        })
++    }
++    fn marked_text_range(&self, _: &mut Window, _: &mut Context<Self>) -> Option<Range<usize>> {
++        (!self.marked.is_empty()).then(|| 0..self.marked.encode_utf16().count())
++    }
++    fn unmark_text(&mut self, _: &mut Window, _: &mut Context<Self>) {
++        self.marked.clear();
++    }
++    fn replace_text_in_range(
++        &mut self,
++        _: Option<Range<usize>>,
++        text: &str,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) {
++        self.marked.clear();
++        if !text.is_empty() {
++            self.commits.push(text.into());
++        }
++    }
++    fn replace_and_mark_text_in_range(
++        &mut self,
++        _: Option<Range<usize>>,
++        text: &str,
++        _: Option<Range<usize>>,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) {
++        self.marked = text.into();
++    }
++    fn bounds_for_range(
++        &mut self,
++        _: Range<usize>,
++        bounds: Bounds<Pixels>,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) -> Option<Bounds<Pixels>> {
++        Some(bounds)
++    }
++    fn character_index_for_point(
++        &mut self,
++        _: Point<Pixels>,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) -> Option<usize> {
++        None
++    }
++}
++
++#[gpui::test]
++fn uikit_unmark_commits_a_terminal_composition_exactly_once(cx: &mut TestAppContext) {
++    let (view, cx) = cx.add_window_view(|_, _| Terminal::default());
++    let mut handler = cx.update(|window, cx| {
++        PlatformInputHandler::new(
++            window.to_async(cx),
++            Box::new(ElementInputHandler::new(Bounds::default(), view.clone())),
++        )
++    });
++    for text in ["日本", "𠮷野家"] {
++        handler.replace_and_mark_text_in_range(None, text, None);
++        assert_eq!(
++            handler.marked_text_range(),
++            Some(0..text.encode_utf16().count())
++        );
++        let count = view.read_with(cx, |view, _| view.commits.len());
++        editing::unmark_text(&mut handler);
++        assert_eq!(
++            &view.read_with(cx, |view, _| view.commits.clone())[count..],
++            &[text.to_owned()]
++        );
++        assert_eq!(handler.marked_text_range(), None);
++        editing::unmark_text(&mut handler);
++        assert_eq!(view.read_with(cx, |view, _| view.commits.len()), count + 1);
++    }
++}
++
++#[gpui::test]
++fn explicit_commit_then_unmark_does_not_duplicate_text(cx: &mut TestAppContext) {
++    let (view, cx) = cx.add_window_view(|_, _| Terminal::default());
++    let mut handler = cx.update(|window, cx| {
++        PlatformInputHandler::new(
++            window.to_async(cx),
++            Box::new(ElementInputHandler::new(Bounds::default(), view.clone())),
++        )
++    });
++    handler.replace_and_mark_text_in_range(None, "にほん", None);
++    handler.replace_text_in_range(None, "日本");
++    editing::unmark_text(&mut handler);
++    assert_eq!(view.read_with(cx, |view, _| view.commits.clone()), ["日本"]);
++    handler.replace_and_mark_text_in_range(None, "とりけし", None);
++    handler.replace_text_in_range(Some(0..4), "");
++    editing::unmark_text(&mut handler);
++    assert_eq!(view.read_with(cx, |view, _| view.commits.clone()), ["日本"]);
++}
++
++mod control_input;
+diff --git a/src/window/text_input/tests/composition_commit/control_input.rs b/src/window/text_input/tests/composition_commit/control_input.rs
+new file mode 100644
+index 0000000..1ec0628
+--- /dev/null
++++ b/src/window/text_input/tests/composition_commit/control_input.rs
+@@ -0,0 +1,57 @@
++use super::*;
++use crate::window::text_input::keymap;
++
++#[gpui::test]
++fn return_insertion_commits_before_acknowledging_a_forwarded_key(cx: &mut TestAppContext) {
++    let (view, cx) = cx.add_window_view(|_, _| Terminal::default());
++    let mut handler = cx.update(|window, cx| {
++        PlatformInputHandler::new(
++            window.to_async(cx),
++            Box::new(ElementInputHandler::new(Bounds::default(), view.clone())),
++        )
++    });
++    for text in ["\r", "\n"] {
++        let key = keymap::control_keystroke(text).unwrap_or_else(|| panic!("return is a key"));
++        for forwarded in [false, true] {
++            let count = view.read_with(cx, |view, _| view.commits.len());
++            handler.replace_and_mark_text_in_range(None, "日本😀", None);
++            let dispatch = editing::control_input(&mut handler, &key, forwarded);
++            assert_eq!(
++                &view.read_with(cx, |view, _| view.commits.clone())[count..],
++                &["日本😀"]
++            );
++            assert!(
++                !dispatch,
++                "confirming composition must not also submit the terminal line"
++            );
++            assert_eq!(handler.marked_text_range(), None);
++            assert_eq!(
++                editing::control_input(&mut handler, &key, forwarded),
++                !forwarded
++            );
++            assert_eq!(view.read_with(cx, |view, _| view.commits.len()), count + 1);
++        }
++    }
++}
++
++#[gpui::test]
++fn escape_insertion_cancels_composition_without_text_or_terminal_escape(cx: &mut TestAppContext) {
++    let (view, cx) = cx.add_window_view(|_, _| Terminal::default());
++    let mut handler = cx.update(|window, cx| {
++        PlatformInputHandler::new(
++            window.to_async(cx),
++            Box::new(ElementInputHandler::new(Bounds::default(), view.clone())),
++        )
++    });
++    let key = keymap::control_keystroke("\u{1b}").unwrap_or_else(|| panic!("escape is a key"));
++    for forwarded in [false, true] {
++        handler.replace_and_mark_text_in_range(None, "とりけし😀", None);
++        assert!(!editing::control_input(&mut handler, &key, forwarded));
++        assert_eq!(handler.marked_text_range(), None);
++        assert!(view.read_with(cx, |view, _| view.commits.is_empty()));
++        assert_eq!(
++            editing::control_input(&mut handler, &key, forwarded),
++            !forwarded
++        );
++    }
++}
+diff --git a/src/window/text_input/tests/composition_selection.rs b/src/window/text_input/tests/composition_selection.rs
+new file mode 100644
+index 0000000..269a10a
+--- /dev/null
++++ b/src/window/text_input/tests/composition_selection.rs
+@@ -0,0 +1,131 @@
++use super::super::editing;
++use gpui::{
++    Bounds, Context, ElementInputHandler, EntityInputHandler, IntoElement, Pixels,
++    PlatformInputHandler, Point, Render, TestAppContext, UTF16Selection, Window, div,
++};
++use std::ops::Range;
++
++struct Document {
++    text: Vec<u16>,
++    marked: Option<Range<usize>>,
++    selection: Range<usize>,
++}
++
++impl Render for Document {
++    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
++        div()
++    }
++}
++
++impl EntityInputHandler for Document {
++    fn text_for_range(
++        &mut self,
++        range: Range<usize>,
++        adjusted: &mut Option<Range<usize>>,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) -> Option<String> {
++        *adjusted = Some(range.clone());
++        String::from_utf16(self.text.get(range)?).ok()
++    }
++    fn selected_text_range(
++        &mut self,
++        _: bool,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) -> Option<UTF16Selection> {
++        Some(UTF16Selection {
++            range: self.selection.clone(),
++            reversed: false,
++        })
++    }
++    fn set_selected_text_range(
++        &mut self,
++        range: Range<usize>,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) {
++        self.selection = range;
++    }
++    fn marked_text_range(&self, _: &mut Window, _: &mut Context<Self>) -> Option<Range<usize>> {
++        self.marked.clone()
++    }
++    fn unmark_text(&mut self, _: &mut Window, _: &mut Context<Self>) {
++        self.marked = None;
++    }
++    fn replace_text_in_range(
++        &mut self,
++        range: Option<Range<usize>>,
++        text: &str,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) {
++        let range = range.unwrap_or_else(|| self.selection.clone());
++        let end = range.start + text.encode_utf16().count();
++        self.text.splice(range, text.encode_utf16());
++        self.selection = end..end;
++        self.marked = None;
++    }
++    fn replace_and_mark_text_in_range(
++        &mut self,
++        _: Option<Range<usize>>,
++        _: &str,
++        _: Option<Range<usize>>,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) {
++        panic!("this test starts with a composition already in the document");
++    }
++    fn bounds_for_range(
++        &mut self,
++        _: Range<usize>,
++        bounds: Bounds<Pixels>,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) -> Option<Bounds<Pixels>> {
++        Some(bounds)
++    }
++    fn character_index_for_point(
++        &mut self,
++        _: Point<Pixels>,
++        _: &mut Window,
++        _: &mut Context<Self>,
++    ) -> Option<usize> {
++        None
++    }
++}
++
++#[gpui::test]
++fn unmark_preserves_a_document_caret_and_emoji_selection(cx: &mut TestAppContext) {
++    let (view, cx) = cx.add_window_view(|_, _| Document {
++        text: "前😀日本後".encode_utf16().collect(),
++        marked: Some(1..5),
++        selection: 1..3,
++    });
++    let mut handler = cx.update(|window, cx| {
++        PlatformInputHandler::new(
++            window.to_async(cx),
++            Box::new(ElementInputHandler::new(Bounds::default(), view.clone())),
++        )
++    });
++    for selection in [1..3, 4..4] {
++        cx.update(|_, cx| {
++            view.update(cx, |view, _| {
++                view.marked = Some(1..5);
++                view.selection = selection.clone();
++            })
++        });
++        editing::unmark_text(&mut handler);
++        assert_eq!(handler.marked_text_range(), None);
++        assert_eq!(
++            handler
++                .selected_text_range(false)
++                .map(|selection| selection.range),
++            Some(selection)
++        );
++        assert_eq!(
++            view.read_with(cx, |view, _| view.text.clone()),
++            "前😀日本後".encode_utf16().collect::<Vec<_>>()
++        );
++    }
++}
+diff --git a/src/window/text_input/tests/menu_keystrokes.rs b/src/window/text_input/tests/menu_keystrokes.rs
+index 1a66fde..4d049ce 100644
+--- a/src/window/text_input/tests/menu_keystrokes.rs
++++ b/src/window/text_input/tests/menu_keystrokes.rs
+@@ -39,7 +38,0 @@ fn a_shortcut_reports_the_keystroke_of_its_press() {
+-        (
+-            "ctrl-space",
+-            UIKeyboardHIDUsage::KeyboardSpacebar,
+-            " ",
+-            " ",
+-            control,
+-        ),

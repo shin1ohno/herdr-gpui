@@ -145,11 +145,13 @@ gpui_platform = { features = ["font-kit", "runtime_shaders", "wayland", "x11"], 
 keepawake.workspace = true
 
 [target.'cfg(target_os = "ios")'.dependencies]
+block2.workspace = true
+dispatch2.workspace = true
 herdr-ssh.workspace = true
 herdr-uikit.workspace = true
 objc2.workspace = true
-objc2-foundation.workspace = true
-objc2-ui-kit.workspace = true
+objc2-foundation = { workspace = true, features = ["NSDate", "NSItemProvider", "NSProgress", "NSRunLoop", "block2"] }
+objc2-ui-kit = { workspace = true, features = ["UIImage"] }
 
 # wry has no working GPUI child-view backend on Linux yet; browser tabs there
 # open in the system browser instead.

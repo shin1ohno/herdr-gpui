@@ -73,6 +73,9 @@ Every command accepts:
 | `commands` | The names `run` accepts (no app needed) |
 | `open DIR` | Open a folder as **Open Project** in the palette does, starting the app if needed (below) |
 
+`run keybindings` opens the interactive shortcut guide on iPad, with a link to
+Keyboard settings; desktop opens the shortcut reference.
+
 `open DIR` checks the folder where you run it and resolves it to an absolute,
 canonical path. A path that does not exist exits 5; a file, or a folder in a
 device namespace (`\\.\…`, `\\?\GLOBALROOT\…`, and on Unix `/dev`, `/proc`,

@@ -116,7 +116,7 @@ fn facts(snapshot: &ClientShellSnapshot, target: NavigationTarget<&str>) -> Opti
             .map_or_else(|| fl!("palette-go-to-terminal"), str::to_owned);
         match agent(&pane.pane_id) {
             Some(agent) => (
-                crate::sidebar::agent_name(agent).to_owned(),
+                crate::sidebar::agent_label(agent, snapshot),
                 crate::sidebar::state_label(agent, &status_badge(agent.agent_status)).into_owned(),
             ),
             None => (

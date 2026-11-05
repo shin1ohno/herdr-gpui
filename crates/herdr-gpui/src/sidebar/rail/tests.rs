@@ -16,6 +16,7 @@ use herdr_client::ConnectTarget;
 use std::sync::Arc;
 
 mod ipad;
+mod ipad_navigation;
 mod mutes;
 mod omo;
 mod touch_context;

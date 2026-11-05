@@ -513,6 +513,10 @@ impl HerdrWindow {
                 return;
             }
             Command::Keybinds => {
+                if crate::ipad_ui::layout() {
+                    self.toggle_shortcut_guide(cx);
+                    return;
+                }
                 self.open_keybinds(window, cx);
                 return;
             }

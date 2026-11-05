@@ -150,6 +150,13 @@ fn rail_status_hint_is_translated_with_both_shortcut_styles() {
             "tab 2".into(),
             env!("HERDR_BUILD_BRANCH").to_owned(),
         ];
+        let snapshot = snapshot(1);
+        data.extend(
+            snapshot
+                .agents
+                .iter()
+                .map(|agent| crate::sidebar::agent_label(agent, &snapshot)),
+        );
         for style in [
             crate::config::ShortcutStyle::Ipad,
             crate::config::ShortcutStyle::HerdrPrefix,

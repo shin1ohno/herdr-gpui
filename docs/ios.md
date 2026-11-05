@@ -549,7 +549,9 @@ form: a 64 pt host row, 56 pt space rows, 44 pt agent rows and footer buttons;
 a 52 pt tab strip whose tabs carry a 40 pt close target that is always visible
 and, with a hardware keyboard, a shortcut hint; a 2 pt frame around the focused
 pane on Herdr 2 (Herdr 1 draws its own borders into the cells); and a 44 pt
-status bar with the host, a keyboard button, and a legend of four shortcuts.
+status bar with the host, a keyboard button, and a Shortcuts button.
+The Spaces heading/search stays above the host list, including when no hosts
+are visible. Hosts retain their configured order and spaces stay under their host.
 Hover-only controls have a touch replacement, and the activity bar is off by
 default on iOS. On a Nord theme the iPad accent is the theme's nord8.
 
@@ -603,8 +605,8 @@ with a sample of each; the resolved prefix key and where it comes from ("From
 the host's Herdr config" when a server profile is in use, otherwise "Herdr's
 default"); a switch for using the server's keybindings, which is also in the
 device menu and is disabled for local and cloud devices; and a table of the
-shortcuts for the selected style. The status bar's legend opens this page. The
-`shortcut_style` setting is stored at the top level of the config file.
+shortcuts for the selected style. The shortcut guide's Keyboard settings
+button opens this page. The `shortcut_style` setting is stored at the top level of the config file.
 
 In the iPad shortcut style the Herdr prefix is not armed: the prefix key
 reaches the terminal as an ordinary key, and prefixed custom commands cannot be
@@ -612,6 +614,19 @@ reached until the style is switched to "Herdr prefix". With the Herdr prefix
 style, a prefix chord pressed while Settings is open as a sheet first saves
 and closes the sheet, then runs once; a chord that arrives while that save is
 still finishing is ignored.
+
+The status bar's Shortcuts button opens a transient, touchable guide above
+it. Tabs, panes, and navigation are grouped, with keys read from the active
+resolved keymap and selected style; disconnected hosts omit terminal actions.
+In Herdr prefix style, typing the prefix or opening the guide arms the next
+key, and the guide shows the prefix once in its header and only the next key
+on each row. In iPad style, opening the guide leaves ordinary typing and IME
+input with the terminal. A row runs the existing command; Escape, an outside
+tap, or another keystroke dismisses the guide. `run keybindings` opens
+the same guide on iPad; desktop keeps its shortcut reference. The guide's
+All shortcuts link retains that full reference, including operations beyond
+the guide's common actions. The transient guide lists up to 32 host commands;
+the full reference retains the whole list.
 
 ## Remaining platform work
 

@@ -231,6 +231,7 @@ for what only Herdr UI shows or keeps.
 
 | To | Run |
 | --- | --- |
+| Show the interactive iPad shortcut guide (desktop: shortcut reference) | `herdr-gpui run keybindings` |
 | Show a file at a line, read-only | `herdr-gpui code open src/main.rs:42` |
 | Open the review of your uncommitted changes | `herdr-gpui review` |
 | Open px0 to browse, edit, or review your local checkout (macOS/Windows) | `herdr-gpui px0 open` |

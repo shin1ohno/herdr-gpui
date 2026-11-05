@@ -1,0 +1,9 @@
+shortcut-guide-next = Press the next key
+shortcut-guide-tabs = Tabs
+shortcut-guide-panes = Panes
+shortcut-guide-navigation = Navigate & configure
+shortcut-guide-close = Close shortcut guide
+shortcut-guide-dismiss = Tap an action · Esc or tap outside to close
+shortcut-guide-settings = Keyboard settings →
+shortcut-guide-custom = Host commands
+shortcut-guide-reference = All shortcuts

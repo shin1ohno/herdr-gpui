@@ -150,3 +150,5 @@ fn profile_slot_bounds_and_context_menu_do_not_start_auth(cx: &mut TestAppContex
         })
     });
 }
+
+mod ipad_accounts;

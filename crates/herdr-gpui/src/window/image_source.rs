@@ -23,7 +23,7 @@ const MAX_READ_DURATION: Duration = Duration::from_secs(3);
 /// Source acquisition cap, shared with native clipboard readers. Only encoded
 /// inputs up to 128 MiB may enter the background resize fallback.
 pub(super) const MAX_IMAGE_INPUT_BYTES: usize = 128 * 1024 * 1024;
-const MAX_DECODE_PIXELS: u64 = 64 * 1024 * 1024;
+pub(super) const MAX_DECODE_PIXELS: u64 = 64 * 1024 * 1024;
 const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;
 
 pub(crate) struct PreparedImage {

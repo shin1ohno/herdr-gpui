@@ -7,7 +7,7 @@ use crate::{
     i18n::fl,
     ipad_ui::metrics::{MENU_RADIUS, MENU_ROW, MENU_WIDTH, RAIL_DOT},
     navigation::OwnedNavigationTarget,
-    sidebar::{agent_name, workspace_label},
+    sidebar::{agent_label, workspace_label},
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
@@ -169,7 +169,9 @@ impl HerdrWindow {
                 };
                 (
                     Some(agent.workspace_id.clone()),
-                    agent_name(agent).to_owned(),
+                    snapshot
+                        .map(|snapshot| agent_label(agent, snapshot))
+                        .unwrap_or_default(),
                     agent.agent_status,
                 )
             }

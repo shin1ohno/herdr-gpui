@@ -6,6 +6,7 @@ pub(crate) struct IpadState {
     // keep-sorted start
     pub(crate) compact_font: Option<f32>,
     pub(crate) font_update_pending: bool,
+    pub(crate) guide: super::shortcut_guide::Guide,
     pub(crate) keyboard: KeyboardState,
     pub(crate) latch: crate::ipad_keys::Latch,
     pub(crate) more_keys: crate::motion::Toggle,

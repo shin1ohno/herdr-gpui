@@ -1009,6 +1009,9 @@ independent of a native terminal theme override, drawn with the set picked on
 **Settings > Appearance > Indicators** and saved as `status_icons` in
 `config-gpui.local.toml`. This app draws only its own sets and ignores Herdr's
 `ui.status_indicators`, which the TUI keeps for itself; unset means **Dots**.
+Agent labels and their Rename/title fallbacks are specified in
+[Agent labels](../../docs/agent-labels.md).
+
 The page shows each set as a card previewing all five statuses with the
 sidebar's own marks:
 
