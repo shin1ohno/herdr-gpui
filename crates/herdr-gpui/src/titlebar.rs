@@ -330,7 +330,7 @@ impl HerdrWindow {
             .items_center()
             .children(self.render_git_button(cx))
             .children(self.remote_indicator(cx))
-            .child(
+            .children((!crate::ipad_ui::layout()).then(|| {
                 div()
                     .debug_selector(|| "titlebar-account-slot".into())
                     .row()
@@ -421,8 +421,8 @@ impl HerdrWindow {
                                         .bg(rgb(self.theme.ink(self.theme.palette[1]))),
                                 )
                             }),
-                    ),
-            )
+                    )
+            }))
             // The in-window menu bar carries the window controls instead.
             .when(!crate::menus::IN_WINDOW, |end| {
                 end.children(controls(false, window, &self.theme, |window, _| {

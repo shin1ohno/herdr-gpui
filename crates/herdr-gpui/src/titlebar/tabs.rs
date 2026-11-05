@@ -246,7 +246,7 @@ impl HerdrWindow {
     pub(crate) fn strip_trailing(&self, window: &Window, cx: &mut Context<Self>) -> Div {
         self.titlebar_end(window, cx)
             .debug_selector(|| "strip-titlebar-trailing".into())
-            .pl(px(4.))
+            .when(!crate::ipad_ui::layout(), |end| end.pl(px(4.)))
     }
 
     /// The room after a strip's tabs: it moves the window when the strip
