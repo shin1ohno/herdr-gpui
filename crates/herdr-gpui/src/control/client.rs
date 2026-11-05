@@ -1,6 +1,7 @@
 //! The caller's side: build a request from the command line, send it to
 //! the running app (or read the app's files), and print the answer as text
 //! or, with `--json`, as one JSON document.
+mod agents;
 mod app;
 mod browser;
 mod chat;
@@ -442,6 +443,7 @@ pub(crate) fn run(invocation: Invocation) -> ExitCode {
         ControlCommand::Devices => tabs::devices(&context),
         ControlCommand::Orchestrator(command) => tabs::orchestrator(command, &context),
         ControlCommand::Review => tabs::review(&context),
+        ControlCommand::Agent { pane, pinned } => agents::agent(pane, pinned, &context),
         ControlCommand::Chat(command) => chat::chat(command, &context),
         ControlCommand::Px0 => tabs::px0(&context),
         ControlCommand::Notes(command) => work::notes(command, &context),

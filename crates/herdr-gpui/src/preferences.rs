@@ -1,3 +1,4 @@
+pub(crate) mod pins;
 use crate::{HerdrWindow, config::Config};
 use chrono::{DateTime, Utc};
 use gpui::*;
@@ -125,6 +126,7 @@ pub struct Chrome {
     /// The sort the user picked with the panel toggle, like upstream's
     /// `agent_panel_sort` preference. `None` follows the daemon's config.
     pub agent_sort: Option<AgentSort>,
+    pub(crate) agent_pins: pins::AgentPins,
     /// The notes panel's width, once dragged; `None` is its default.
     pub notes_width: Option<f32>,
     /// The mod panel's width, once dragged.
@@ -293,6 +295,7 @@ fn read_chrome(path: &Path) -> crate::Result<Chrome> {
         sidebar_width,
         sidebar_split,
         agent_sort,
+        agent_pins: pins::AgentPins::read(object.get("agent_pins")),
         notes_width: panel_width("notes_width_px"),
         mod_panel_width: panel_width("mod_panel_width_px"),
         review_files_width: panel_width("review_files_width_px"),
@@ -375,6 +378,7 @@ fn write_chrome(path: &Path, chrome: Chrome) -> crate::Result<()> {
                     split.is_finite() && (0.1..=0.9).contains(split)
                 }),
                 "agent_sort_manual": chrome.agent_sort.map(|sort| sort.to_string()),
+                "agent_pins": chrome.agent_pins,
                 "notes_width_px": chrome.notes_width.filter(|width| width.is_finite() && *width > 0.0),
                 "mod_panel_width_px": chrome
                     .mod_panel_width

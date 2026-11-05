@@ -455,7 +455,18 @@ impl HerdrWindow {
                         icon_path,
                     ))
             };
+            let pinned = self.agent_pin_rank(index, &id).is_some();
             let marks = div()
+                .relative()
+                .when(pinned, |marks| {
+                    marks.child(
+                        div()
+                            .absolute()
+                            .top(px(-2.))
+                            .inset_e(px(0.))
+                            .child(crate::icons::icon("icons/pin.svg", 10., theme.foreground)),
+                    )
+                })
                 .row()
                 .items_center()
                 .gap(px(columns.gap))

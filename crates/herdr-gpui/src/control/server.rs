@@ -2,6 +2,7 @@
 //! thread, a few at a time, from the windows and the app's globals. Most are
 //! answered at once; a request that waits for something (notes, an event, a
 //! page) is parked as a [`Watch`] and checked on every tick.
+mod agents;
 mod app;
 mod browser;
 mod chat;
@@ -245,6 +246,7 @@ fn named_window(request: &Request) -> Option<u64> {
         Request::Settings(call) => call.caller.window,
         Request::Events(call) => call.caller.window,
         Request::Link(call) => call.caller.window,
+        Request::Agent(call) => call.caller.window,
         Request::Chat(call) => call.caller.window,
         Request::Cloud(call) => call.caller.window,
         Request::Remote(call) => call.caller.window,
@@ -294,6 +296,7 @@ fn serve(incoming: socket::Incoming, state: &mut State, cx: &mut App) {
         Request::Settings(call) => settings::serve(call, incoming, &mut state.watches, cx),
         Request::Events(call) => events::serve(call, incoming, &mut state.watches, cx),
         Request::Link(call) => incoming.respond(links::serve(call, cx)),
+        Request::Agent(call) => incoming.respond(agents::serve(call, cx)),
         Request::Chat(call) => incoming.respond(chat::serve(call, cx)),
         Request::Cloud(call) => cloud::serve(call, incoming, &mut state.watches, cx),
         Request::Remote(call) => remote::serve(call, incoming, &mut state.watches, cx),

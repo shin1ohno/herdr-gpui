@@ -1123,6 +1123,15 @@ order then follows Herdr's `ui.agent_panel_sort` (`priority` or `grouped`)
 unless it was toggled earlier or a plugin sets the agent view, which keeps the
 header shown while that view is active.
 
+Right-click an Agent (long-press on iPad) and choose **Pin Agent** to keep
+it above the regular Agents list, newest pin first. The pin icon marks it;
+**Unpin Agent** returns it to the existing grouped or priority order. The
+collapsed rail uses the same pin order. Pins survive app restarts in the
+existing local UI state file and follow the host, daemon boot, and pane,
+so renaming does not change them. Disconnecting preserves pins; a connected
+snapshot retires a closed pane's pin. Restarting the daemon does not carry
+pins to newly allocated panes. Nested workspace lists keep their placement.
+
 Agents list in their own section below Spaces by default. Set top-level
 `agents_placement = "nested"`, or pick **Under workspaces** for **Agents
 placement** in **Settings > Sidebar**, to list each agent under the workspace
