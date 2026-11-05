@@ -787,6 +787,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         sidebar_split_modified: false,
         sidebar_preferences: None,
         sidebar_modified: false,
+        agent_pins: Default::default(),
+        agent_pins_modified: false,
         agent_sort: Default::default(),
         agent_sort_modified: false,
         avatars: None,

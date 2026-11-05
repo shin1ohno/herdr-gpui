@@ -182,6 +182,12 @@ impl HerdrWindow {
                     continue;
                 };
                 let name = agent_label(agent, snapshot);
+                let pinned = self.agent_pin_rank(index, &agent.pane_id).is_some();
+                let spoken = if pinned {
+                    crate::i18n::fl!("pane-menu-pinned-name", name = name.clone())
+                } else {
+                    name.clone()
+                };
                 let endpoint_id = endpoint.id.clone();
                 let pane = agent.pane_id.clone();
                 let key = format!("rail-agent-{endpoint_id}-{pane}");
@@ -193,7 +199,7 @@ impl HerdrWindow {
                         index == self.selected_endpoint && agent.focused,
                         theme,
                     )
-                    .aria_label(name.clone())
+                    .aria_label(spoken)
                     .child(
                         div()
                             .relative()
@@ -203,6 +209,11 @@ impl HerdrWindow {
                             .child(
                                 crate::icons::of_agent(agent).element(RAIL_ICON, theme.subtext()),
                             )
+                            .when(pinned, |icon| {
+                                icon.child(div().absolute().top(px(-3.)).inset_s(px(-4.)).child(
+                                    crate::icons::icon("icons/pin.svg", 12., theme.foreground),
+                                ))
+                            })
                             .child(
                                 div()
                                     .absolute()

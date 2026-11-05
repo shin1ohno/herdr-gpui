@@ -331,6 +331,7 @@ embedded_icons! {
     "pass.svg",
     "pencil.svg",
     "phone.svg",
+    "pin.svg",
     "play.svg",
     "plug.svg",
     "plus.svg",

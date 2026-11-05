@@ -54,7 +54,69 @@ impl HerdrWindow {
     /// The agents the panel paints, by host index, in its order. Painting
     /// and stepping both read it, so a shortcut lands on the row below.
     pub(super) fn panel_agents(&self) -> Vec<(usize, &ClientShellAgent)> {
-        panel_agents(self.listed_lives(), self.agent_sort)
+        let mut rows = panel_agents(self.listed_lives(), self.agent_sort);
+        rows.sort_by_key(|(index, agent)| {
+            self.agent_pin_rank(*index, &agent.pane_id)
+                .unwrap_or(usize::MAX)
+        });
+        rows
+    }
+
+    pub(crate) fn agent_pin_rank(&self, index: usize, pane: &str) -> Option<usize> {
+        let endpoint = self.endpoints.get(index)?;
+        let live = if index == self.selected_endpoint {
+            &self.live
+        } else {
+            &endpoint.live
+        };
+        self.agent_pins
+            .rank(&endpoint.id, &live.snapshot.as_ref()?.boot_id, pane)
+    }
+
+    /// All pin entry points use the selected host's current agent identity.
+    pub(crate) fn set_agent_pin(&mut self, pane: &str, pinned: bool) -> crate::Result<()> {
+        if !self.live.status.is_connected() {
+            return Err(crate::Error::ConnectionNotReady);
+        }
+        let snapshot = self
+            .live
+            .snapshot
+            .as_ref()
+            .ok_or(crate::Error::NotConnected)?;
+        if !snapshot.agents.iter().any(|agent| agent.pane_id == pane) {
+            return Err(crate::Error::StalePane);
+        }
+        if self.agent_pin_rank(self.selected_endpoint, pane).is_some() != pinned {
+            let endpoint = &self.endpoints[self.selected_endpoint].id;
+            self.agent_pins
+                .toggle(crate::preferences::pins::AgentPin::new(
+                    endpoint,
+                    &snapshot.boot_id,
+                    pane,
+                ));
+            self.agent_pins_modified = true;
+            self.save_chrome();
+        }
+        Ok(())
+    }
+
+    pub(crate) fn reconcile_agent_pins(&mut self) {
+        let mut changed = false;
+        for (index, endpoint) in self.endpoints.iter().enumerate() {
+            let live = if index == self.selected_endpoint {
+                &self.live
+            } else {
+                &endpoint.live
+            };
+            if live.status.is_connected()
+                && let Some(snapshot) = live.snapshot.as_deref()
+            {
+                changed |= self.agent_pins.reconcile(&endpoint.id, snapshot);
+            }
+        }
+        if changed {
+            self.save_chrome();
+        }
     }
 
     /// The agent panel's rows, whether or not the panel is shown, as Herdr

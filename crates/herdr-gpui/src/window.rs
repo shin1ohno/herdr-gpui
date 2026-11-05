@@ -123,6 +123,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) active: bool,
     /// The activity bar's panel and filter.
     pub(crate) activity: sidebar::Activity,
+    pub(crate) agent_pins: preferences::pins::AgentPins,
+    pub(crate) agent_pins_modified: bool,
     pub(crate) agent_sort: preferences::AgentSort,
     /// Whether the user chose the sort with the panel toggle, now or in a
     /// stored session. Until then the daemon's `ui.agent_panel_sort` decides,
@@ -549,6 +551,9 @@ impl HerdrWindow {
             self.agent_sort = sort;
             self.agent_sort_modified = true;
         }
+        if !self.agent_pins_modified {
+            self.agent_pins = chrome.agent_pins;
+        }
         // Saved once the whole chrome is merged, so the save keeps it all.
         if resave {
             self.save_chrome();
@@ -592,6 +597,7 @@ impl HerdrWindow {
         };
         let old_tab = focused_tab(&self.live);
         self.poll_endpoints(cx);
+        self.reconcile_agent_pins();
         if self
             .icon_font_notice
             .observe(self.config.icon_font_missing, self.live.surface.as_deref())

@@ -1,6 +1,7 @@
 use super::*;
 use control::BrowserCommand;
 
+mod agent_pins;
 mod automation;
 mod browser_zoom;
 mod chat;

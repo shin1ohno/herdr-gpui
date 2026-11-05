@@ -8,6 +8,8 @@ use core::prelude::v1::test;
 use gpui::{prelude::*, *};
 use std::sync::Arc;
 
+mod pins;
+
 struct MenuSurface(Entity<HerdrWindow>);
 impl Render for MenuSurface {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

@@ -49,6 +49,7 @@ impl HerdrWindow {
                 sidebar_width: self.sidebar_width,
                 sidebar_split: self.sidebar_split,
                 agent_sort: self.agent_sort_modified.then_some(self.agent_sort),
+                agent_pins: self.agent_pins.clone(),
                 notes_width: self.notes_width.chosen(),
                 mod_panel_width: self.mod_panel_width.chosen(),
                 review_files_width: self.review_files_width.chosen(),

@@ -1,6 +1,7 @@
 //! The agents list: every listed host's agents in the panel's one order, so a
 //! blocked agent on one host can sit above an idle one on another.
 
+use crate::direction::Logical;
 use crate::menu::{ContextMenuEvent, context_menu};
 use crate::{
     HerdrWindow, NavigationTarget,
@@ -138,6 +139,7 @@ impl HerdrWindow {
         let place = (!nested).then(|| agent_place(agent, snapshot)).flatten();
         let status = status_text(agent.agent_status);
         let state = state_label(agent, &status);
+        let pinned = self.agent_pin_rank(index, &id).is_some();
         let spoken = crate::sidebar::accessibility::agent_name(
             &name,
             pane.as_deref(),
@@ -145,6 +147,11 @@ impl HerdrWindow {
             place,
             row_cx.host,
         );
+        let spoken = if pinned {
+            crate::i18n::fl!("pane-menu-pinned-name", name = spoken)
+        } else {
+            spoken
+        };
         Cell::new(
             rows,
             RowData::Agent(AgentRow {
@@ -168,6 +175,20 @@ impl HerdrWindow {
         .selected(selected && agent.focused)
         .highlighted(menu_open)
         .row()
+        .when(pinned, |row| {
+            row.relative().pr(px(20.)).child(
+                div()
+                    .absolute()
+                    .inset_e(px(4.))
+                    .top(px(4.))
+                    .debug_selector(|| format!("agent-pin-{endpoint_id}-{id}"))
+                    .child(crate::icons::icon(
+                        "icons/pin.svg",
+                        12.,
+                        self.theme.foreground,
+                    )),
+            )
+        })
         .when(gap > 0., |row| row.mt(px(gap)))
         .id(SharedString::from(format!("agent-{endpoint_id}-{id}")))
         .role(Role::ListItem)

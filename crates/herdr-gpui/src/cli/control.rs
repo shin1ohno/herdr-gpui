@@ -66,6 +66,10 @@ pub enum ControlCommand {
     Devices,
     Orchestrator(OrchestratorCommand),
     Review,
+    Agent {
+        pane: String,
+        pinned: bool,
+    },
     Chat(ChatCommand),
     Px0,
     Notes(NotesCommand),
@@ -163,6 +167,7 @@ pub const FAMILIES: &[(&str, &str)] = &[
         "code",
         "Show a file in a code tab or open it in your editor",
     ),
+    ("agent", "Pin or unpin an Agent row in this window"),
     ("devices", "Open the Devices overview"),
     (
         "orchestrator",
@@ -342,6 +347,18 @@ fn command(family: &'static str, args: &mut Args) -> Result<ControlCommand, CliE
         "review" => {
             tabs::open_only(args)?;
             ControlCommand::Review
+        }
+        "agent" => {
+            let verb = args.verb().ok_or(CliError::InvalidValue("pin or unpin"))?;
+            let pinned = match verb.to_str() {
+                Some("pin") => true,
+                Some("unpin") => false,
+                _ => return Err(unknown("agent", verb)),
+            };
+            let pane = args
+                .text_option("--pane")?
+                .ok_or(CliError::InvalidValue("--pane"))?;
+            ControlCommand::Agent { pane, pinned }
         }
         "chat" => ControlCommand::Chat(chat::chat(args)?),
         "px0" => {
