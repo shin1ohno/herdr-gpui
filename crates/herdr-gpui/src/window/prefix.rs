@@ -62,6 +62,16 @@ impl HerdrWindow {
     }
 
     fn prefix_keystroke(&mut self, typed: &Typed<'_>, window: &mut Window, cx: &mut Context<Self>) {
+        if crate::ipad_ui::layout() && self.ipad.guide.manual {
+            self.ipad.guide.manual = false;
+            if typed.keystroke().key == "escape" {
+                self.prefix_armed = false;
+                cx.stop_propagation();
+                cx.notify();
+                return;
+            }
+            cx.notify();
+        }
         if self.prefix_armed && !self.uses_prefix() {
             self.prefix_armed = false;
             cx.notify();
@@ -216,6 +226,7 @@ impl HerdrWindow {
     /// Leaving the window abandons a half-typed chord, as the TUI's prefix
     /// mode does not outlive its client, and ends resize mode.
     pub(super) fn disarm_prefix(&mut self) {
+        self.ipad.guide.manual = false;
         self.prefix_armed = false;
         self.resize_mode = false;
     }

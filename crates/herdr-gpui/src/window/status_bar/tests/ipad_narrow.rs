@@ -2,7 +2,6 @@
 use super::*;
 use crate::{
     config::ShortcutStyle,
-    controls::Command,
     sidebar::layout_tests::{fixture_window, full_draw},
 };
 use core::prelude::v1::test;
@@ -74,7 +73,7 @@ fn ipad_narrow_status_host_keeps_its_floor(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn ipad_narrow_status_legend_keeps_whole_leading_pairs(cx: &mut TestAppContext) {
+fn ipad_narrow_shortcut_button_stays_inside_status_bar(cx: &mut TestAppContext) {
     let _ipad = crate::ipad_ui::ipad_layout();
     let (view, cx) = cx.add_window_view(fixture);
     for style in [ShortcutStyle::Ipad, ShortcutStyle::HerdrPrefix] {
@@ -82,20 +81,6 @@ fn ipad_narrow_status_legend_keeps_whole_leading_pairs(cx: &mut TestAppContext) 
             view.config.shortcut_style = style;
             cx.notify();
         });
-        let actions = match style {
-            ShortcutStyle::Ipad => [
-                Command::Tab,
-                Command::SplitRight,
-                Command::ToggleSidebar,
-                Command::Palette,
-            ],
-            ShortcutStyle::HerdrPrefix => [
-                Command::Tab,
-                Command::SplitRight,
-                Command::ClosePane,
-                Command::Keybinds,
-            ],
-        };
         for &width in WIDTHS {
             view.update(cx, |view, cx| {
                 view.ipad.keyboard = Default::default();
@@ -112,32 +97,10 @@ fn ipad_narrow_status_legend_keeps_whole_leading_pairs(cx: &mut TestAppContext) 
                 let keyboard = cx.debug_bounds("status-keyboard").unwrap();
                 assert_eq!(keyboard.size, size(px(44.), px(44.)));
                 assert!(inside(keyboard, bar), "{width}: keyboard outside {bar:?}");
-                let mut hidden = false;
-                let mut visible = 0;
-                for command in actions {
-                    let selector: &str = format!("ipad-legend-{command:?}").leak();
-                    let pair = cx.debug_bounds(selector).unwrap();
-                    if inside(pair, legend) && inside(pair, bar) {
-                        assert!(
-                            !hidden,
-                            "{style:?} {width}: {selector} follows a hidden pair"
-                        );
-                        visible += 1;
-                    } else {
-                        assert!(
-                            pair.top() >= bar.bottom(),
-                            "{style:?} window {width}: {selector} {pair:?} clipped by legend {legend:?}, bar {bar:?}"
-                        );
-                        hidden = true;
-                    }
-                }
-                if width == 1194. {
-                    assert_eq!(visible, actions.len(), "{style:?}: wide legend lost pairs");
-                    // The legend is as wide as its pairs: no trailing room
-                    // pushes it away from the keyboard button.
-                    let last: &str = format!("ipad-legend-{:?}", actions[3]).leak();
-                    assert_eq!(cx.debug_bounds(last).unwrap().right(), legend.right());
-                }
+                assert!(
+                    inside(legend, bar),
+                    "{width}: shortcut button outside {bar:?}"
+                );
             }
         }
     }

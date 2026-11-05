@@ -76,13 +76,11 @@ fn ipad_status_excludes_desktop_items_but_keeps_prefix_and_error(cx: &mut TestAp
     }
     let legend = cx.debug_bounds("status-keybinds").unwrap();
     cx.simulate_click(legend.center(), Modifiers::default());
-    view.read_with(cx, |view, _| {
-        assert_eq!(view.menu.page, Some(crate::menu::Page::Settings))
-    });
+    view.read_with(cx, |view, _| assert!(view.menu.page.is_none()));
 }
 
 #[gpui::test]
-fn ipad_legend_uses_the_selected_style_and_keyboard_stays_reachable(cx: &mut TestAppContext) {
+fn ipad_shortcut_and_keyboard_buttons_stay_reachable_in_both_styles(cx: &mut TestAppContext) {
     let _ipad = crate::ipad_ui::ipad_layout();
     let (view, cx) = cx.add_window_view(fixture_window);
     for style in [ShortcutStyle::Ipad, ShortcutStyle::HerdrPrefix] {
@@ -108,14 +106,6 @@ fn ipad_legend_uses_the_selected_style_and_keyboard_stays_reachable(cx: &mut Tes
                 "{width}: {keyboard:?} inside {bar:?}"
             );
             assert!(cx.debug_bounds("status-keybinds").is_some());
-            assert_eq!(
-                cx.debug_bounds("ipad-legend-ToggleSidebar").is_some(),
-                style == ShortcutStyle::Ipad
-            );
-            assert_eq!(
-                cx.debug_bounds("ipad-legend-ClosePane").is_some(),
-                style == ShortcutStyle::HerdrPrefix
-            );
         }
     }
 }

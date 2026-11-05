@@ -48,6 +48,7 @@ mod report_issue;
 mod select_hint;
 mod selection;
 mod server_keys;
+mod shortcut_guide;
 mod shortcut_hint;
 mod sound;
 mod status_bar;

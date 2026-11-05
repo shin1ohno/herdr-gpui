@@ -1,7 +1,6 @@
 //! iPad connection context and a legend drawn from the resolved shortcut style.
 use super::*;
 use crate::{
-    config::ShortcutStyle,
     controls::Command,
     fonts::StyledFont,
     ipad_ui::{kbd, metrics::TOUCH},
@@ -144,20 +143,6 @@ impl HerdrWindow {
     }
 
     fn ipad_legend(&self, cx: &mut Context<Self>) -> Stateful<Div> {
-        let actions = match self.config.shortcut_style {
-            ShortcutStyle::Ipad => [
-                (Command::Tab, fl!("ipad-chrome-legend-tab")),
-                (Command::SplitRight, fl!("ipad-chrome-legend-split")),
-                (Command::ToggleSidebar, fl!("ipad-chrome-legend-sidebar")),
-                (Command::Palette, fl!("ipad-chrome-legend-commands")),
-            ],
-            ShortcutStyle::HerdrPrefix => [
-                (Command::Tab, fl!("ipad-chrome-legend-tab")),
-                (Command::SplitRight, fl!("ipad-chrome-legend-split")),
-                (Command::ClosePane, fl!("ipad-chrome-legend-close-pane")),
-                (Command::Keybinds, fl!("ipad-chrome-legend-help")),
-            ],
-        };
         self.chrome_stop(
             crate::window::chrome_focus::Region::StatusBar,
             div()
@@ -167,47 +152,16 @@ impl HerdrWindow {
                 .aria_label(fl!("status-bar-shortcuts")),
         )
         .flex()
-        .flex_wrap()
-        .content_start()
         .items_center()
+        .gap(px(8.))
         .h_full()
+        .px(px(12.))
         .min_w_0()
-        .flex_shrink_1()
         .overflow_hidden()
-        .whitespace_nowrap()
         .cursor_pointer()
-        // An oversized first pair must wrap too, so an empty item holds the
-        // full-height first line. Pairs space themselves with a leading
-        // margin rather than a gap: a gap after the empty item, or a negative
-        // margin cancelling it, would widen the legend's intrinsic width.
-        .child(div().w(px(0.)).h(px(STATUS_BAR)).flex_none())
-        .children(
-            actions
-                .into_iter()
-                .enumerate()
-                .map(|(index, (command, label))| {
-                    div()
-                        .debug_selector(move || format!("ipad-legend-{command:?}"))
-                        .when(index > 0, |pair| pair.ml(px(12.)))
-                        .h(px(STATUS_BAR))
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .gap(px(5.))
-                        .children(self.shortcut_hint(command).map(|hint| {
-                            kbd(hint, &self.theme, &self.config.ui)
-                                .debug_selector(move || format!("ipad-legend-shortcut-{command:?}"))
-                        }))
-                        .child(label)
-                }),
-        )
-        .on_click(cx.listener(|_, _, _, cx| {
-            crate::settings_window::open_at(
-                cx.weak_entity(),
-                Some(crate::settings_window::Section::Keyboard),
-                cx,
-            )
-        }))
+        .child(glyph("icons/keyboard.svg", self.theme.foreground))
+        .child(div().truncate().child(fl!("status-bar-shortcuts")))
+        .on_click(cx.listener(|this, _, _, cx| this.toggle_shortcut_guide(cx)))
     }
 
     pub(super) fn ipad_keyboard_button(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {

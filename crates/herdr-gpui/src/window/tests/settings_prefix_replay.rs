@@ -60,38 +60,24 @@ fn dirty_sheet_replays_the_chord_once_after_saving_and_returning_focus(cx: &mut 
 }
 
 #[gpui::test]
-fn clean_sheet_replays_help_into_the_existing_keybinds_page(cx: &mut TestAppContext) {
+fn clean_sheet_replays_help_into_the_shortcut_guide(cx: &mut TestAppContext) {
     let _ipad = crate::ipad_ui::ipad_layout();
     let (view, fixture, cx) = open(cx, false);
     cx.update(|window, cx| chord(window, cx, "?"));
     cx.run_until_parked();
-    view.read_with(cx, |view, cx| {
-        assert_eq!(view.menu.page, Some(Page::Keybinds));
+    view.read_with(cx, |view, _| {
+        assert!(view.menu.page.is_none());
         assert!(view.menu.settings.is_none());
         assert!(view.menu.settings_prefix.is_none());
-        assert!(
-            view.menu
-                .keybinds_search
-                .as_ref()
-                .unwrap()
-                .read(cx)
-                .text()
-                .is_empty()
-        );
+        assert!(view.prefix_armed);
+        assert!(view.ipad.guide.manual);
     });
     assert!(fixture.writes.lock().unwrap().is_empty());
     cx.update(|window, cx| {
-        assert!(
-            view.read(cx)
-                .menu
-                .keybinds_search
-                .as_ref()
-                .unwrap()
-                .read(cx)
-                .focus
-                .is_focused(window)
-        );
+        window.draw(cx).clear(cx);
+        assert!(view.read(cx).focus.is_focused(window));
     });
+    assert!(cx.debug_bounds("shortcut-guide").is_some());
 }
 
 #[gpui::test]

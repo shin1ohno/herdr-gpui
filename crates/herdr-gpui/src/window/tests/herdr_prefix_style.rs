@@ -24,7 +24,7 @@ fn screen(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {
 }
 
 #[test]
-fn screen_08_renders_the_herdr_tab_chip_legend_and_sidebar_hint() {
+fn screen_08_renders_the_herdr_tab_chip_guide_and_sidebar_hint() {
     under_en_xa("screen 08 Herdr prefix", |cx, recorder| {
         let _ipad = crate::ipad_ui::ipad_layout();
         english(cx);
@@ -36,42 +36,19 @@ fn screen_08_renders_the_herdr_tab_chip_legend_and_sidebar_hint() {
         assert!(cx.debug_bounds("tab-shortcut-t0").is_some());
         let seen = recorder.take();
         assert!(seen.iter().any(|line| line == "⌃B 1"), "{seen:?}");
-        let pairs = [
-            (Command::Tab, "Tab"),
-            (Command::SplitRight, "Split"),
-            (Command::ClosePane, "Close pane"),
-            (Command::Keybinds, "Help"),
-        ];
-        let legend = view.read_with(cx, |view, _| {
-            pairs
-                .map(|(command, label)| {
-                    let hint = view.shortcut_hint(command).unwrap();
-                    assert!(seen.contains(&hint), "missing rendered {hint}: {seen:?}");
-                    assert!(
-                        seen.iter().any(|line| line == label),
-                        "missing {label}: {seen:?}"
-                    );
-                    format!("{hint} {label}")
-                })
-                .join(" · ")
+        assert!(seen.iter().any(|line| line == "Shortcuts"), "{seen:?}");
+        assert!(cx.debug_bounds("status-keybinds").is_some());
+        view.update_in(cx, |view, window, cx| {
+            view.command(Command::Keybinds, window, cx)
         });
-        assert_eq!(
-            legend,
-            "⌃B c Tab · ⌃B v Split · ⌃B x Close pane · ⌃B ? Help"
-        );
-        let mut right = px(0.);
-        for selector in [
-            "ipad-legend-Tab",
-            "ipad-legend-SplitRight",
-            "ipad-legend-ClosePane",
-            "ipad-legend-Keybinds",
-        ] {
-            let pair = cx.debug_bounds(selector).unwrap();
-            assert!(pair.left() >= right);
-            right = pair.right();
+        draw(cx);
+        assert!(cx.debug_bounds("shortcut-guide").is_some());
+        let guide = recorder.take();
+        for key in ["⌃B", "w", "b", "s"] {
+            assert!(guide.iter().any(|line| line == key), "{guide:?}");
         }
-        assert!(cx.debug_bounds("ipad-legend-ToggleSidebar").is_none());
         view.update(cx, |view, cx| {
+            view.disarm_prefix();
             view.sidebar_visible = false;
             cx.notify();
         });

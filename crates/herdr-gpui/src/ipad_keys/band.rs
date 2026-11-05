@@ -28,6 +28,7 @@ impl HerdrWindow {
             layers.push(self.ipad_key_band(window, cx).into_any_element());
         }
         layers.extend(self.ipad_sidebar_overlay(window, cx));
+        layers.extend(self.render_shortcut_guide(window, cx));
         layers
     }
 

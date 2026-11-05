@@ -17,7 +17,7 @@ impl Render for Chrome {
 }
 
 #[test]
-fn ipad_chrome_translates_both_legends_and_hardware_prose() {
+fn ipad_chrome_translates_shortcut_button_and_hardware_prose() {
     under_en_xa("iPad chrome", |cx, recorder| {
         let _ipad = crate::ipad_ui::ipad_layout();
         let (surface, cx) = cx.add_window_view(|window, cx| {
@@ -55,14 +55,7 @@ fn ipad_chrome_translates_both_legends_and_hardware_prose() {
             draw(cx);
             seen.extend(recorder.take());
             assert!(cx.debug_bounds("ipad-status-hardware").is_some());
-            assert_eq!(
-                cx.debug_bounds("ipad-legend-ToggleSidebar").is_some(),
-                style == ShortcutStyle::Ipad
-            );
-            assert_eq!(
-                cx.debug_bounds("ipad-legend-ClosePane").is_some(),
-                style == ShortcutStyle::HerdrPrefix
-            );
+            assert!(cx.debug_bounds("status-keybinds").is_some());
             assert_translated("iPad status chrome", &uncut(seen.clone()), &data);
         }
     });
