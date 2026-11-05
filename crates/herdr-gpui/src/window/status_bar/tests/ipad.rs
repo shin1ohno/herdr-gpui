@@ -11,14 +11,6 @@ fn draw(cx: &mut VisualTestContext) {
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
 }
 
-struct KeyboardButton(Entity<HerdrWindow>);
-
-impl Render for KeyboardButton {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div().children(self.0.update(cx, |view, cx| view.ipad_keyboard_button(cx)))
-    }
-}
-
 #[gpui::test]
 fn ipad_status_geometry_and_hardware_evidence(cx: &mut TestAppContext) {
     let _ipad = crate::ipad_ui::ipad_layout();
@@ -29,10 +21,7 @@ fn ipad_status_geometry_and_hardware_evidence(cx: &mut TestAppContext) {
         cx.debug_bounds("connection-status").unwrap().size.height,
         px(44.)
     );
-    assert_eq!(
-        cx.debug_bounds("status-keyboard").unwrap().size,
-        size(px(44.), px(44.))
-    );
+    assert!(cx.debug_bounds("status-keyboard").is_none());
     assert!(cx.debug_bounds("ipad-status-host").is_some());
     assert!(cx.debug_bounds("ipad-status-hardware").is_none());
     cx.simulate_keystrokes("escape");
@@ -80,7 +69,7 @@ fn ipad_status_excludes_desktop_items_but_keeps_prefix_and_error(cx: &mut TestAp
 }
 
 #[gpui::test]
-fn ipad_shortcut_and_keyboard_buttons_stay_reachable_in_both_styles(cx: &mut TestAppContext) {
+fn ipad_shortcuts_stay_reachable_in_both_styles(cx: &mut TestAppContext) {
     let _ipad = crate::ipad_ui::ipad_layout();
     let (view, cx) = cx.add_window_view(fixture_window);
     for style in [ShortcutStyle::Ipad, ShortcutStyle::HerdrPrefix] {
@@ -93,32 +82,22 @@ fn ipad_shortcut_and_keyboard_buttons_stay_reachable_in_both_styles(cx: &mut Tes
             };
             assert!(view.shortcut_hint(command).is_some());
             view.endpoints[0].label =
-                "a very long host label that must yield to the keyboard button".into();
+                "a very long host label that must yield to the shortcut guide".into();
             cx.notify();
         });
         for width in [1194., 500., 320.] {
             cx.simulate_resize(size(px(width), px(834.)));
             draw(cx);
             let bar = cx.debug_bounds("connection-status").unwrap();
-            let keyboard = cx.debug_bounds("status-keyboard").unwrap();
+            let shortcuts = cx.debug_bounds("status-keybinds").unwrap();
             assert!(
-                keyboard.left() >= bar.left() && keyboard.right() <= bar.right(),
-                "{width}: {keyboard:?} inside {bar:?}"
+                shortcuts.left() >= bar.left() && shortcuts.right() <= bar.right(),
+                "{width}: {shortcuts:?} inside {bar:?}"
             );
+            assert!(cx.debug_bounds("status-keyboard").is_none());
             assert!(cx.debug_bounds("status-keybinds").is_some());
         }
     }
-}
-
-#[gpui::test]
-fn keyboard_button_is_a_behavior_gate_not_a_layout_gate(cx: &mut TestAppContext) {
-    let (_, cx) =
-        cx.add_window_view(|window, cx| KeyboardButton(cx.new(|cx| fixture_window(window, cx))));
-    draw(cx);
-    assert!(cx.debug_bounds("status-keyboard").is_some());
-    let _desktop = crate::ipad_ui::desktop();
-    draw(cx);
-    assert!(cx.debug_bounds("status-keyboard").is_none());
 }
 
 #[gpui::test]

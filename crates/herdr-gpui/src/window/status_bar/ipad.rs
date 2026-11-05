@@ -99,7 +99,6 @@ impl HerdrWindow {
             )
             .child(self.ipad_legend(cx))
             .children(self.ipad_rail_hint(cx))
-            .children(self.ipad_keyboard_button(cx))
     }
 
     fn ipad_rail_hint(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
@@ -162,36 +161,6 @@ impl HerdrWindow {
         .child(glyph("icons/keyboard.svg", self.theme.foreground))
         .child(div().truncate().child(fl!("status-bar-shortcuts")))
         .on_click(cx.listener(|this, _, _, cx| this.toggle_shortcut_guide(cx)))
-    }
-
-    pub(super) fn ipad_keyboard_button(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
-        crate::ipad_ui::active().then(|| {
-            self.chrome_stop(
-                crate::window::chrome_focus::Region::StatusBar,
-                div()
-                    .id("status-keyboard")
-                    .debug_selector(|| "status-keyboard".into())
-                    .role(Role::Button)
-                    .aria_label(fl!("ipad-chrome-status-show-keyboard")),
-            )
-            .size(px(if crate::ipad_ui::layout() {
-                TOUCH
-            } else {
-                STATUS_GLYPH
-            }))
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_center()
-            .cursor_pointer()
-            .child(glyph("icons/keyboard.svg", self.theme.foreground))
-            .on_click(cx.listener(|this, _, window, cx| {
-                if !this.request_core_terminal_keyboard(window, cx) {
-                    window.focus(&this.focus, cx);
-                    this.request_terminal_keyboard(window);
-                }
-            }))
-        })
     }
 }
 

@@ -12,6 +12,10 @@ mod ipad_narrow;
 #[path = "status_bar/tests/ipad.rs"]
 mod ipad_tests;
 
+#[cfg(test)]
+#[path = "status_bar/tests/keyboard_removal.rs"]
+mod keyboard_removal;
+
 use super::HerdrWindow;
 use crate::direction::Logical;
 use crate::i18n::{Localize, fl};

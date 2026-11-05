@@ -155,34 +155,3 @@ fn desktop_core_panes_gain_no_ipad_frame(cx: &mut TestAppContext) {
         .is_none()
     );
 }
-
-#[gpui::test]
-fn keyboard_action_focuses_the_shown_core_pane_without_focusing_herdr_1(cx: &mut TestAppContext) {
-    let _ipad = crate::ipad_ui::ipad_layout();
-    let (surface, cx) = fixture(cx);
-    let (view, tab) = surface.read_with(cx, |surface, _| (surface.view.clone(), surface.tab.id));
-    view.update_in(cx, |view, window, cx| {
-        let snapshot = serde_json::from_str(include_str!(
-            "../../../../herdr-protocol/tests/fixtures/endpoint-snapshot-v1.json"
-        ))
-        .unwrap();
-        view.live.snapshot = Some(std::sync::Arc::new(snapshot));
-        let layout = view.ensure_layout().unwrap();
-        let group = layout.active();
-        layout.show(group, crate::browser::Pick::Page(tab));
-        window.focus(&view.focus, cx);
-        assert!(view.request_core_terminal_keyboard(window, cx));
-        let terminal = view.core_terminals.tabs.get(&tab).unwrap().active.clone();
-        let core = view.core_terminals.views.get(&(tab, terminal)).unwrap();
-        assert!(core.read(cx).focus_handle().is_focused(window));
-        assert!(!view.focus.is_focused(window));
-        // A Core page waiting for its view is still Core's input destination.
-        view.core_terminals.views.clear();
-        window.focus(&view.focus, cx);
-        assert!(view.request_core_terminal_keyboard(window, cx));
-        view.ensure_layout()
-            .unwrap()
-            .show(group, crate::browser::Pick::Herdr("w1:t1".into()));
-        assert!(!view.request_core_terminal_keyboard(window, cx));
-    });
-}

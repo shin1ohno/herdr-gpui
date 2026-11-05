@@ -41,53 +41,6 @@ pub(crate) struct SplitDrag {
 }
 
 impl HerdrWindow {
-    /// A Core pane owns its own input handler and focus; the Herdr 1 surface
-    /// behind its page must never receive the keyboard button's focus.
-    pub(crate) fn request_core_terminal_keyboard(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let page = self
-            .active_group()
-            .and_then(|group| match self.group_shown(group, cx) {
-                crate::browser::Shown::Page(id) => Some(id),
-                _ => None,
-            });
-        if page.is_some_and(|id| {
-            !cx.try_global::<Store>()
-                .and_then(|store| store.get(id))
-                .is_some_and(|tab| {
-                    matches!(
-                        tab.location,
-                        Some(crate::browser::Location::CoreTerminal { .. })
-                    )
-                })
-        }) {
-            return false;
-        }
-        let view = page
-            .and_then(|id| self.core_pane_view(id))
-            .cloned()
-            .or_else(|| {
-                self.core_terminals
-                    .shown()
-                    .find(|view| view.read(cx).focus_handle().is_focused(window))
-                    .cloned()
-            });
-        let Some(view) = view else {
-            return page.is_some();
-        };
-        let focus = view.read(cx).focus_handle().clone();
-        window.focus(&focus, cx);
-        view.update(cx, |view, cx| {
-            if view.accepts_text_input(window, cx) {
-                window.request_virtual_keyboard();
-            }
-        });
-        true
-    }
-
     pub(crate) fn render_core_terminal_tab(
         &mut self,
         _slot: Slot,

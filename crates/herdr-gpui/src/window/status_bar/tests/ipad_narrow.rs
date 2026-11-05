@@ -94,9 +94,7 @@ fn ipad_narrow_shortcut_button_stays_inside_status_bar(cx: &mut TestAppContext) 
                 draw(cx);
                 let bar = cx.debug_bounds("connection-status").unwrap();
                 let legend = cx.debug_bounds("status-keybinds").unwrap();
-                let keyboard = cx.debug_bounds("status-keyboard").unwrap();
-                assert_eq!(keyboard.size, size(px(44.), px(44.)));
-                assert!(inside(keyboard, bar), "{width}: keyboard outside {bar:?}");
+                assert!(cx.debug_bounds("status-keyboard").is_none());
                 assert!(
                     inside(legend, bar),
                     "{width}: shortcut button outside {bar:?}"
