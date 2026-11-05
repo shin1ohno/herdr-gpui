@@ -178,6 +178,14 @@ fn row_menu_header_and_actions_are_translated() {
     under_en_xa("rail row menu", |cx, recorder| {
         let _ipad = crate::ipad_ui::ipad_layout();
         let (view, cx) = fixture(cx);
+        let snapshot = snapshot(2);
+        let mut data = vec!["Local".into(), "herdr".into()];
+        data.extend(
+            snapshot
+                .agents
+                .iter()
+                .map(|agent| crate::sidebar::agent_label(agent, &snapshot)),
+        );
         let mut seen = Vec::new();
         for target in [
             None,
@@ -186,11 +194,7 @@ fn row_menu_header_and_actions_are_translated() {
         ] {
             open(&view, cx, target);
             seen.extend(recorder.take());
-            assert_translated(
-                "rail row menu",
-                &uncut(seen.clone()),
-                &["Local".into(), "herdr".into(), "Claude Code".into()],
-            );
+            assert_translated("rail row menu", &uncut(seen.clone()), &data);
         }
     });
 }

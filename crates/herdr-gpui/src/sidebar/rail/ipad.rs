@@ -156,6 +156,15 @@ impl HerdrWindow {
                 if multi && endpoint.collapsed {
                     continue;
                 }
+                let live = if index == self.selected_endpoint {
+                    &self.live
+                } else {
+                    &endpoint.live
+                };
+                let Some(snapshot) = live.snapshot.as_deref() else {
+                    continue;
+                };
+                let name = agent_label(agent, snapshot);
                 let endpoint_id = endpoint.id.clone();
                 let pane = agent.pane_id.clone();
                 let key = format!("rail-agent-{endpoint_id}-{pane}");
@@ -167,7 +176,7 @@ impl HerdrWindow {
                         index == self.selected_endpoint && agent.focused,
                         theme,
                     )
-                    .aria_label(agent_name(agent).to_owned())
+                    .aria_label(name.clone())
                     .child(
                         div()
                             .relative()
@@ -195,7 +204,7 @@ impl HerdrWindow {
                                     ),
                             ),
                     )
-                    .child(label(format!("rail-label-{key}"), agent_name(agent)))
+                    .child(label(format!("rail-label-{key}"), &name))
                     .map(|row| {
                         context_menu(
                             row,
@@ -323,7 +332,7 @@ fn label(id: String, text: &str) -> Div {
         .text_size(px(RAIL_LABEL))
         .text_center()
         .truncate()
-        .child(text.to_owned())
+        .child(label_text(text))
 }
 
 fn badge(id: String, count: usize, theme: &Theme) -> Stateful<Div> {

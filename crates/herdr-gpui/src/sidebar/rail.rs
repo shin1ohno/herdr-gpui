@@ -14,7 +14,7 @@ mod marks;
 use marks::*;
 
 use super::{
-    agent_name,
+    agent_label,
     agents::{Indicators, agent_place, state_label, status_indicator, status_text},
     cell::RowState,
     glyph_width, label_text,
@@ -496,7 +496,7 @@ impl HerdrWindow {
                 .cursor_pointer()
                 .tooltip(hint.with(describe(
                     host,
-                    agent_name(agent),
+                    &agent_label(agent, snapshot),
                     place.as_deref(),
                     agent_status_word(agent).as_deref(),
                 )))

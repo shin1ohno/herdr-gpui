@@ -8,6 +8,7 @@ fn agent_icons_follow_names_and_reserve_narrow_label_width(cx: &mut gpui::TestAp
         let mut view = fixture_window(window, cx);
         let mut snapshot = snapshot(6);
         for agent in &mut snapshot.agents {
+            agent.name = Some(label.into());
             agent.display_agent = Some(label.into());
         }
         snapshot.agents[1].workspace_id = "missing-workspace".into();
@@ -366,7 +367,7 @@ fn hiding_agents_reclaims_sidebar_height(cx: &mut gpui::TestAppContext) {
             });
             cx.update(|_, cx| {
                 assert_eq!(
-                    cx.global::<TextProbes>().0.contains_key("Claude Code"),
+                    cx.global::<TextProbes>().0.contains_key("review"),
                     show_agents
                 );
             });
@@ -403,6 +404,7 @@ fn hiding_agents_preserves_scrolled_multi_endpoint_lists(cx: &mut gpui::TestAppC
         );
         remote.live.snapshot = view.live.snapshot.clone();
         for agent in &mut Arc::make_mut(remote.live.snapshot.as_mut().unwrap()).agents {
+            agent.name = Some("Remote Agent".into());
             agent.display_agent = Some("Remote Agent".into());
         }
         view.endpoints.push(remote);
@@ -428,7 +430,7 @@ fn hiding_agents_preserves_scrolled_multi_endpoint_lists(cx: &mut gpui::TestAppC
                 cx.default_global::<TextProbes>().0.clear();
                 window.refresh();
                 full_draw(window, cx).clear(cx);
-                for label in ["Claude Code", "Remote Agent"] {
+                for label in ["review", "Remote Agent"] {
                     assert_eq!(
                         cx.global::<TextProbes>().0.contains_key(label),
                         show_agents,

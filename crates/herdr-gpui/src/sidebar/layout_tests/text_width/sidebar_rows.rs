@@ -22,7 +22,7 @@ pub(super) fn check_text_allocation(cx: &mut gpui::VisualTestContext) {
         }
         // Each part of an agent's line is painted on its own, so the tab can
         // stay muted beside its workspace.
-        for input in ["herdr", "main", "tab 1", "Claude Code"] {
+        for input in ["herdr", "main", "tab 1", "review"] {
             let (bounds, rendered, _) = &cx.global::<TextProbes>().0[input];
             assert_eq!(
                 rendered, input,

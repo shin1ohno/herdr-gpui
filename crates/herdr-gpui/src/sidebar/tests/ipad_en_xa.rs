@@ -59,7 +59,7 @@ fn ipad_sidebar_prose_is_translated_and_names_are_data() {
             "local".into(),
             "herdr".into(),
             "main".into(),
-            "Claude Code".into(),
+            "review".into(),
         ];
         assert_translated("iPad sidebar", &uncut(seen.clone()), &data);
         let view = surface.read_with(cx, |surface, _| surface.0.clone());

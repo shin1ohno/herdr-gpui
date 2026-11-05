@@ -5,6 +5,7 @@ use gpui::TestAppContext;
 use herdr_client::protocol::ClientShellCommand;
 
 mod agent_filter;
+mod agent_labels;
 mod background_ranking;
 mod en_xa;
 mod frecency_ranking;
@@ -327,7 +328,7 @@ fn go_to_lists_every_pane_under_its_workspace() {
             ),
             // The fixture's agent labels its blocked state "waiting".
             (
-                "Claude · shell",
+                "shell",
                 "repo  main  /repo",
                 "waiting",
                 NavigationTarget::Pane("w1:p1".into())
@@ -394,16 +395,14 @@ fn go_to_names_remote_hosts_and_hides_a_lone_default_tab() {
         &entry.action,
         Action::Go { endpoint, .. } if endpoint == "ssh:box"
     )));
-    let mut matching = entries
-        .iter()
-        .filter(|entry| {
-            matches_query(
-                &format!("{} {} {}", entry.label, entry.detail, entry.badge),
-                "box claude",
-            )
-        })
-        .map(|entry| entry.label.as_ref());
-    assert_eq!(matching.next(), Some("Claude · shell"));
+    let hits = search::rank(
+        &entries,
+        0..entries.len(),
+        &search::Query::parse("box claude"),
+        &mut search::matcher(),
+    );
+    let mut matching = hits.iter().map(|hit| entries[hit.index].label.as_ref());
+    assert_eq!(matching.next(), Some("shell"));
     assert_eq!(matching.next(), None);
 }
 

@@ -128,7 +128,7 @@ fn sidebar_split_preserves_independent_scrolling_and_agents_toggle(cx: &mut gpui
             window.refresh();
             full_draw(window, cx).clear(cx);
             assert_eq!(
-                cx.global::<TextProbes>().0.contains_key("Claude Code"),
+                cx.global::<TextProbes>().0.contains_key("review"),
                 show_agents
             );
         });

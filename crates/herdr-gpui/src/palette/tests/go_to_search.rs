@@ -79,11 +79,11 @@ fn go_to_titles_agents_with_the_pane_name_the_sidebar_shows() {
     };
     assert_eq!(
         agent_row_title(Some("shop-cash-eng question"), Some("Review")).as_deref(),
-        Some("Claude · shop-cash-eng question")
+        Some("shop-cash-eng question")
     );
     assert_eq!(
         agent_row_title(None, Some("Review")).as_deref(),
-        Some("Claude · Review")
+        Some("Review")
     );
-    assert_eq!(agent_row_title(None, None).as_deref(), Some("Claude"));
+    assert_eq!(agent_row_title(None, None).as_deref(), Some("reviewer"));
 }

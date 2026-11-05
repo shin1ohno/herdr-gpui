@@ -118,11 +118,11 @@ impl CloseConfirmation {
         match busy.as_slice() {
             [] => None,
             [agent] => {
-                let name = crate::sidebar::agent_name(agent);
+                let name = crate::sidebar::agent_label(agent, snapshot);
                 Some(if agent.agent_status == AgentStatus::Blocked {
-                    fl!("close-modal-agent-waiting", agent = name)
+                    fl!("close-modal-agent-waiting", agent = name.as_str())
                 } else {
-                    fl!("close-modal-agent-working", agent = name)
+                    fl!("close-modal-agent-working", agent = name.as_str())
                 })
             }
             agents => Some(fl!("close-modal-agents-busy", count = agents.len())),

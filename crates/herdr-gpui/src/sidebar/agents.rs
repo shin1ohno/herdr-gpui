@@ -155,9 +155,8 @@ pub(super) fn panel_agents<'a>(
         .collect()
 }
 
-/// What an agent is called wherever it is listed. The fallback, for an
-/// agent that reports no name at all, is the daemon's identity word and
-/// stays English while other areas borrow the name as `&str`.
+/// The legacy identity caption used by configured tokens and existing API
+/// projections. Sidebar presentation uses `agent_label` with its snapshot.
 pub(crate) fn agent_name(agent: &ClientShellAgent) -> &str {
     // i18n: data
     first_text(agent_names(agent), "agent")
@@ -184,7 +183,11 @@ pub(crate) fn pane_name(
     let renamed = snapshot
         .panes
         .iter()
-        .find(|pane| pane.pane_id == agent.pane_id)
+        .find(|pane| {
+            pane.pane_id == agent.pane_id
+                && pane.tab_id == agent.tab_id
+                && pane.workspace_id == agent.workspace_id
+        })
         .and_then(|pane| safe_caption(pane.label.as_deref()));
     renamed
         .or_else(|| safe_caption(agent.title.as_deref()))
@@ -195,7 +198,7 @@ pub(crate) fn pane_name(
 /// a runaway title from being scanned and laid out in full.
 pub(super) const PANE_CAPTION_LIMIT: usize = 160;
 
-fn safe_caption(text: Option<&str>) -> Option<String> {
+pub(super) fn safe_caption(text: Option<&str>) -> Option<String> {
     let text =
         crate::notifications::safe_text(herdr_client::text::caption(text?)?, PANE_CAPTION_LIMIT);
     let text = text.trim();

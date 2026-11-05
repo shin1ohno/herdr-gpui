@@ -18,7 +18,7 @@ fn hiding_the_agents_header_keeps_the_list_and_drops_the_sort(cx: &mut gpui::Tes
         assert_eq!(cx.debug_bounds("agents-sort").is_some(), show_header);
         assert!(cx.debug_bounds("agents-section").is_some());
         cx.update(|_, cx| {
-            assert!(cx.global::<TextProbes>().0.contains_key("Claude Code"));
+            assert!(cx.global::<TextProbes>().0.contains_key("review"));
         });
     }
 }

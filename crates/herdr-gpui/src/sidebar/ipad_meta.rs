@@ -5,7 +5,7 @@ use crate::{
     i18n::fl,
     icons::AgentIcon,
     sidebar::{
-        agent_name,
+        agent_label,
         agents::{state_label, status_priority, status_text},
     },
 };
@@ -105,7 +105,7 @@ pub(in crate::sidebar) fn space_meta(
         needs_you,
         lead: lead_agent(snapshot, &workspace.workspace_id).map(|agent| Lead {
             icon: crate::icons::of_agent(agent),
-            name: text(agent_name(agent)).unwrap_or_default(),
+            name: agent_label(agent, snapshot),
             state: state_label(agent, &status_text(agent.agent_status)).into_owned(),
         }),
         branch: workspace.branch.as_deref().and_then(text),
