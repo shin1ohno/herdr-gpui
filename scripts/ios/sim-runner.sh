@@ -27,10 +27,16 @@ udid=$(ios_sim_boot "$HERDR_IOS_SIMULATOR")
 
 # simctl hands the process only SIMCTL_CHILD_-prefixed variables: forward what
 # the test harness and Cargo-built tests read.
+child_environment=()
 while IFS= read -r variable; do
   case "$variable" in
-    RUST_* | CARGO_* | HERDR_TEST_*) export "SIMCTL_CHILD_$variable=${!variable}" ;;
+    RUST_* | CARGO_* | HERDR_TEST_*) child_environment+=("SIMCTL_CHILD_$variable=${!variable}") ;;
   esac
 done < <(compgen -e)
 
-exec xcrun simctl spawn "$udid" "$binary" "$@"
+# Cargo binary names can contain hyphens: valid OS environment names but not
+# shell identifiers. env preserves those names and literal values without eval.
+if [[ ${binary##*/} == ios_clipboard-* ]]; then
+  exec /usr/bin/env "${child_environment[@]}" bash "$(dirname "${BASH_SOURCE[0]}")/clipboard-test-runner.sh" "$udid" "$binary" "$@"
+fi
+exec /usr/bin/env "${child_environment[@]}" xcrun simctl spawn "$udid" "$binary" "$@"

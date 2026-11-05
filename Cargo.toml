@@ -101,7 +101,7 @@ herdr-remote         = { default-features = false, path = "crates/herdr-remote" 
 herdr-remote-control         = { default-features = false, path = "crates/herdr-remote-control" }
 herdr-ssh            = { path = "crates/herdr-ssh" }
 herdr-terminal       = { path = "crates/herdr-terminal" }
-herdr-uikit          = { git = "https://github.com/shin1ohno/herdr-uikit", rev = "d92c542f7ccab81c2b2b726ff96b9e0313c69d38" }
+herdr-uikit          = { git = "https://github.com/shin1ohno/herdr-uikit", rev = "2ff3bccd4609e665af89b1b444c95452de5e1b78" }
 herdr-updater        = { path = "crates/herdr-updater" }
 herdr-usage          = { path = "crates/herdr-usage" }
 herdr-vcs            = { path = "crates/herdr-vcs" }

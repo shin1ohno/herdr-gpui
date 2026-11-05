@@ -294,7 +294,11 @@ impl HerdrWindow {
         self.start_image_preparation(
             target,
             PreparationKind::Image,
-            move || Prepared::image(source.prepare(), fallback),
+            move || {
+                move |_: &herdr_client::ClipboardImageUpload| {
+                    Prepared::image(source.prepare(), fallback)
+                }
+            },
             cx,
         )
     }
@@ -309,66 +313,73 @@ impl HerdrWindow {
             return Delivery::Queued;
         };
         let bridge_paths = self.accepts_remote_images();
-        // GPUI's native reader copies and hashes whole images synchronously.
-        // UIKit requires main-thread pasteboard access. Capture its owned item
-        // here, then decode and prepare it in the same ordered worker slot.
+        // Desktop acquisition runs on the worker. UIKit captures only metadata
+        // on the UI thread after reservation; its payload loads asynchronously
+        // while the same ordered worker slot waits and prepares the result.
         #[cfg(not(target_os = "ios"))]
         let read = super::clipboard::read;
         #[cfg(test)]
         let item: crate::Result<_> = Ok(cx.read_from_clipboard());
-        #[cfg(all(not(test), target_os = "ios"))]
-        let item = super::clipboard::read(image_only);
         #[cfg(all(test, not(target_os = "ios")))]
         let _ = read;
         self.start_image_preparation(
             target,
             PreparationKind::Input,
             move || {
-                #[cfg(not(any(test, target_os = "ios")))]
-                let item = read(image_only)?;
-                #[cfg(any(test, target_os = "ios"))]
-                let item = item?;
-                let Some(item) = item else {
-                    return Ok(fallback.map_or(Prepared::Empty, Prepared::Input));
-                };
-                if !image_only && let Some(paths) = external_paths(&item) {
-                    // A local pane keeps the paste in this reserved slot, as an
-                    // image when it is a temporary drag item the pane cannot
-                    // open, so input typed meanwhile still follows it. A remote
-                    // pane needs the drop's image bridge or file copy.
-                    if !bridge_paths && let Ok(text) = super::file_drop::quote_paths(&paths) {
-                        if let Some(source) = image_source::temporary_drag_image(&paths) {
+                #[cfg(all(not(test), target_os = "ios"))]
+                let item = super::clipboard::read(image_only);
+                move |_upload: &herdr_client::ClipboardImageUpload| {
+                    #[cfg(not(any(test, target_os = "ios")))]
+                    let item = read(image_only)?;
+                    #[cfg(test)]
+                    let item = item?;
+                    #[cfg(all(not(test), target_os = "ios"))]
+                    let item = item?.wait(|| _upload.is_cancelled())?;
+                    let Some(item) = item else {
+                        return Ok(fallback.map_or(Prepared::Empty, Prepared::Input));
+                    };
+                    if !image_only && let Some(paths) = external_paths(&item) {
+                        // A local pane keeps the paste in this reserved slot, as an
+                        // image when it is a temporary drag item the pane cannot
+                        // open, so input typed meanwhile still follows it. A remote
+                        // pane needs the drop's image bridge or file copy.
+                        if !bridge_paths && let Ok(text) = super::file_drop::quote_paths(&paths) {
+                            if let Some(source) = image_source::temporary_drag_image(&paths) {
+                                return Prepared::image(source.prepare(), Some(text));
+                            }
+                            return Ok(Prepared::Input(ClientPaneInputEvent::Paste(text)));
+                        }
+                        return Ok(Prepared::Files(paths));
+                    }
+                    if !image_only && let Some(text) = item.text().filter(|text| !text.is_empty()) {
+                        if bridge_paths && let Some(source) = image_source::from_paste(&text) {
                             return Prepared::image(source.prepare(), Some(text));
                         }
                         return Ok(Prepared::Input(ClientPaneInputEvent::Paste(text)));
                     }
-                    return Ok(Prepared::Files(paths));
-                }
-                if !image_only && let Some(text) = item.text().filter(|text| !text.is_empty()) {
-                    if bridge_paths && let Some(source) = image_source::from_paste(&text) {
-                        return Prepared::image(source.prepare(), Some(text));
+                    if let Some(image) = item.into_entries().find_map(|entry| match entry {
+                        ClipboardEntry::Image(image) => Some(image),
+                        _ => None,
+                    }) {
+                        return Source::Clipboard(image).prepare().map(Prepared::Image);
                     }
-                    return Ok(Prepared::Input(ClientPaneInputEvent::Paste(text)));
+                    Ok(fallback.map_or(Prepared::Empty, Prepared::Input))
                 }
-                if let Some(image) = item.into_entries().find_map(|entry| match entry {
-                    ClipboardEntry::Image(image) => Some(image),
-                    _ => None,
-                }) {
-                    return Source::Clipboard(image).prepare().map(Prepared::Image);
-                }
-                Ok(fallback.map_or(Prepared::Empty, Prepared::Input))
             },
             cx,
         )
     }
 
-    fn start_image_preparation(
+    fn start_image_preparation<F>(
         &mut self,
         target: InputTarget,
         kind: PreparationKind,
-        prepare: impl FnOnce() -> crate::Result<Prepared> + Send + 'static,
+        begin: impl FnOnce() -> F,
         cx: &mut Context<Self>,
-    ) -> Delivery {
+    ) -> Delivery
+    where
+        F: FnOnce(&herdr_client::ClipboardImageUpload) -> crate::Result<Prepared> + Send + 'static,
+    {
         // Callers choose clipboard or remote eligibility. Unsupported platforms
         // still report the client's typed reservation error below.
         if let Some(refused) = self.refuse_paste(cx) {
@@ -380,7 +391,7 @@ impl HerdrWindow {
         // Keep a cancelled preparation until it actually exits. Reconnecting or
         // repeated drops cannot build up background readers holding large images.
         self.cancel_stale_image();
-        if self.pending_images.len() >= 4
+        if self.pending_images.len() >= super::clipboard::MAX_ACQUISITIONS
             || (kind == PreparationKind::Image
                 && self
                     .pending_images
@@ -419,6 +430,9 @@ impl HerdrWindow {
         let endpoint = endpoint.id.clone();
         let generation = self.endpoints[self.selected_endpoint].generation;
         let boot = snapshot.boot_id.clone();
+        // Native metadata and preparation begin only after the FIFO slot was
+        // accepted. Refused/busy pastes never initiate a native payload load.
+        let prepare = begin();
         let executor = cx.background_executor().clone();
         let prepare = executor.spawn(async move {
             let result = if upload.is_cancelled() {
@@ -426,7 +440,7 @@ impl HerdrWindow {
                     herdr_client::clipboard::Error::Cancelled,
                 )))
             } else {
-                prepare()
+                prepare(&upload)
             };
             (upload, result)
         });

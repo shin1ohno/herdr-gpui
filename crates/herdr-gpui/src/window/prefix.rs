@@ -62,12 +62,28 @@ impl HerdrWindow {
     }
 
     fn prefix_keystroke(&mut self, typed: &Typed<'_>, window: &mut Window, cx: &mut Context<Self>) {
+        if cfg!(target_os = "ios")
+            && typed.keystroke().key == "escape"
+            && std::env::var_os("HERDR_IOS_ESCAPE_DIAGNOSTICS").is_some()
+        {
+            tracing::debug!(
+                manual = self.ipad.guide.manual,
+                prefix_armed = self.prefix_armed,
+                composing = !self.marked.is_empty(),
+                "iPad Escape reached GPUI interceptor"
+            );
+        }
         if crate::ipad_ui::layout() && self.ipad.guide.manual {
             self.ipad.guide.manual = false;
             if typed.keystroke().key == "escape" {
                 self.prefix_armed = false;
                 cx.stop_propagation();
                 cx.notify();
+                if cfg!(target_os = "ios")
+                    && std::env::var_os("HERDR_IOS_ESCAPE_DIAGNOSTICS").is_some()
+                {
+                    tracing::debug!("iPad Escape dismissed shortcut guide");
+                }
                 return;
             }
             cx.notify();

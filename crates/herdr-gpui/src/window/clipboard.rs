@@ -3,6 +3,9 @@
 
 mod error;
 
+/// FIFO preparations and outstanding native callbacks share this ceiling.
+pub(super) const MAX_ACQUISITIONS: usize = 4;
+
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -20,9 +23,9 @@ mod acquire;
 ))]
 use acquire::read_with;
 
-#[cfg(target_os = "ios")]
+#[cfg(all(target_os = "ios", not(test)))]
 mod ios;
-#[cfg(target_os = "ios")]
+#[cfg(all(target_os = "ios", not(test)))]
 pub(super) use ios::read;
 
 pub(crate) use error::Error;
@@ -50,6 +53,8 @@ const TEXT_LIMIT: usize = 2 * 1024 * 1024;
     test
 ))]
 const IMAGE_LIMIT: usize = super::image_source::MAX_IMAGE_INPUT_BYTES;
+#[cfg(all(target_os = "ios", not(test)))]
+const IMAGE_PIXEL_LIMIT: u64 = super::image_source::MAX_DECODE_PIXELS;
 
 /// Blocking: invoke only on a background executor, never through an App context.
 /// Normal paste reads copied files first, then text, and never fetches an image

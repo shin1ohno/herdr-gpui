@@ -5,6 +5,7 @@ use std::io;
 
 mod en_xa;
 mod paste_errors;
+mod reservation;
 
 fn processing_errors() -> Vec<Error> {
     vec![

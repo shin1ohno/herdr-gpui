@@ -65,6 +65,14 @@ impl HerdrWindow {
             self.resize_mode = false;
         }
         self.prefix_armed = open && self.config.shortcut_style == ShortcutStyle::HerdrPrefix;
+        if cfg!(target_os = "ios") && std::env::var_os("HERDR_IOS_ESCAPE_DIAGNOSTICS").is_some() {
+            tracing::debug!(
+                open,
+                composing = !self.marked.is_empty(),
+                native_trace_enabled = tracing::enabled!(target: "herdr_uikit::window::text_input::keys", tracing::Level::DEBUG),
+                "iPad shortcut guide diagnostic"
+            );
+        }
         cx.notify();
     }
 
