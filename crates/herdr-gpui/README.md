@@ -1721,14 +1721,15 @@ around the window carries a shadow and the resize handles; edges the
 compositor tiles lose both, so a maximized window fills the screen. X11 and
 compositors with server-side decorations keep their native frame.
 
-Linked-worktree builds add a full-width, 22px amber banner below
-the macOS header (above the body on Linux), with the compile-time branch or short
-SHA and optional open PR number, clickable to open that PR on GitHub. The branch
+Debug linked-worktree builds add a full-width, 22px amber banner at the
+window’s foot, with the compile-time branch or short SHA and optional open PR number, clickable to open that PR on GitHub. The branch
 truncates while the PR stays visible. It participates in the root flex
 layout, so terminal painting,
 hit testing, resize, and IME geometry continue to use the actual canvas bounds.
 The banner does not query Git/GitHub or intercept keyboard focus. Main-checkout
-builds have no banner. Headless tests cover banner presence/absence, long branch
+and release builds have no banner. About retains the build identity in either
+profile; configuration and connection warnings are unaffected. Headless tests
+cover debug/release and worktree banner presence/absence, long branch
 labels, PR presence/absence, and body bounds at 360px, 640px, and 1200px widths.
 Build identity and icon selection are described in the
 [release notes](../../scripts/release/README.md#build-identity).

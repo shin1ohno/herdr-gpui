@@ -5,6 +5,18 @@ of GPUI's desktop ones and a network transport in place of the local daemon
 socket. This document is the design and the contract the parts are built
 against.
 
+## Bundled terminal icons
+
+The client bundle includes the Regular, Bold, Italic, and BoldItalic faces of
+SauceCodePro Nerd Font Mono. `scripts/ios/bundle.sh` copies them into `Fonts/`
+and registers them through `UIAppFonts` before the first scene. The existing
+font resolver can then add the family to its automatic icon fallback cascade;
+ASCII keeps its selected terminal face and CJK keeps its system fallback.
+An explicit `fallback = []` still opts out of the automatic icon cascade.
+No system-font installation or user-font entitlement is required. Platform
+examples do not carry the client's fonts. Licenses and binary hashes are in
+[`assets/fonts/SauceCodePro`](../assets/fonts/SauceCodePro/PROVENANCE.md).
+
 ## Shape
 
 - **Platform.** GPUI has no iOS platform, but `gpui::Application::with_platform`

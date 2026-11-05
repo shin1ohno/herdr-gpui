@@ -286,6 +286,17 @@ plutil -replace CFBundleIdentifier -string "$bundle_id" "$plist"
 plutil -replace CFBundleShortVersionString -string "$version" "$plist"
 plutil -replace CFBundleVersion -string "$version" "$plist"
 plutil -replace CFBundleSupportedPlatforms -json "[\"$platform\"]" "$plist"
+# App-local fonts do not require access to fonts installed by other apps.
+# UIAppFonts registers them before UIKit creates the first scene.
+if [[ $package == herdr-gpui && $kind == bin && $name == herdr-gpui ]]; then
+  font_source=assets/fonts/SauceCodePro
+  mkdir -p "$app/Fonts"
+  for face in Regular Bold Italic BoldItalic; do
+    cp "$font_source/SauceCodeProNerdFontMono-$face.ttf" "$app/Fonts/"
+  done
+  cp "$font_source/LICENSE.txt" "$font_source/README.md" "$font_source/PROVENANCE.md" "$font_source/NERD-FONTS-LICENSE.txt" "$app/Fonts/"
+  plutil -replace UIAppFonts -json '["Fonts/SauceCodeProNerdFontMono-Regular.ttf","Fonts/SauceCodeProNerdFontMono-Bold.ttf","Fonts/SauceCodeProNerdFontMono-Italic.ttf","Fonts/SauceCodeProNerdFontMono-BoldItalic.ttf"]' "$plist"
+fi
 plutil -lint "$plist" >&2
 if grep -q '\$(' "$plist"; then
   echo "error: $plist still has an unsubstituted \$(...) value" >&2

@@ -4,7 +4,7 @@
 use super::*;
 
 impl SettingsWindow {
-    pub(super) fn navigation(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+    pub(super) fn navigation(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
         use crate::panel_resize::{PanelDrag, Side, handle};
         let theme = &self.theme;
         div()
@@ -58,6 +58,7 @@ impl SettingsWindow {
             .child(
                 div()
                     .debug_selector(|| "settings-nav-search".into())
+                    .pl(crate::window::viewport::window_controls(window).left)
                     .mb(px(8.))
                     .child(self.nav_search.clone()),
             )

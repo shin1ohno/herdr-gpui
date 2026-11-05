@@ -1,5 +1,6 @@
 //! Native chrome and GitHub account access.
 // i18n: migrated
+mod chrome;
 mod decorations;
 mod navigation;
 mod status;
@@ -23,6 +24,22 @@ const AVATAR: f32 = 20.;
 const ATTENTION_DOT: f32 = 10.;
 
 const SIDEBAR_TOGGLE_SIZE: f32 = 28.;
+
+fn sidebar_toggle_size() -> f32 {
+    if crate::ipad_ui::layout() {
+        crate::ipad_ui::metrics::TOUCH
+    } else {
+        SIDEBAR_TOGGLE_SIZE
+    }
+}
+
+fn header_height() -> f32 {
+    if crate::ipad_ui::layout() {
+        crate::ipad_ui::metrics::TOUCH
+    } else {
+        HEIGHT
+    }
+}
 const SIDEBAR_GLYPH_WIDTH: f32 = 18.;
 /// Empty room between the toggle's edge and the glyph drawn inside it.
 const SIDEBAR_TOGGLE_INSET: f32 = (SIDEBAR_TOGGLE_SIZE - SIDEBAR_GLYPH_WIDTH) / 2.;
@@ -301,7 +318,7 @@ impl HerdrWindow {
             .map(|control| self.chrome_stop(crate::window::chrome_focus::Region::TitleBar, control))
             .flex_none()
             .self_center()
-            .size(px(SIDEBAR_TOGGLE_SIZE))
+            .size(px(sidebar_toggle_size()))
             .row()
             .items_center()
             .justify_center()
@@ -452,13 +469,13 @@ pub(super) fn render(
         .row()
         .flex_none()
         .w_full()
-        .h(px(HEIGHT))
+        .h(px(header_height()))
         .bg(background)
-        .when(rtl, |bar| bar.pl(px(LEADING)))
+        .when(rtl, |bar| bar.pl(px(chrome::leading(window))))
         .child(
             div()
                 .flex_none()
-                .w(px(if rtl { MARGIN } else { LEADING }))
+                .w(px(if rtl { MARGIN } else { chrome::leading(window) }))
                 .h_full(),
         )
         .children(leading);
