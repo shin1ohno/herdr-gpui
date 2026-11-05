@@ -65,9 +65,11 @@ impl SettingsWindow {
             .flatten()
             .copied()
             .filter(|index| {
-                catalog::CATALOG
-                    .get(*index)
-                    .is_some_and(|entry| self.available(entry.availability))
+                catalog::CATALOG.get(*index).is_some_and(|entry| {
+                    super::availability::section(entry.section)
+                        && super::availability::row(entry.id)
+                        && self.available(entry.availability)
+                })
             })
             .collect()
     }
@@ -114,6 +116,12 @@ impl SettingsWindow {
         let Some(entry) = catalog::CATALOG.get(index) else {
             return;
         };
+        if !super::availability::section(entry.section)
+            || !super::availability::row(entry.id)
+            || !self.available(entry.availability)
+        {
+            return;
+        }
         cx.default_global::<RowBounds>().0.clear();
         self.select_section(entry.section, window, cx);
         let id = entry.id;

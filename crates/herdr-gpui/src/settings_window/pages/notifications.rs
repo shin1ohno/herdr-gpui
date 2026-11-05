@@ -34,11 +34,13 @@ impl SettingsWindow {
         div()
             .flex()
             .flex_col()
-            .child(ui::section(
-                theme,
-                &fl!("settings-notifications-section-delivery"),
-                Some(ui::Source::Herdr),
-            ))
+            .when(!super::super::availability::ipad(), |page| {
+                page.child(ui::section(
+                    theme,
+                    &fl!("settings-notifications-section-delivery"),
+                    Some(ui::Source::Herdr),
+                ))
+            })
             .child(
                 self.gate_shared(
                     ui::row(theme, "notif-delivery", fl!("settings-notif-delivery"))

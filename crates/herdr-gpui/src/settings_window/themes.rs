@@ -196,6 +196,9 @@ impl ThemeBrowser {
     }
 
     fn source_enabled(&self, scope: Scope) -> bool {
+        if super::availability::ipad() && scope == Scope::Herdr {
+            return false;
+        }
         match scope {
             Scope::App => self.ghostty_enabled,
             Scope::Herdr => self.herdr_enabled,

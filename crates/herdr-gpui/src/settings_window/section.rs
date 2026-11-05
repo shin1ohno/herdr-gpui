@@ -76,17 +76,7 @@ impl Section {
                     (section == Self::Tabs && crate::ipad_ui::layout()).then_some(Self::Keyboard),
                 )
             })
-            .filter(|section| {
-                if !crate::ipad_ui::layout() {
-                    return true;
-                }
-                match section {
-                    Self::RemoteControl => false,
-                    #[cfg(feature = "cloud")]
-                    Self::CloudDevices => false,
-                    _ => true,
-                }
-            })
+            .filter(|section| super::availability::section(*section))
     }
 
     /// The section list's order: General first, outside every group, as the
@@ -206,10 +196,13 @@ impl Section {
     pub(super) fn nav_item(self) -> usize {
         let mut item = 0;
         for group in std::iter::once(None).chain(Group::ALL.map(Some)) {
-            if group.is_some() {
+            let mut sections = Self::shown()
+                .filter(|section| section.group() == group)
+                .peekable();
+            if group.is_some() && sections.peek().is_some() {
                 item += 1;
             }
-            for section in Self::shown().filter(|section| section.group() == group) {
+            for section in sections {
                 if section == self {
                     return item;
                 }

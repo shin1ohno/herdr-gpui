@@ -58,8 +58,34 @@ against.
 | Control socket CLI (`herdr-gpui COMMAND`) | No | No agents run on the iPad |
 | Saved sign-ins (`herdr-credentials`) | Keychain | A device-only Keychain backend; no plaintext file on iOS |
 
-A feature that is unavailable shows that it is unavailable on iPad. It never
-appears to work while doing nothing.
+Settings hides unavailable controls and pages, including search results, without
+removing their saved values. See the [Settings availability audit](ios-settings.md).
+Other unavailable operations never appear to succeed while doing nothing.
+
+## Clipboard images
+
+In a Herdr terminal pane, use ⌘V or the system Paste action to send a copied
+image to the connected computer. Control-V on a remote pane takes only an
+image and otherwise keeps its terminal key behavior. Images use the daemon's
+temporary-file bridge, so the path inserted into the terminal belongs to the
+computer running the pane. Normal paste prefers text when a copy offers both
+text and an image.
+
+UIKit clipboard access stays on the main thread. Image preparation and transfer
+run in the existing ordered background queue, with the same size limits and
+stale-target cancellation as desktop pastes. Image-only acquisition reads UIKit
+representations directly so a text representation cannot hide a copied image.
+
+The native clipboard regression uses a private UIKit pasteboard containing both
+text and PNG data, and runs on the simulator's main thread:
+
+```sh
+source scripts/ios/lib.sh
+ios_export_deployment_target
+CARGO_TARGET_AARCH64_APPLE_IOS_SIM_RUNNER="$PWD/scripts/ios/sim-runner.sh" \
+  cargo test --locked -p herdr-gpui --no-default-features \
+  --test ios_clipboard --target aarch64-apple-ios-sim
+```
 
 ## `herdr-uikit` modules
 

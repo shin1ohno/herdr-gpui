@@ -252,11 +252,13 @@ impl SettingsWindow {
                     cx,
                 )),
             )
-            .child(ui::section(
-                theme,
-                &fl!("settings-general-section-worktrees"),
-                None,
-            ))
+            .when(!super::super::availability::ipad(), |page| {
+                page.child(ui::section(
+                    theme,
+                    &fl!("settings-general-section-worktrees"),
+                    None,
+                ))
+            })
             .child(
                 ui::row(
                     theme,
@@ -271,11 +273,13 @@ impl SettingsWindow {
                     cx,
                 )),
             )
-            .child(ui::section(
-                theme,
-                &fl!("settings-general-section-browser-skill"),
-                None,
-            ))
+            .when(!super::super::availability::ipad(), |page| {
+                page.child(ui::section(
+                    theme,
+                    &fl!("settings-general-section-browser-skill"),
+                    None,
+                ))
+            })
             .child(
                 ui::row(
                     theme,
@@ -301,11 +305,13 @@ impl SettingsWindow {
                 ),
             )
             .children(self.startup_rows(cx))
-            .child(ui::section(
-                theme,
-                &fl!("settings-general-section-updates"),
-                None,
-            ))
+            .when(!super::super::availability::ipad(), |page| {
+                page.child(ui::section(
+                    theme,
+                    &fl!("settings-general-section-updates"),
+                    None,
+                ))
+            })
             .child(
                 ui::row(
                     theme,

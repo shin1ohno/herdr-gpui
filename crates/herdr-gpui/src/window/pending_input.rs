@@ -217,6 +217,7 @@ impl HerdrWindow {
     /// macOS and Linux use the bounded background reader. GPUI's synchronous
     /// Wayland reader can return a cached selection before its event loop has
     /// processed the new offer; a helper asks the compositor for a fresh one.
+    /// iPad captures UIKit's clipboard on the UI thread before worker preparation.
     fn replay_paste(
         &mut self,
         image_only: bool,
@@ -225,7 +226,11 @@ impl HerdrWindow {
     ) -> Delivery {
         if image_only {
             self.paste_native_clipboard(true, fallback, cx)
-        } else if cfg!(any(target_os = "macos", target_os = "linux")) {
+        } else if cfg!(any(
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "ios"
+        )) {
             self.paste_native_clipboard(false, None, cx)
         } else if let Some(item) = cx.read_from_clipboard() {
             self.paste_item(item, false, cx).unwrap_or(Delivery::Queued)

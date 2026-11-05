@@ -14,6 +14,7 @@ mod en_xa;
 mod gpu_settings;
 #[cfg(not(target_os = "ios"))]
 mod host_key_code;
+mod ipad_availability;
 mod ipad_key;
 mod keyboard;
 mod keyboard_en_xa;

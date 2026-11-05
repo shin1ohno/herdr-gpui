@@ -1,5 +1,6 @@
 //! Independent native preferences window. Disk work never owns a window or a socket.
 // i18n: migrated
+mod availability;
 #[cfg(any(target_os = "ios", test))]
 mod background;
 mod catalog;
@@ -758,6 +759,9 @@ impl SettingsWindow {
         cx: &mut Context<Self>,
     ) {
         let section = self.shown_section(section);
+        if !availability::section(section) {
+            return;
+        }
         if self.shell == Shell::Sheet {
             self.sheet.page = true;
         }

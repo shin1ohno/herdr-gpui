@@ -126,9 +126,14 @@ impl HerdrWindow {
 
     /// The daemon stages clipboard images beside the pane's processes, so the
     /// bridge serves local endpoints too: GUI text paste cannot carry an image.
-    /// Only macOS, Linux, and Windows have a bounded background clipboard reader.
+    /// iPad reads through UIKit on the main thread; preparation stays on a worker.
     pub(crate) fn accepts_clipboard_images(&self) -> bool {
-        cfg!(any(target_os = "macos", target_os = "linux", windows)) && self.accepts_image_input()
+        cfg!(any(
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "ios",
+            windows
+        )) && self.accepts_image_input()
     }
 
     /// Dropped files and pasted image paths need bridging only when the pane
@@ -305,21 +310,24 @@ impl HerdrWindow {
         };
         let bridge_paths = self.accepts_remote_images();
         // GPUI's native reader copies and hashes whole images synchronously.
-        // Only its in-memory test clipboard is read on the foreground thread.
+        // UIKit requires main-thread pasteboard access. Capture its owned item
+        // here, then decode and prepare it in the same ordered worker slot.
+        #[cfg(not(target_os = "ios"))]
         let read = super::clipboard::read;
         #[cfg(test)]
-        let item = cx.read_from_clipboard();
+        let item: crate::Result<_> = Ok(cx.read_from_clipboard());
+        #[cfg(all(not(test), target_os = "ios"))]
+        let item = super::clipboard::read(image_only);
+        #[cfg(all(test, not(target_os = "ios")))]
+        let _ = read;
         self.start_image_preparation(
             target,
             PreparationKind::Input,
             move || {
-                #[cfg(test)]
-                let item = {
-                    let _ = read;
-                    item
-                };
-                #[cfg(not(test))]
+                #[cfg(not(any(test, target_os = "ios")))]
                 let item = read(image_only)?;
+                #[cfg(any(test, target_os = "ios"))]
+                let item = item?;
                 let Some(item) = item else {
                     return Ok(fallback.map_or(Prepared::Empty, Prepared::Input));
                 };
