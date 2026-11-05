@@ -15,11 +15,11 @@ fn ipad_tabs_keep_touch_bounds_and_chat_marks_without_hover(cx: &mut TestAppCont
         cx.notify();
     });
     draw(cx);
-    assert_eq!(cx.debug_bounds("tab-w1:t1").unwrap().size.height, px(52.));
+    assert_eq!(cx.debug_bounds("tab-w1:t1").unwrap().size.height, px(44.));
     for selector in ["close-tab-w1:t1", "close-tab-plain", "close-tab-zoomy"] {
         assert_eq!(
             cx.debug_bounds(selector).unwrap().size,
-            size(px(40.), px(40.)),
+            size(px(44.), px(44.)),
             "{selector}"
         );
     }
@@ -34,7 +34,7 @@ fn ipad_tabs_keep_touch_bounds_and_chat_marks_without_hover(cx: &mut TestAppCont
     for selector in ["new-tab", "split-editor", "tab-actions"] {
         assert_eq!(
             cx.debug_bounds(selector).unwrap().size,
-            size(px(52.), px(52.)),
+            size(px(44.), px(44.)),
             "{selector}"
         );
     }
@@ -222,7 +222,7 @@ fn ipad_core_and_page_faces_use_workspace_numbered_hints(cx: &mut TestAppContext
         assert!(entries.iter().any(|(id, _)| *id == page));
     });
     let close: &'static str = Box::leak(format!("close-browser-tab-{page}").into_boxed_str());
-    assert_eq!(cx.debug_bounds(close).unwrap().size, size(px(40.), px(40.)));
+    assert_eq!(cx.debug_bounds(close).unwrap().size, size(px(44.), px(44.)));
 }
 
 #[gpui::test]

@@ -668,6 +668,7 @@ mod curved;
 mod launcher;
 
 mod ipad;
+mod ipad_compact;
 
 #[cfg(test)]
 mod crumb;

@@ -28,8 +28,8 @@ pub(crate) const SHEET_RADIUS: f32 = 18.;
 pub(crate) const SHEET_WIDTH: f32 = 620.;
 pub(crate) const SHORTCUT_ROW: f32 = 36.;
 pub(crate) const SIDEBAR: f32 = 300.;
-pub(crate) const STRIP_BUTTON: f32 = 52.;
+pub(crate) const STRIP_BUTTON: f32 = 44.;
 pub(crate) const STYLE_ROW: f32 = 64.;
-pub(crate) const TAB_STRIP: f32 = 52.;
+pub(crate) const TAB_STRIP: f32 = 44.;
 pub(crate) const TOUCH: f32 = 44.;
 // keep-sorted end
