@@ -16,6 +16,8 @@ use crate::{
 use gpui::{prelude::*, *};
 use herdr_client::protocol::{ClientShellAgent, ClientShellSnapshot};
 
+const PIN_SPACE: f32 = 20.;
+
 impl HerdrWindow {
     /// Appends a row for each agent `panel_agents` lists, in that order, and
     /// returns the list with how many rows it painted and where the selected
@@ -152,6 +154,11 @@ impl HerdrWindow {
         } else {
             spoken
         };
+        // Layouts budget fixed columns from this width, not the row's padding.
+        let row_cx = RowContext {
+            width: (row_cx.width - if pinned { PIN_SPACE } else { 0. }).max(0.),
+            ..*row_cx
+        };
         Cell::new(
             rows,
             RowData::Agent(AgentRow {
@@ -169,14 +176,14 @@ impl HerdrWindow {
                     .then_some(state),
                 lines,
             }),
-            row_cx,
+            &row_cx,
         )
         .ipad(crate::ipad_ui::layout().then(|| IpadMeta::Agent(agent_meta(agent, snapshot))))
         .selected(selected && agent.focused)
         .highlighted(menu_open)
         .row()
         .when(pinned, |row| {
-            row.relative().pr(px(20.)).child(
+            row.relative().pe(px(PIN_SPACE)).child(
                 div()
                     .absolute()
                     .inset_e(px(4.))
