@@ -18,7 +18,7 @@ const DETAILS: [(Detail, &str); 2] = [
     (Detail::Detailed, "settings-status-bar-detailed"),
     (Detail::Compact, "settings-status-bar-compact"),
 ];
-const SCOPES: [(AwakeScope, &str); 2] = [
+const SCOPES: &[(AwakeScope, &str)] = &[
     (AwakeScope::Display, "settings-status-bar-awake-display"),
     (AwakeScope::System, "settings-status-bar-awake-system"),
 ];
@@ -169,7 +169,15 @@ impl SettingsWindow {
                 .control(ui::segmented(
                     theme,
                     "status-keep-awake-scope",
-                    &choices(&SCOPES),
+                    &choices(
+                        &SCOPES
+                            .iter()
+                            .copied()
+                            .filter(|(scope, _)| {
+                                !super::super::availability::ipad() || *scope == AwakeScope::Display
+                            })
+                            .collect::<Vec<_>>(),
+                    ),
                     Some(items.keep_awake_scope),
                     true,
                     on_value(cx, |this, scope, _, cx| {

@@ -55,11 +55,13 @@ impl SettingsWindow {
                         cx,
                     )),
             )
-            .child(ui::section(
-                theme,
-                &fl!("settings-tabs-section-tab-bar"),
-                Some(ui::Source::Herdr),
-            ))
+            .when(!super::super::availability::ipad(), |page| {
+                page.child(ui::section(
+                    theme,
+                    &fl!("settings-tabs-section-tab-bar"),
+                    Some(ui::Source::Herdr),
+                ))
+            })
             .child(
                 self.gate_shared(ui::row(
                     theme,
@@ -157,11 +159,13 @@ impl SettingsWindow {
                     cx,
                 )),
             )
-            .child(ui::section(
-                theme,
-                &fl!("settings-tabs-section-session-restore"),
-                None,
-            ))
+            .when(!super::super::availability::ipad(), |page| {
+                page.child(ui::section(
+                    theme,
+                    &fl!("settings-tabs-section-session-restore"),
+                    None,
+                ))
+            })
             .child(
                 self.gate_shared(
                     ui::row(
@@ -183,6 +187,9 @@ impl SettingsWindow {
                     ),
                 ),
             );
+        if super::super::availability::ipad() {
+            return page;
+        }
         for (index, host) in self.remote_history.hosts().iter().enumerate() {
             let (checked, settled) = match &host.state {
                 HostState::Ready(history) => (history.enabled, true),

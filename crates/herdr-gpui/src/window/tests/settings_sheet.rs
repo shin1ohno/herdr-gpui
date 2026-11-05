@@ -169,11 +169,11 @@ fn page_search_keeps_typing_and_control_w_local(cx: &mut TestAppContext) {
     let (owner, fixture, cx) = open(cx, 1194.);
     cx.update(|window, cx| {
         fixture.model.update(cx, |view, cx| {
-            view.select_section(settings_window::Section::Plugins, window, cx)
+            view.select_section(settings_window::Section::Theme, window, cx)
         });
     });
     draw(cx);
-    let values = cx.debug_bounds("plugins-values").unwrap();
+    let values = cx.debug_bounds("settings-theme-search").unwrap();
     cx.simulate_click(
         point(values.center().x, values.top() + px(8.)),
         Modifiers::default(),
@@ -183,13 +183,13 @@ fn page_search_keeps_typing_and_control_w_local(cx: &mut TestAppContext) {
         assert!(!fixture.focused(window, cx));
         assert!(!owner.read(cx).focus.is_focused(window));
     });
-    cx.simulate_keystrokes("p l u g");
+    cx.simulate_keystrokes("n o r d");
     cx.dispatch_action(crate::actions::SelectAll);
     cx.dispatch_action(crate::actions::Copy);
     assert_eq!(
         cx.update(|_, cx| cx.read_from_clipboard().and_then(|item| item.text()))
             .as_deref(),
-        Some("plug")
+        Some("nord")
     );
     cx.update(|_, cx| fixture.dirty(cx));
     cx.simulate_keystrokes("ctrl-w");

@@ -82,12 +82,21 @@ impl SettingsWindow {
                         .children(std::iter::once(None).chain(Group::ALL.map(Some)).flat_map(
                             |group| {
                                 group
+                                    .filter(|group| {
+                                        Section::shown().any(|section| {
+                                            section.group() == Some(*group)
+                                                && availability::section(section)
+                                        })
+                                    })
                                     .map(|group| self.group_label(group).into_any_element())
                                     .into_iter()
                                     .chain(
                                         Section::shown()
                                             .enumerate()
-                                            .filter(move |(_, section)| section.group() == group)
+                                            .filter(move |(_, section)| {
+                                                section.group() == group
+                                                    && availability::section(*section)
+                                            })
                                             .map(|(index, section)| {
                                                 self.navigation_row(index, section, cx)
                                                     .into_any_element()

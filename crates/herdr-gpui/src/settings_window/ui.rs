@@ -123,6 +123,9 @@ impl Row {
 impl IntoElement for Row {
     type Element = Stateful<Div>;
     fn into_element(self) -> Stateful<Div> {
+        if !super::availability::row(&self.id) {
+            return div().id(ElementId::Name(self.id)).hidden();
+        }
         let id = self.id.clone();
         let title = self.title.clone();
         let help = self.disabled.clone().or_else(|| self.description.clone());
@@ -138,6 +141,9 @@ impl Row {
     /// The row without its group, for a caller that makes the whole row one
     /// control, as search results do.
     pub(in crate::settings_window) fn into_div(self) -> Div {
+        if !super::availability::row(&self.id) {
+            return div();
+        }
         let theme = &self.theme;
         let id = self.id.clone();
         let title_id = format!("{id}-title");

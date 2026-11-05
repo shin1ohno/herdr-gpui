@@ -14,13 +14,14 @@ fn shown_hides_desktop_connection_sections_in_ipad_layout() {
     let shown = Section::shown().collect::<Vec<_>>();
     assert!(shown.contains(&Section::General));
     assert!(!shown.contains(&Section::RemoteControl));
+    assert!(!shown.contains(&Section::Plugins));
     #[cfg(feature = "cloud")]
     assert!(!shown.contains(&Section::CloudDevices));
     let mut expected = Section::ALL
         .iter()
         .copied()
         .filter(|section| match section {
-            Section::RemoteControl => false,
+            Section::Plugins | Section::RemoteControl => false,
             #[cfg(feature = "cloud")]
             Section::CloudDevices => false,
             _ => true,
@@ -55,6 +56,7 @@ fn ipad_navigation_renders_only_shown_sections(cx: &mut TestAppContext) {
         );
     }
     assert!(cx.debug_bounds(Section::RemoteControl.message()).is_none());
+    assert!(cx.debug_bounds(Section::Plugins.message()).is_none());
     #[cfg(feature = "cloud")]
     assert!(cx.debug_bounds(Section::CloudDevices.message()).is_none());
 }

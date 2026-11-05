@@ -187,7 +187,11 @@ impl SettingsWindow {
     /// Cheap when nothing changed: the source notifies on every update, and
     /// this repaints Settings only when its host list does.
     pub(super) fn sync_remote_history(&mut self, reload: bool, cx: &mut Context<Self>) {
-        let hosts = self.connected_ssh_hosts(cx);
+        let hosts = if super::availability::ipad() {
+            Vec::new()
+        } else {
+            self.connected_ssh_hosts(cx)
+        };
         let unchanged = !reload
             && hosts.len() == self.remote_history.hosts.len()
             && hosts

@@ -148,6 +148,7 @@ keepawake.workspace = true
 herdr-ssh.workspace = true
 herdr-uikit.workspace = true
 objc2.workspace = true
+objc2-foundation.workspace = true
 objc2-ui-kit.workspace = true
 
 # wry has no working GPUI child-view backend on Linux yet; browser tabs there
@@ -210,6 +211,10 @@ objc2.workspace              = true
 objc2-app-kit.workspace      = true
 objc2-foundation.workspace   = true
 raw-window-handle            = { optional = true, workspace = true }
+
+[[test]]
+name    = "ios_clipboard"
+harness = false
 
 [[test]]
 name              = "live_gui"

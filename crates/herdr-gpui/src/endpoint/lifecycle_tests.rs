@@ -33,6 +33,7 @@ mod group_page_move;
 mod held_paste;
 mod horizontal_wheel;
 mod image_paste;
+mod image_paste_capture;
 mod image_paste_native;
 mod input_gap;
 mod input_settings;

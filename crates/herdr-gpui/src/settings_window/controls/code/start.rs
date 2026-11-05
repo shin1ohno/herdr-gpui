@@ -76,12 +76,14 @@ impl SettingsWindow {
                     .row()
                     .flex_wrap()
                     .gap(px(12.))
-                    .child(choice(
-                        "settings-code-start",
-                        fl!("settings-code-start"),
-                        CodeMode::Start,
-                        can_start,
-                    ))
+                    .when(!crate::settings_window::availability::ipad(), |row| {
+                        row.child(choice(
+                            "settings-code-start",
+                            fl!("settings-code-start"),
+                            CodeMode::Start,
+                            can_start,
+                        ))
+                    })
                     .child(choice(
                         "settings-code-address",
                         fl!("settings-code-address"),
