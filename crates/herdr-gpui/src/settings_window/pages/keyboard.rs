@@ -10,7 +10,7 @@ use crate::{
         self, kbd,
         metrics::{SHORTCUT_ROW, STYLE_ROW, TOUCH},
     },
-    keymap::{Keymap, glyphs},
+    keymap::{Keymap, KeymapSource, LocalPrefixSource, ResolvedKeymap, glyphs},
 };
 use gpui::{prelude::*, *};
 
@@ -95,17 +95,37 @@ pub(in crate::settings_window) fn prefix_value(keymap: &Keymap) -> String {
 }
 
 /// An opt-in is insufficient: a missing or rejected profile uses local keys.
+#[cfg(test)]
 pub(in crate::settings_window) fn prefix_host(owner: &crate::HerdrWindow) -> Option<&str> {
-    let endpoint = owner.endpoints.get(owner.selected_endpoint)?;
-    (owner.config.keybinding_source(&endpoint.id) == KeybindingSource::Server
-        && owner.server_keys.is_some()
-        && owner
-            .live
-            .snapshot
-            .as_ref()
-            .is_some_and(|snapshot| snapshot.server_keybindings_toml.is_some())
-        && owner.server_keybindings_error(&endpoint.id).is_none())
-    .then_some(endpoint.label.as_str())
+    match owner.resolved_keymap().source {
+        KeymapSource::Server(host) => Some(host),
+        KeymapSource::Local(_) => None,
+    }
+}
+
+pub(in crate::settings_window) fn prefix_guidance(source: KeymapSource<'_>) -> (String, String) {
+    match source {
+        KeymapSource::Server(host) => (
+            fl!("ipad-keyboard-prefix-from-host", host = host),
+            fl!("ipad-keyboard-prefix-edit-host", host = host),
+        ),
+        KeymapSource::Local(source) => {
+            let origin = match source {
+                LocalPrefixSource::Default(_) => fl!("ipad-keyboard-prefix-default"),
+                LocalPrefixSource::Configured(_) => fl!("ipad-keyboard-prefix-local"),
+            };
+            let edit = source.path().map_or_else(
+                || fl!("ipad-keyboard-prefix-edit-local"),
+                |path| {
+                    fl!(
+                        "ipad-keyboard-prefix-edit-path",
+                        path = path.to_string_lossy().as_ref()
+                    )
+                },
+            );
+            (origin, edit)
+        }
+    }
 }
 
 impl SettingsWindow {
@@ -115,16 +135,20 @@ impl SettingsWindow {
         }
         let source = self.source.upgrade();
         let owner = source.as_ref().map(|source| source.read(cx));
-        let keymap = owner.map_or(&self.config.keybindings, |owner| owner.keymap());
+        let resolved = owner.map_or_else(
+            || ResolvedKeymap {
+                keymap: &self.config.keybindings,
+                source: KeymapSource::Local(&self.config.keybinding_prefix_source),
+            },
+            |owner| owner.resolved_keymap(),
+        );
+        let keymap = resolved.keymap;
         let theme = &self.theme;
         let endpoint = owner.and_then(|owner| owner.endpoints.get(owner.selected_endpoint));
         let server = endpoint.is_some_and(|endpoint| {
             self.config.keybinding_source(&endpoint.id) == KeybindingSource::Server
         });
-        let prefix_source = match owner.and_then(prefix_host) {
-            Some(host) => fl!("ipad-keyboard-prefix-from-host", host = host),
-            None => fl!("ipad-keyboard-prefix-default"),
-        };
+        let (prefix_source, prefix_edit) = prefix_guidance(resolved.source);
         let prefix = prefix_value(keymap);
         let enabled = !self.quitting && self.closing.is_none();
         let server_enabled = enabled && self.keyboard_keybinding_choice(cx).is_some();
@@ -186,6 +210,16 @@ impl SettingsWindow {
                         kbd(prefix, theme, &self.config.ui)
                             .debug_selector(|| "keyboard-prefix-value".into()),
                     ),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .px(px(12.))
+                    .py(px(8.))
+                    .text_size(px(12.))
+                    .line_height(px(18.))
+                    .text_color(rgb(theme.subtext()))
+                    .child(prefix_edit),
             )
             .child(
                 ui::row(

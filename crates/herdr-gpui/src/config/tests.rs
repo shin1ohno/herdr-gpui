@@ -46,6 +46,7 @@ mod missing_fonts;
 mod notification_settings;
 mod omarchy_theme;
 mod preferences;
+mod prefix_source;
 mod px0;
 mod remote;
 mod repository_icons;

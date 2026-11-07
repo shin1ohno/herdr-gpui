@@ -11,11 +11,13 @@ mod custom;
 pub(crate) mod daemon;
 mod error;
 mod glyphs;
+mod prefix_source;
 
 pub(crate) use custom::Reach;
 pub(crate) use daemon::DaemonKeys;
 pub(crate) use error::Error;
 pub(crate) use glyphs::glyphs;
+pub(crate) use prefix_source::{KeymapSource, LocalPrefixSource, ResolvedKeymap};
 
 use crate::{
     Result,
