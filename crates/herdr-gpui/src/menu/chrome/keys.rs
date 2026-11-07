@@ -39,6 +39,10 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.menu.page == Some(Page::SidebarSearch) {
+            self.sidebar_search_popup_key(event, window, cx);
+            return;
+        }
         if self.menu.page == Some(Page::Settings) {
             self.settings_sheet_key(event, window, cx);
             return;

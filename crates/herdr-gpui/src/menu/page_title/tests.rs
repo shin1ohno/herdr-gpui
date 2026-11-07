@@ -43,6 +43,7 @@ fn every_page_title_is_a_message_under_en_xa() {
             Page::CarryPane,
             Page::Checkpoints,
             Page::CodeSearch,
+            Page::SidebarSearch,
             Page::ConfirmClose,
             Page::Devices,
             Page::DeviceTheme,
