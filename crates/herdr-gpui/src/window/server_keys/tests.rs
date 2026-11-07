@@ -1,3 +1,5 @@
+mod provenance;
+
 use super::*;
 use crate::{Command, Error, config::DeviceSettings, keymap::Binding};
 use gpui::{Entity, Keystroke, TestAppContext, VisualTestContext};

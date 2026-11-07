@@ -8,6 +8,7 @@ mod glyphs;
 mod literal_plus;
 mod pane_keys;
 mod platform_defaults;
+mod prefix_source;
 mod shift_enter;
 mod styled;
 
@@ -29,6 +30,7 @@ fn keystroke(text: &str) -> Keystroke {
 /// A daemon config that binds nothing, isolating the GUI layers.
 fn no_keys() -> DaemonKeys {
     DaemonKeys {
+        prefix_source: LocalPrefixSource::Default(None),
         prefixes: vec![keystroke("ctrl-b")],
         bindings: Vec::new(),
         navigate_up: Vec::new(),

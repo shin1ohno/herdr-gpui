@@ -7,7 +7,7 @@ use crate::{
     Result,
     contrast::Contrast,
     i18n::fl,
-    keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
+    keymap::{Binding, DaemonKeys, Keymap, LocalPrefixSource, PaneKeys},
 };
 mod accent;
 mod agent_skill;
@@ -232,6 +232,8 @@ pub struct Config {
     /// The `[keybindings]` table `keybindings` was built from, kept so a
     /// device's server keys can be layered under the same GUI overrides.
     pub(crate) keybinding_overrides: BTreeMap<String, Binding>,
+    /// Local daemon provenance is presentation data, not key-binding identity.
+    pub(crate) keybinding_prefix_source: LocalPrefixSource,
     pub keybindings: Keymap,
     /// The language the app shows: `system`, or a BCP 47 tag (docs/i18n.md).
     pub language: herdr_i18n::Language,
@@ -445,6 +447,7 @@ impl Default for Config {
             icon_font_missing: false,
             keep_selection_after_copy: true,
             keybinding_overrides: BTreeMap::new(),
+            keybinding_prefix_source: LocalPrefixSource::Default(None),
             keybindings: Keymap::default(),
             language: herdr_i18n::Language::default(),
             layout: Layout::default(),
@@ -902,6 +905,7 @@ impl Config {
         config.layout = settings.layout;
         config.language = settings.language.unwrap_or_default();
         config.sidebar_style = settings.sidebar.style()?;
+        config.keybinding_prefix_source = base.keys.prefix_source().clone();
         config.keybindings =
             Keymap::with_overrides(&settings.keybindings, &settings.pane_keys, &base.keys)?;
         config.keybinding_overrides = settings.keybindings;
