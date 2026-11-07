@@ -293,13 +293,14 @@ impl HerdrWindow {
                 )
                 .child(agents)
             })
+            .when(self.config.show_sidebar_search, |rail| {
+                rail.child(self.sidebar_search_trigger("rail-search", cx))
+            })
             .child(
-                button("rail-new-workspace".into(), false, theme)
-                    .aria_label(fl!("sidebar-new-workspace"))
-                    .child(label_text("+"))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.command(Command::Workspace, window, cx)
-                    })),
+                self.sidebar_new_space_trigger("rail-new-workspace", cx)
+                    .w(px(RAIL_BUTTON_W))
+                    .max_w_full()
+                    .h(px(RAIL_BUTTON_H)),
             )
             .child(
                 compact_control(
@@ -356,6 +357,7 @@ fn button(id: String, selected: bool, theme: &Theme) -> Stateful<Div> {
         .relative()
         .flex_none()
         .w(px(RAIL_BUTTON_W))
+        .max_w_full()
         .h(px(RAIL_BUTTON_H))
         .flex()
         .flex_col()

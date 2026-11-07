@@ -24,6 +24,7 @@ impl HerdrWindow {
         look: SidebarLook,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
+        let popup = self.menu.page == Some(crate::menu::Page::SidebarSearch);
         let theme = &self.theme;
         let font = &self.config.sidebar;
         let content_x = look.content_x();
@@ -87,6 +88,9 @@ impl HerdrWindow {
                     .id(("sidebar-search-hit", index))
                     .debug_selector(move || format!("sidebar-search-hit-{index}"))
                     .flex_none()
+                    .when(popup && crate::ipad_ui::layout(), |row| {
+                        row.min_h(px(crate::ipad_ui::metrics::TOUCH))
+                    })
                     .flex()
                     .items_center()
                     .gap(px(look.density.gap()))
@@ -100,7 +104,9 @@ impl HerdrWindow {
                         row.hover(move |style| style.bg(rgb(hover)))
                     })
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.open_search_hit(&target, window, cx);
+                        if !popup || this.menu.page == Some(crate::menu::Page::SidebarSearch) {
+                            this.open_search_hit(&target, window, cx);
+                        }
                     }))
                     .child(lead)
                     .child(

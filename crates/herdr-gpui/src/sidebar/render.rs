@@ -73,9 +73,10 @@ impl HerdrWindow {
         // A hidden field keeps whatever it held, but never filters the list.
         let searchable = self.config.show_sidebar_search && !devices;
         let tree_search = self.config.show_sidebar_search && devices;
-        let search = (searchable && self.sidebar_search.query().is_some()).then(|| {
-            self.sidebar_search_results(self.sidebar_search_hits(cx), indicators, look, cx)
-        });
+        let search = (searchable
+            && !crate::ipad_ui::layout()
+            && self.sidebar_search.query().is_some())
+        .then(|| self.sidebar_search_results(self.sidebar_search_hits(cx), indicators, look, cx));
         let mut spaces = div()
             .id("spaces-scroll")
             .debug_selector(|| "spaces-scroll".into())
@@ -111,7 +112,7 @@ impl HerdrWindow {
             .then_some(self.config.agents_placement);
         let agents_panel = placement == Some(AgentsPlacement::Panel) && !devices;
         let nested_agents = placement == Some(AgentsPlacement::Nested) && !devices;
-        let query = if tree_search {
+        let query = if tree_search && !crate::ipad_ui::layout() {
             self.device_tree_query(cx)
         } else {
             String::new()
@@ -855,7 +856,7 @@ impl HerdrWindow {
             })
             .children(self.render_mod_sidebar_sections(cx))
             .when(crate::ipad_ui::layout(), |sidebar| {
-                sidebar.child(self.ipad_sidebar_footer(window, cx))
+                sidebar.child(self.ipad_sidebar_footer(cx))
             })
             .map(|sidebar| {
                 if self.device_footer_shown() {

@@ -90,6 +90,7 @@ impl Page {
             Self::RenamePane => fl!("menu-page-rename-pane"),
             Self::RenameTab => fl!("menu-page-rename-tab"),
             Self::RevokeDevice => fl!("menu-page-revoke-device"),
+            Self::SidebarSearch => fl!("sidebar-search-spaces-label"),
             Self::Settings => fl!("ipad-settings-sheet-title"),
             Self::Tab => fl!("menu-page-tab"),
             Self::Teleport => fl!("menu-page-teleport"),

@@ -19,6 +19,7 @@ pub(in crate::menu) fn leaves(page: Page) -> bool {
             | Page::PrComment
             | Page::PrMerge
             | Page::RemoteControl
+            | Page::SidebarSearch
             | Page::RowMenu(_)
     )
 }
