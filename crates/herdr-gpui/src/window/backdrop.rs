@@ -32,7 +32,11 @@ pub(crate) struct State {
 
 impl HerdrWindow {
     pub(crate) fn fill(&self) -> Fill {
-        Fill::new(&self.theme, &self.config.backdrop)
+        Fill::for_window(
+            &self.theme,
+            &self.config.backdrop,
+            self.backdrop.picture.texture().is_some(),
+        )
     }
 
     pub(crate) fn ground(&self) -> Ground {

@@ -41,6 +41,7 @@ pub(super) fn row(id: &str) -> bool {
         id,
         "theme-follow"
             | "theme-source"
+            | "theme-backdrop"
             | "general-ports"
             | "general-checkpoints"
             | "general-copy-on-select"

@@ -66,6 +66,7 @@ settings-theme-backdrop-remove = Remove
 settings-theme-backdrop-choose = Choose
 settings-theme-backdrop-opacity = Background opacity
 settings-theme-backdrop-percent = { $percent }%
+settings-theme-backdrop-ipad = This iPad build uses an opaque window background.
 
 ## Terminal padding.
 

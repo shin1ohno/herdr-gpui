@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod platform;
+
 fn backdrop(opacity: f32) -> config::Backdrop {
     config::Backdrop {
         opacity,
@@ -53,16 +55,16 @@ fn a_translucent_layer_on_its_own_color_paints_nothing() {
 fn the_window_stays_opaque_under_a_picture_and_blurs_only_the_desktop() {
     let mut translucent = backdrop(0.5);
     assert_eq!(
-        appearance(&translucent, false),
+        appearance_for_surface(&translucent, false, true),
         WindowBackgroundAppearance::Transparent
     );
     translucent.blur = true;
     assert_eq!(
-        appearance(&translucent, false),
+        appearance_for_surface(&translucent, false, true),
         WindowBackgroundAppearance::Blurred
     );
     assert_eq!(
-        appearance(&translucent, true),
+        appearance_for_surface(&translucent, true, true),
         WindowBackgroundAppearance::Opaque
     );
 }
@@ -77,15 +79,18 @@ fn mica_replaces_blur_on_windows_only() {
     } else {
         WindowBackgroundAppearance::Blurred
     };
-    assert_eq!(appearance(&mica, false), expected);
+    assert_eq!(appearance_for_surface(&mica, false, true), expected);
     // Without blur it is plain translucency, and a picture covers it.
     mica.blur = false;
     assert_eq!(
-        appearance(&mica, false),
+        appearance_for_surface(&mica, false, true),
         WindowBackgroundAppearance::Transparent
     );
     mica.blur = true;
-    assert_eq!(appearance(&mica, true), WindowBackgroundAppearance::Opaque);
+    assert_eq!(
+        appearance_for_surface(&mica, true, true),
+        WindowBackgroundAppearance::Opaque
+    );
 }
 
 fn pixel() -> RenderImage {
