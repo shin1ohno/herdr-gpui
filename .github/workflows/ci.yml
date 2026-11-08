@@ -206,7 +206,7 @@ jobs:
   ios:
     if: >-
       needs.commits.outputs.code == 'true' &&
-      github.repository == 'penso/sheprd-gpui' &&
+      (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
       (github.event_name == 'pull_request' ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         github.actor == 'penso' && github.triggering_actor == 'penso' &&

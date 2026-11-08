@@ -18,6 +18,7 @@ use sheprd_client::{ConnectOptions, ConnectTarget};
 #[cfg(test)]
 use std::sync::Arc;
 
+#[cfg(test)]
 mod agent_groups;
 #[cfg(test)]
 mod agent_labels;
@@ -89,6 +90,7 @@ mod pane_names;
 mod picker_scroll;
 #[cfg(test)]
 mod pinned_rows;
+#[cfg(test)]
 mod pins_groups;
 #[cfg(test)]
 mod plain_folder_icon;

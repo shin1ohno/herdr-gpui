@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = (ROOT / ".github/workflows/ci.yml").read_text()
 SECTIONS = re.split(r"^  ([a-z-]+):\n", WORKFLOW.split("\njobs:\n", 1)[1], flags=re.M)
 JOBS = dict(zip(SECTIONS[1::2], SECTIONS[2::2]))
-PR_JOBS = ("zizmor", "commits", "checks", "windows", "windows-native", "build-macos", "website",
+PR_JOBS = ("zizmor", "commits", "checks", "windows", "windows-native", "build-macos", "ios", "website",
            "checks-passed")
 # Jobs that never run on main: the release workflow builds those targets.
 PR_ONLY_JOBS = ("build-macos",)
@@ -137,7 +137,7 @@ class CiPolicy(unittest.TestCase):
             context = self.context(**{"needs.commits.outputs.code": code})
             for job in PR_JOBS:
                 self.assertEqual(condition_matches(job, context),
-                                 job not in ("checks", "windows", "windows-native", "build-macos"),
+                                 job not in ("checks", "windows", "windows-native", "build-macos", "ios"),
                                  (job, code))
         for website in ("false", ""):
             context = self.context(**{"needs.commits.outputs.website": website})
@@ -150,13 +150,15 @@ class CiPolicy(unittest.TestCase):
         script = "\n".join(line[10:] for line in script.splitlines() if line.startswith("          "))
 
         def gate(code, checks, windows, native, commits, package_inputs="false", package="skipped",
-                 event="push", macos=None, site_inputs="false", site="skipped"):
+                 event="push", macos=None, site_inputs="false", site="skipped", ios=None):
             if macos is None:
                 macos = "success" if code == "true" and event == "pull_request" else "skipped"
+            if ios is None:
+                ios = native
             return subprocess.run(
                 ["bash", "-e", "-c", script], capture_output=True,
                 env={**os.environ, "CODE": code, "RESULT": checks, "WINDOWS": windows,
-                     "NATIVE": native, "COMMITS": commits,
+                     "NATIVE": native, "IOS": ios, "COMMITS": commits,
                      "PACKAGE_INPUTS": package_inputs, "PACKAGE": package,
                      "EVENT": event, "MACOS_RELEASE": macos,
                      "SITE_INPUTS": site_inputs, "SITE": site},
@@ -174,6 +176,14 @@ class CiPolicy(unittest.TestCase):
         for native in ("failure", "cancelled", "skipped"):
             self.assertFalse(gate("true", "success", "success", native, "success"), native)
         self.assertFalse(gate("false", "skipped", "skipped", "success", "success"))
+        # iPad checks are independently required for code, and skipped only
+        # for docs-only changes. A missing result must never pass the gate.
+        for code, ios in itertools.product(
+                ("true", "false", ""), ("success", "failure", "cancelled", "skipped", "")):
+            platform = "success" if code == "true" else "skipped"
+            expected = code in ("true", "false") and ios == platform
+            self.assertEqual(gate(code, platform, platform, platform, "success", ios=ios),
+                             expected, (code, ios))
         # The Windows package job runs only when its inputs change, and must
         # then succeed; missing detection fails like the platform jobs'.
         for inputs, package in itertools.product(
@@ -218,7 +228,7 @@ class CiPolicy(unittest.TestCase):
                     self.assertIn("save-if: ${{ github.ref == 'refs/heads/main' }}", job)
         # Keep runners a fixed hosted set; never accept a PR-controlled label.
         self.assertEqual(re.findall(r"^    runs-on: (.+)$", WORKFLOW, re.M), [
-            "ubuntu-latest", "ubuntu-24.04", "${{ matrix.runner }}",
+            "ubuntu-latest", "ubuntu-24.04", "${{ matrix.runner }}", "macos-15",
             "${{ matrix.runner }}", "${{ matrix.runner }}", "windows-2025",
             "ubuntu-24.04", "ubuntu-24.04", "${{ matrix.runner }}", "macos-15",
         ])
