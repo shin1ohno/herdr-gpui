@@ -479,3 +479,5 @@ fn a_selection_dragged_past_the_screen_follows_the_scroll() {
             .is_none()
     );
 }
+
+mod copy_as_one_line;

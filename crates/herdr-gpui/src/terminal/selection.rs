@@ -734,6 +734,16 @@ impl Selection {
         cell_width: f32,
         cell_height: f32,
     ) -> Result<String> {
+        self.text_with_join(surface, cell_width, cell_height, false)
+    }
+
+    pub(crate) fn text_with_join(
+        &self,
+        surface: &PaneSurfaceFrame,
+        cell_width: f32,
+        cell_height: f32,
+        join_wrapped: bool,
+    ) -> Result<String> {
         let region =
             region(surface, &self.target, cell_width, cell_height).ok_or(Error::SelectionStale)?;
         let frame = frame(surface, &self.target).ok_or(Error::SelectionStale)?;
@@ -745,6 +755,7 @@ impl Selection {
         let left = region.columns.start;
         let mut text = String::new();
         let mut line = String::new();
+        let mut previous_filled = false;
         for (index, (row, columns)) in self.spans(region).enumerate() {
             if row >= frame.height {
                 return Err(Error::SelectionStale);
@@ -754,11 +765,12 @@ impl Selection {
                 .cells
                 .get(offset + usize::from(left)..offset + usize::from(columns.end))
                 .ok_or(Error::SelectionStale)?;
-            if index > 0 {
+            if index > 0 && !(join_wrapped && previous_filled) {
                 text.push('\n');
             }
             line.clear();
-            for (column, _, cell) in graphemes(cells) {
+            previous_filled = false;
+            for (column, span, cell) in graphemes(cells) {
                 if cell.symbol.len() > MAX_SELECTION_BYTES {
                     return Err(Error::SelectionSize);
                 }
@@ -766,6 +778,9 @@ impl Selection {
                     continue;
                 }
                 let symbol = shown(cell);
+                previous_filled = columns.end == edge
+                    && column + span == usize::from(edge - left)
+                    && !symbol.trim().is_empty();
                 if text.len() + line.len() + symbol.len() > MAX_SELECTION_BYTES {
                     return Err(Error::SelectionSize);
                 }

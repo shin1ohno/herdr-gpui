@@ -113,6 +113,38 @@ impl Selection {
             .collect()
     }
 
+    /// Joins a row only when its selected right edge is occupied. A wide
+    /// glyph owns its continuation cell; a following blank row adds no text.
+    pub(crate) fn text_with_join(&self, frame: &FrameData) -> String {
+        use unicode_width::UnicodeWidthStr;
+        let mut text = String::new();
+        let mut previous_filled = false;
+        for (index, (row, columns)) in self
+            .rows(frame.width)
+            .into_iter()
+            .filter(|(row, _)| *row < frame.height)
+            .enumerate()
+        {
+            if index > 0 && !previous_filled {
+                text.push('\n');
+            }
+            previous_filled = false;
+            let mut line = String::new();
+            for column in columns.clone() {
+                let value = symbol(frame, row, column);
+                if columns.end == frame.width
+                    && usize::from(column) + value.width() == usize::from(frame.width)
+                    && !value.trim().is_empty()
+                {
+                    previous_filled = true;
+                }
+                line.push_str(value);
+            }
+            text.push_str(line.trim_end());
+        }
+        text
+    }
+
     /// The selected text: each row's cells with trailing blanks dropped,
     /// rows joined by newlines.
     pub(crate) fn text(&self, frame: &FrameData) -> String {

@@ -26,6 +26,7 @@ menus-reopen-closed-tab = Reopen Closed Tab
 menus-edit = Edit
 menus-cut = Cut
 menus-copy = Copy
+menus-copy-as-one-line = Copy as one line
 menus-paste = Paste
 menus-select-all = Select All
 

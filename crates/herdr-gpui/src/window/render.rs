@@ -338,9 +338,15 @@ impl Render for HerdrWindow {
                 this.select_all(cx);
             }))
             .when(self.selection_retained(), |terminal| {
-                terminal.on_action(cx.listener(|this, _: &crate::actions::Copy, _, cx| {
-                    this.copy_retained_selection(cx);
-                }))
+                terminal
+                    .on_action(cx.listener(|this, _: &crate::actions::Copy, _, cx| {
+                        this.copy_retained_selection(cx);
+                    }))
+                    .on_action(
+                        cx.listener(|this, _: &crate::actions::CopyAsOneLine, _, cx| {
+                            this.copy_as_one_line(cx);
+                        }),
+                    )
             })
             .on_scroll_wheel(cx.listener(Self::scroll_wheel))
             .on_drop(cx.listener(Self::drop_terminal_files))

@@ -10,8 +10,8 @@ use crate::{
     CheckForUpdates, PlaySound, Quit, RunCommand, ShowHerdrNotDetected, ShowLogs,
     ShowUpdatePreview,
     actions::{
-        Copy, Cut, Paste, RingBellPreview, SelectAll, SetLayout, SetTabLayout, ShowToastPreview,
-        ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview, TogglePseudoLocale,
+        Copy, CopyAsOneLine, Cut, Paste, RingBellPreview, SelectAll, SetLayout, SetTabLayout,
+        ShowToastPreview, ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview, TogglePseudoLocale,
         ToggleSlowAnimations,
     },
     config::{Config, LayoutMode, TabLayoutMode},
@@ -201,6 +201,7 @@ fn menus_for_platform(config: &Config, ipad: bool) -> Vec<Menu> {
             items: vec![
                 MenuItem::os_action(fl!("menus-cut"), Cut, OsAction::Cut),
                 MenuItem::os_action(fl!("menus-copy"), Copy, OsAction::Copy),
+                MenuItem::action(fl!("menus-copy-as-one-line"), CopyAsOneLine),
                 MenuItem::os_action(fl!("menus-paste"), Paste, OsAction::Paste),
                 MenuItem::separator(),
                 MenuItem::os_action(fl!("menus-select-all"), SelectAll, OsAction::SelectAll),

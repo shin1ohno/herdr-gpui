@@ -175,13 +175,23 @@ impl CoreTerminalView {
 
     /// Copies the selection; false when nothing is selected.
     pub(super) fn copy_selection(&self, cx: &mut App) -> bool {
+        self.copy_selection_with_join(false, cx)
+    }
+
+    pub(super) fn copy_selection_with_join(&self, join_wrapped: bool, cx: &mut App) -> bool {
         let Some(frame) = self.screen.frame.as_deref() else {
             return false;
         };
         let Some(text) = self
             .selection
             .filter(|selection| !selection.is_empty())
-            .map(|selection| selection.text(frame))
+            .map(|selection| {
+                if join_wrapped {
+                    selection.text_with_join(frame)
+                } else {
+                    selection.text(frame)
+                }
+            })
         else {
             return false;
         };
