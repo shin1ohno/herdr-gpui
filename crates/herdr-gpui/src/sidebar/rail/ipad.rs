@@ -182,6 +182,12 @@ impl HerdrWindow {
                     continue;
                 };
                 let name = agent_label(agent, snapshot);
+                let pinned = self.agent_pin_rank(index, &agent.pane_id).is_some();
+                let spoken = if pinned {
+                    crate::i18n::fl!("pane-menu-pinned-name", name = name.clone())
+                } else {
+                    name.clone()
+                };
                 let endpoint_id = endpoint.id.clone();
                 let pane = agent.pane_id.clone();
                 let key = format!("rail-agent-{endpoint_id}-{pane}");
@@ -193,7 +199,7 @@ impl HerdrWindow {
                         index == self.selected_endpoint && agent.focused,
                         theme,
                     )
-                    .aria_label(name.clone())
+                    .aria_label(spoken)
                     .child(
                         div()
                             .relative()
@@ -203,6 +209,11 @@ impl HerdrWindow {
                             .child(
                                 crate::icons::of_agent(agent).element(RAIL_ICON, theme.subtext()),
                             )
+                            .when(pinned, |icon| {
+                                icon.child(div().absolute().top(px(-3.)).inset_s(px(-4.)).child(
+                                    crate::icons::icon("icons/pin.svg", 12., theme.foreground),
+                                ))
+                            })
                             .child(
                                 div()
                                     .absolute()
@@ -282,13 +293,14 @@ impl HerdrWindow {
                 )
                 .child(agents)
             })
+            .when(self.config.show_sidebar_search, |rail| {
+                rail.child(self.sidebar_search_trigger("rail-search", cx))
+            })
             .child(
-                button("rail-new-workspace".into(), false, theme)
-                    .aria_label(fl!("sidebar-new-workspace"))
-                    .child(label_text("+"))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.command(Command::Workspace, window, cx)
-                    })),
+                self.sidebar_new_space_trigger("rail-new-workspace", cx)
+                    .w(px(RAIL_BUTTON_W))
+                    .max_w_full()
+                    .h(px(RAIL_BUTTON_H)),
             )
             .child(
                 compact_control(
@@ -345,6 +357,7 @@ fn button(id: String, selected: bool, theme: &Theme) -> Stateful<Div> {
         .relative()
         .flex_none()
         .w(px(RAIL_BUTTON_W))
+        .max_w_full()
         .h(px(RAIL_BUTTON_H))
         .flex()
         .flex_col()

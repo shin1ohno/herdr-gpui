@@ -51,7 +51,14 @@ fn heading_precedes_hosts(cx: &mut gpui::TestAppContext) {
             );
             bottom = host.bottom();
         }
-        assert_eq!(cx.debug_bounds("sidebar-search").is_some(), searchable);
+        assert_eq!(
+            cx.debug_bounds("sidebar-search").is_some(),
+            searchable && !crate::ipad_ui::layout()
+        );
+        assert_eq!(
+            cx.debug_bounds("sidebar-search-open").is_some(),
+            searchable && crate::ipad_ui::layout()
+        );
         view.read_with(cx, |view, _| {
             assert_eq!(view.endpoints[view.selected_endpoint].id, "ssh:pro");
             assert!(
@@ -94,7 +101,14 @@ fn ipad_keeps_heading_when_no_host_is_visible(cx: &mut gpui::TestAppContext) {
         let heading = cx.debug_bounds("header-spaces").unwrap();
         let list = cx.debug_bounds("spaces-scroll").unwrap();
         assert!(heading.bottom() <= list.top());
-        assert_eq!(cx.debug_bounds("sidebar-search").is_some(), searchable);
+        assert_eq!(
+            cx.debug_bounds("sidebar-search").is_some(),
+            searchable && !crate::ipad_ui::layout()
+        );
+        assert_eq!(
+            cx.debug_bounds("sidebar-search-open").is_some(),
+            searchable && crate::ipad_ui::layout()
+        );
         assert!(cx.debug_bounds("host-ssh:pro").is_none());
     }
 }

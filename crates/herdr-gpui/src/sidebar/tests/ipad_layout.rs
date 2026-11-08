@@ -28,7 +28,7 @@ fn ipad_rows_have_fixed_touch_geometry_and_worktree_indent(cx: &mut TestAppConte
         ("host-local", 64.),
         ("row-herdr", 56.),
         ("row-agent-p0", 44.),
-        ("new-workspace", 44.),
+        ("sidebar-new-space", 44.),
         ("ipad-sidebar-settings", 44.),
         ("collapse-host-local", 44.),
     ] {
@@ -97,7 +97,9 @@ fn ipad_long_branches_remain_inside_rows_at_saved_narrow_widths(cx: &mut TestApp
 }
 
 #[gpui::test]
-fn ipad_heading_and_footer_chips_need_hardware_and_preserve_search(cx: &mut TestAppContext) {
+fn ipad_heading_icons_replace_fields_and_badges_but_keep_keyboard_bindings(
+    cx: &mut TestAppContext,
+) {
     let _ipad = crate::ipad_ui::ipad_layout();
     let (view, cx) = cx.add_window_view(|window, cx| {
         let mut view = fixture(window, cx);
@@ -106,12 +108,15 @@ fn ipad_heading_and_footer_chips_need_hardware_and_preserve_search(cx: &mut Test
     });
     cx.simulate_resize(size(px(1194.), px(834.)));
     cx.update(|window, cx| layout_tests::full_draw(window, cx).clear(cx));
-    assert!(cx.debug_bounds("sidebar-search").is_some());
+    assert!(cx.debug_bounds("sidebar-search").is_none());
+    assert!(cx.debug_bounds("sidebar-search-open").is_some());
+    assert!(cx.debug_bounds("sidebar-new-space").is_some());
+    assert!(cx.debug_bounds("new-workspace").is_none());
     assert!(cx.debug_bounds("ipad-spaces-shortcut").is_none());
     cx.simulate_keystrokes("escape");
     cx.update(|window, cx| layout_tests::full_draw(window, cx).clear(cx));
-    assert!(cx.debug_bounds("ipad-spaces-shortcut").is_some());
-    assert!(cx.debug_bounds("ipad-new-space-shortcut").is_some());
+    assert!(cx.debug_bounds("ipad-spaces-shortcut").is_none());
+    assert!(cx.debug_bounds("ipad-new-space-shortcut").is_none());
     view.update(cx, |view, _| {
         view.config.shortcut_style = crate::config::ShortcutStyle::HerdrPrefix;
         assert_eq!(

@@ -2,6 +2,7 @@
 //! line, then the connection closes. Browser requests keep their original
 //! flat form; every other family sends `{"method", "caller", "op"}` with a
 //! family-specific `op`, and is answered with a family-specific `reply`.
+pub mod agents;
 pub mod app;
 pub mod chat;
 pub mod cloud;
@@ -30,8 +31,8 @@ pub enum Placement {
 /// an outdated app from a refused request. 3: `browser.open` placement.
 /// 4: `link`. 5: the `tab` family's `zoom`. 6: the `cloud` family. 7: `chat`.
 /// 8: `host` `automation_approve`. 9: `remote`. 10: `settings` `language`.
-/// 11: `mod`.
-pub const PROTOCOL_VERSION: u32 = 11;
+/// 11: `mod`. 12: `agent` pins.
+pub const PROTOCOL_VERSION: u32 = 12;
 
 /// Older apps and clients know only tabs, so a tab is left off the wire.
 fn is_tab(placement: &Placement) -> bool {
@@ -77,6 +78,8 @@ pub enum Request {
     Events(Call<events::EventsOp>),
     #[serde(rename = "link")]
     Link(Call<LinkOp>),
+    #[serde(rename = "agent")]
+    Agent(Call<agents::AgentOp>),
     #[serde(rename = "chat")]
     Chat(Call<chat::ChatOp>),
     #[serde(rename = "cloud")]
@@ -265,6 +268,9 @@ pub enum Response {
     },
     Events {
         reply: events::Reply,
+    },
+    Agent {
+        reply: agents::Reply,
     },
     Chat {
         reply: chat::Reply,

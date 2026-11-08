@@ -19,6 +19,8 @@ pub(crate) mod tests;
 #[derive(Clone)]
 struct Target {
     boot: String,
+    agent: bool,
+    pinned: bool,
     workspace: String,
     tab: String,
     pane: String,
@@ -57,6 +59,8 @@ impl Target {
         });
         let target = Self {
             boot: snapshot.boot_id.clone(),
+            agent: false,
+            pinned: false,
             workspace: pane.workspace_id.clone(),
             tab: pane.tab_id.clone(),
             pane: pane.pane_id.clone(),
@@ -98,6 +102,7 @@ impl Target {
 
 #[derive(Clone, Copy)]
 enum Action {
+    Pin,
     Rename,
     SplitRight,
     SplitDown,
@@ -143,7 +148,8 @@ impl Action {
                     "right_click": if target.right_click_passthrough { "herdr" } else { "pane" },
                 }),
             ),
-            Self::Rename
+            Self::Pin
+            | Self::Rename
             | Self::MoveToNewTab
             | Self::MoveToNewWorkspace
             | Self::MoveTo
@@ -155,6 +161,8 @@ impl Action {
 
     fn label(self, target: &Target) -> String {
         match self {
+            Self::Pin if target.pinned => fl!("pane-menu-unpin"),
+            Self::Pin => fl!("pane-menu-pin"),
             Self::Rename => fl!("pane-menu-rename"),
             Self::SplitRight => fl!("pane-menu-split-right"),
             Self::SplitDown => fl!("pane-menu-split-down"),
@@ -175,7 +183,8 @@ impl Action {
     }
 }
 
-const ACTIONS: [Action; 12] = [
+const ACTIONS: &[Action] = &[
+    Action::Pin,
     Action::Rename,
     Action::SplitRight,
     Action::SplitDown,
@@ -197,8 +206,10 @@ impl PaneMenu {
     /// processes on this machine.
     fn actions(&self) -> Vec<Action> {
         ACTIONS
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|action| match action {
+                Action::Pin => self.target.agent,
                 Action::Swap => self.target.focused.is_some(),
                 Action::MoveToNewTab | Action::MoveToNewWorkspace => self.movable,
                 Action::MoveTo => {
@@ -345,9 +356,12 @@ impl HerdrWindow {
             return;
         }
         self.open_pane_menu(pane, anchor, window, cx);
+        let pinned = self.agent_pin_rank(self.selected_endpoint, pane).is_some();
         if let Some(menu) = &mut self.menu.pane {
             // Showing the pane focuses it, so there is no other pane to swap with.
             menu.target.focused = None;
+            menu.target.agent = true;
+            menu.target.pinned = pinned;
         }
         self.menu.opening_right_click = self.menu.page == Some(Page::Pane);
     }
@@ -404,6 +418,16 @@ impl HerdrWindow {
             }
         };
         match action {
+            Action::Pin => {
+                if !target.agent {
+                    self.pane_error(crate::Error::StalePane, cx);
+                    return;
+                }
+                match self.set_agent_pin(&target.pane, !target.pinned) {
+                    Ok(()) => self.dismiss_menu(window, cx),
+                    Err(error) => self.pane_error(error, cx),
+                }
+            }
             Action::MoveToNewTab => self.move_pane(
                 Destination::NewTab {
                     workspace_id: target.workspace,

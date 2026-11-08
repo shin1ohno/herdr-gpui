@@ -8,7 +8,7 @@ use super::HerdrWindow;
 use crate::{
     Result,
     config::KeybindingSource,
-    keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
+    keymap::{Binding, DaemonKeys, Keymap, KeymapSource, PaneKeys, ResolvedKeymap},
 };
 use gpui::{App, Context, Global};
 use std::collections::BTreeMap;
@@ -73,6 +73,28 @@ impl HerdrWindow {
     /// The keymap this window's keys and labels follow.
     pub(crate) fn keymap(&self) -> &Keymap {
         self.server_keymap().unwrap_or(&self.config.keybindings)
+    }
+
+    /// Keep the applied map and its origin together; opt-in alone does not
+    /// establish that a missing or rejected remote profile was applied.
+    pub(crate) fn resolved_keymap(&self) -> ResolvedKeymap<'_> {
+        if let Some(keys) = self.server_keys.as_ref()
+            && let Ok(keymap) = &keys.keymap
+        {
+            let host = self
+                .endpoints
+                .iter()
+                .find(|endpoint| endpoint.id == keys.endpoint)
+                .map_or(keys.endpoint.as_str(), |endpoint| endpoint.label.as_str());
+            return ResolvedKeymap {
+                keymap,
+                source: KeymapSource::Server(host),
+            };
+        }
+        ResolvedKeymap {
+            keymap: &self.config.keybindings,
+            source: KeymapSource::Local(&self.config.keybinding_prefix_source),
+        }
     }
 
     fn server_keymap(&self) -> Option<&Keymap> {

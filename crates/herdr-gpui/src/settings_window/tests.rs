@@ -20,6 +20,7 @@ mod ipad_key;
 mod ipad_window_controls;
 mod keyboard;
 mod keyboard_en_xa;
+mod keyboard_prefix_source;
 mod language_picker;
 mod language_reload;
 #[cfg(windows)]

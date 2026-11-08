@@ -81,6 +81,8 @@ mod pane_names;
 #[cfg(test)]
 mod picker_scroll;
 #[cfg(test)]
+mod pinned_rows;
+#[cfg(test)]
 mod plain_folder_icon;
 #[cfg(test)]
 mod probe_bar;
@@ -787,6 +789,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         sidebar_split_modified: false,
         sidebar_preferences: None,
         sidebar_modified: false,
+        agent_pins: Default::default(),
+        agent_pins_modified: false,
         agent_sort: Default::default(),
         agent_sort_modified: false,
         avatars: None,

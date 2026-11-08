@@ -112,3 +112,7 @@ pane-menu-processes-signalled = { $count ->
 pane-menu-processes-exited = { $count } had already exited.
 pane-menu-processes-moved = { $count } no longer under this pane, left running.
 pane-menu-processes-failed = { $count } could not be signalled.
+
+pane-menu-pin = Pin Agent
+pane-menu-unpin = Unpin Agent
+pane-menu-pinned-name = Pinned: { $name }

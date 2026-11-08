@@ -1,7 +1,7 @@
 //! Shared headings for the sidebar's workspace and agent sections.
 
 use crate::{
-    Command, HerdrWindow,
+    HerdrWindow,
     config::{FontConfig, Theme},
     direction::Logical,
     i18n::fl,
@@ -40,8 +40,7 @@ pub(in crate::sidebar) fn header(
 }
 
 impl HerdrWindow {
-    /// Preserve the searchable heading; append the resolved hardware hint to
-    /// the same row so neither searching nor its accessibility is replaced.
+    /// Touch entries use compact icons; desktop headings keep their field.
     pub(super) fn spaces_header(
         &self,
         (devices, searchable, tree_search): (bool, bool, bool),
@@ -51,7 +50,30 @@ impl HerdrWindow {
     ) -> Div {
         let font = &self.config.sidebar;
         let theme = &self.theme;
-        let heading = searchable
+        if crate::ipad_ui::layout() {
+            return div()
+                .debug_selector(|| "header-spaces".into())
+                .h(px(crate::ipad_ui::metrics::TOUCH))
+                .flex_none()
+                .row()
+                .items_center()
+                .ps(px(look.content_x()))
+                .child(
+                    div()
+                        .debug_selector(|| "header-label-spaces".into())
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .child(label_text(
+                            &look.header_label(&fl!("sidebar-header-spaces")),
+                        )),
+                )
+                .when(searchable || tree_search, |row| {
+                    row.child(self.sidebar_search_trigger("sidebar-search-open", cx))
+                })
+                .child(self.sidebar_new_space_trigger("sidebar-new-space", cx));
+        }
+        searchable
             .then_some(crate::sidebar::search::Heading::Spaces)
             .or(tree_search.then_some(crate::sidebar::search::Heading::DeviceTree))
             .and_then(|heading| self.search_heading(heading, look, window, cx))
@@ -62,23 +84,6 @@ impl HerdrWindow {
                     ("spaces", fl!("sidebar-header-spaces"))
                 };
                 header(key, &label, font, theme, look)
-            });
-        heading.when(crate::ipad_ui::layout(), |heading| {
-            heading
-                .h(px(crate::ipad_ui::metrics::TOUCH))
-                .justify_between()
-                .gap(px(6.))
-                .children(
-                    self.ipad
-                        .keyboard
-                        .hardware(window)
-                        .then(|| self.shortcut_hint(Command::WorkspacePicker))
-                        .flatten()
-                        .map(|hint| {
-                            crate::ipad_ui::kbd(hint, theme, font)
-                                .debug_selector(|| "ipad-spaces-shortcut".into())
-                        }),
-                )
-        })
+            })
     }
 }

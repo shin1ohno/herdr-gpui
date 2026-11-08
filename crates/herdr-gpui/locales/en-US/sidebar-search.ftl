@@ -18,3 +18,7 @@ sidebar-search-spaces = { $count ->
     [one] { $count } space
    *[other] { $count } spaces
 }
+
+sidebar-search-start = Type to find devices, spaces, branches, and notes.
+sidebar-search-close = Close search
+sidebar-search-unavailable = This space is no longer available or its host is disconnected.

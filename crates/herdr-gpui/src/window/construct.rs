@@ -142,6 +142,8 @@ impl HerdrWindow {
             activation_deadline: None,
             active: window.is_window_active(),
             activity: Default::default(),
+            agent_pins: Default::default(),
+            agent_pins_modified: false,
             agent_sort: preferences::AgentSort::default(),
             agent_sort_modified: false,
             app_update_notes: Default::default(),

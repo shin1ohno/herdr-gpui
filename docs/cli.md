@@ -459,3 +459,11 @@ terminal input remains interactive in the same pane. `chat status --json`
 reports `input_mode` (`chat`, `terminal`, or `read_only`) and `session_id`;
 `blocked` status means the running agent needs input. `chat show/hide/toggle`
 still switches the pane presentation, without starting or stopping its agent.
+
+### Agent pins
+
+`herdr-gpui agent pin|unpin --pane ID [--window ID] [--json]` changes the
+client-local pin for an Agent on the targeted window's selected host. It
+uses the usual caller/session fence and refuses a missing or disconnected
+agent (exit 5). Pinning an already pinned row keeps its position. Unpin
+then pin again to put it first. This does not change the daemon's order.

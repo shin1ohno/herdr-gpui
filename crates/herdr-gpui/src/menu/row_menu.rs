@@ -84,6 +84,7 @@ enum Action {
     NewTab,
     Open,
     OpenChat,
+    Pin,
     // keep-sorted end
 }
 
@@ -91,12 +92,15 @@ impl Action {
     fn rows(target: RowTarget) -> &'static [Self] {
         match target {
             RowTarget::Host => &[Self::Open, Self::NewTab, Self::OpenChat, Self::Detach],
-            RowTarget::Space | RowTarget::Agent => &[Self::Open, Self::NewTab, Self::OpenChat],
+            RowTarget::Space => &[Self::Open, Self::NewTab, Self::OpenChat],
+            RowTarget::Agent => &[Self::Open, Self::NewTab, Self::OpenChat, Self::Pin],
         }
     }
 
-    fn label(self, host: &str) -> String {
+    fn label(self, host: &str, pinned: bool) -> String {
         match self {
+            Self::Pin if pinned => fl!("pane-menu-unpin"),
+            Self::Pin => fl!("pane-menu-pin"),
             Self::Open => fl!("ipad-rail-row-menu-open"),
             Self::NewTab => fl!("ipad-rail-row-menu-new-tab"),
             Self::OpenChat => fl!("ipad-rail-row-menu-open-chat"),
@@ -284,7 +288,13 @@ impl HerdrWindow {
                     .enumerate()
                     .map(|(index, action)| {
                         let id = format!("ipad-rail-row-menu-{action:?}");
-                        let label = action.label(&state.label);
+                        let pinned = match &state.target {
+                            Some(NavigationTarget::Pane(pane)) => {
+                                self.agent_pin_rank(self.selected_endpoint, pane).is_some()
+                            }
+                            _ => false,
+                        };
+                        let label = action.label(&state.label, pinned);
                         div()
                             .id(SharedString::from(id.clone()))
                             .debug_selector(move || id)
@@ -315,6 +325,16 @@ impl HerdrWindow {
             return;
         };
         if !state.current(self) || !Action::rows(state.kind()).contains(&action) {
+            self.dismiss_menu(window, cx);
+            return;
+        }
+        if action == Action::Pin {
+            if let Some(NavigationTarget::Pane(pane)) = &state.target {
+                let pinned = self.agent_pin_rank(self.selected_endpoint, pane).is_some();
+                if let Err(error) = self.set_agent_pin(pane, !pinned) {
+                    self.local_error = Some(error.to_string());
+                }
+            }
             self.dismiss_menu(window, cx);
             return;
         }
@@ -484,7 +504,7 @@ impl HerdrWindow {
                     self.open_group_menu(group, anchor, window, cx);
                 }
             }
-            Action::Open | Action::Detach => {}
+            Action::Open | Action::Detach | Action::Pin => {}
         }
     }
 }

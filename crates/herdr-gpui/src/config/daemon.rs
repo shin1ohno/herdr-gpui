@@ -55,6 +55,12 @@ pub(super) struct Daemon {
 /// from a newer herdr, so only the keys read here matter and anything
 /// unreadable, oversized, malformed, or unrecognized leaves the defaults alone.
 pub(super) fn daemon_settings(path: &Path) -> Daemon {
+    let mut settings = read_daemon_settings(path);
+    settings.keys.set_config_path(path);
+    settings
+}
+
+fn read_daemon_settings(path: &Path) -> Daemon {
     if fs::metadata(path).is_ok_and(|data| data.len() > MAX_DAEMON_CONFIG_BYTES) {
         return Daemon::default();
     }

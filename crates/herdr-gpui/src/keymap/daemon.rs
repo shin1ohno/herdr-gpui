@@ -15,6 +15,7 @@ mod error;
 
 pub(crate) use error::Error;
 
+use super::LocalPrefixSource;
 use crate::{Result, controls::Command};
 use gpui::{Keystroke, Modifiers};
 
@@ -275,6 +276,7 @@ pub(crate) enum Trigger {
 /// first binding for a keystroke, so the same one wins here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct DaemonKeys {
+    pub(super) prefix_source: LocalPrefixSource,
     /// Every prefix key, never empty and without duplicates. Each one arms
     /// prefix mode; the first is the one shown in chord labels.
     pub(super) prefixes: Vec<Keystroke>,
@@ -293,6 +295,14 @@ impl Default for DaemonKeys {
 }
 
 impl DaemonKeys {
+    pub(crate) fn prefix_source(&self) -> &LocalPrefixSource {
+        &self.prefix_source
+    }
+
+    pub(crate) fn set_config_path(&mut self, path: &std::path::Path) {
+        self.prefix_source.set_path(path);
+    }
+
     /// Reads a host's `server_keybindings_toml`: the normalized `[keys]`
     /// profile Herdr publishes for `--remote-keybindings server`. It is read
     /// with the same rules as the local `[keys]` table, so prefixes, actions,
@@ -318,7 +328,7 @@ impl DaemonKeys {
     /// Reads the daemon config's `[keys]` table; each action it leaves out,
     /// or gives a value of the wrong type, keeps Herdr's default.
     pub(crate) fn from_table(keys: Option<&toml::Table>) -> Self {
-        let prefixes = prefixes(keys);
+        let (prefixes, configured_prefix) = prefixes(keys);
         let legacy = |indexed: Indexed| {
             keys.and_then(|keys| keys.get("indexed")?.get(indexed.legacy_key())?.as_str())
                 .map(str::trim)
@@ -376,6 +386,7 @@ impl DaemonKeys {
                 .collect()
         };
         Self {
+            prefix_source: LocalPrefixSource::parsed(configured_prefix),
             prefixes,
             bindings: configured,
             navigate_up: navigate("navigate_workspace_up", "up"),
@@ -401,7 +412,7 @@ fn entries(value: Option<&toml::Value>) -> Option<Vec<&str>> {
 /// profiles' `extra_prefixes` appended. Entries this client cannot parse are
 /// dropped, later duplicates are ignored, and when nothing usable remains
 /// (an empty list included) Herdr's default applies.
-fn prefixes(keys: Option<&toml::Table>) -> Vec<Keystroke> {
+fn prefixes(keys: Option<&toml::Table>) -> (Vec<Keystroke>, bool) {
     let field = |name: &str| entries(keys.and_then(|keys| keys.get(name))).unwrap_or_default();
     let mut prefixes: Vec<Keystroke> = Vec::new();
     let entries = field("prefix").into_iter().chain(field("extra_prefixes"));
@@ -410,10 +421,11 @@ fn prefixes(keys: Option<&toml::Table>) -> Vec<Keystroke> {
             prefixes.push(parsed);
         }
     }
+    let configured = !prefixes.is_empty();
     if prefixes.is_empty() {
         prefixes.extend(keystroke(DEFAULT_PREFIX));
     }
-    prefixes
+    (prefixes, configured)
 }
 
 /// Each binding one entry spells, with the digit it types, if any. `1..9`

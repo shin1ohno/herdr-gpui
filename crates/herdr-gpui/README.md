@@ -1123,6 +1123,15 @@ order then follows Herdr's `ui.agent_panel_sort` (`priority` or `grouped`)
 unless it was toggled earlier or a plugin sets the agent view, which keeps the
 header shown while that view is active.
 
+Right-click an Agent (long-press on iPad) and choose **Pin Agent** to keep
+it above the regular Agents list, newest pin first. The pin icon marks it;
+**Unpin Agent** returns it to the existing grouped or priority order. The
+collapsed rail uses the same pin order. Pins survive app restarts in the
+existing local UI state file and follow the host, daemon boot, and pane,
+so renaming does not change them. Disconnecting preserves pins; a connected
+snapshot retires a closed pane's pin. Restarting the daemon does not carry
+pins to newly allocated panes. Nested workspace lists keep their placement.
+
 Agents list in their own section below Spaces by default. Set top-level
 `agents_placement = "nested"`, or pick **Under workspaces** for **Agents
 placement** in **Settings > Sidebar**, to list each agent under the workspace
@@ -1134,6 +1143,12 @@ branches by name; while it holds text, results grouped by kind replace the
 spaces list. Up and Down move through them, Enter opens one, and Escape
 clears the search. Set top-level `show_sidebar_search = false`, or turn off
 **Show search** in **Settings > Sidebar**, to hide it.
+On iPad, the magnifier beside the Spaces heading opens these results in a
+popup, leaving the spaces list in place. The collapsed rail also has a
+magnifier; in a narrow window, open the sidebar from the top-left menu first.
+Escape, the close button, or a click outside dismisses the popup and restores
+focus. The adjacent plus opens **New Space**; the bottom of the sidebar keeps
+Settings without a second New Space button.
 
 In the Normal, Compact, and Comfortable layouts and in Superset, each space's
 sidebar row starts with its repository owner's avatar, or the GitHub mark;

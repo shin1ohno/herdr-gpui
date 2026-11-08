@@ -53,6 +53,7 @@ fn roundtrip_and_reset_drain_after_drop() {
             sidebar_width: Some(width as f32),
             sidebar_split: Some(0.4),
             agent_sort: Some(AgentSort::Priority),
+            agent_pins: Default::default(),
             notes_width: None,
             mod_panel_width: None,
             review_files_width: None,
@@ -72,6 +73,7 @@ fn roundtrip_and_reset_drain_after_drop() {
             sidebar_width: Some(100.0),
             sidebar_split: Some(0.4),
             agent_sort: Some(AgentSort::Priority),
+            agent_pins: Default::default(),
             notes_width: None,
             mod_panel_width: None,
             review_files_width: None,
@@ -98,6 +100,7 @@ fn only_a_toggled_sort_is_stored_and_older_files_migrate() {
         sidebar_width: Some(240.0),
         sidebar_split: None,
         agent_sort,
+        agent_pins: Default::default(),
         notes_width: None,
         mod_panel_width: None,
         review_files_width: None,
@@ -174,6 +177,7 @@ fn drop_does_not_wait_for_blocked_worker_and_queued_saves_still_drain() {
             sidebar_width: Some(160.),
             sidebar_split: None,
             agent_sort: Some(AgentSort::Grouped),
+            agent_pins: Default::default(),
             notes_width: None,
             mod_panel_width: None,
             review_files_width: None,
@@ -185,6 +189,7 @@ fn drop_does_not_wait_for_blocked_worker_and_queued_saves_still_drain() {
             sidebar_width: Some(400.),
             sidebar_split: Some(0.6),
             agent_sort: Some(AgentSort::Priority),
+            agent_pins: Default::default(),
             notes_width: Some(420.),
             mod_panel_width: None,
             review_files_width: None,
@@ -245,6 +250,7 @@ fn malformed_and_invalid_widths_fall_back_to_default() {
                     sidebar_width: Some(width),
                     sidebar_split: None,
                     agent_sort: None,
+                    agent_pins: Default::default(),
                     notes_width: None,
                     mod_panel_width: None,
                     review_files_width: None,
@@ -260,6 +266,7 @@ fn malformed_and_invalid_widths_fall_back_to_default() {
         sidebar_width: Some(237.5),
         sidebar_split: None,
         agent_sort: None,
+        agent_pins: Default::default(),
         notes_width: None,
         mod_panel_width: None,
         review_files_width: None,
@@ -280,6 +287,7 @@ fn invalid_sidebar_splits_preserve_other_preferences() {
         sidebar_width: Some(240.0),
         sidebar_split: None,
         agent_sort: Some(AgentSort::Priority),
+        agent_pins: Default::default(),
         notes_width: None,
         mod_panel_width: None,
         review_files_width: None,
@@ -328,6 +336,7 @@ fn sidebar_split_roundtrips_including_boundaries_and_reset() {
             sidebar_width: Some(240.0),
             sidebar_split,
             agent_sort: Some(AgentSort::Priority),
+            agent_pins: Default::default(),
             notes_width: None,
             mod_panel_width: None,
             review_files_width: None,
@@ -361,3 +370,5 @@ mod activity_last_opened;
 mod activity_panel;
 mod device_order;
 mod notes_width;
+
+mod pins;
