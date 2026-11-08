@@ -415,6 +415,13 @@ class BundleTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         info = plistlib.loads((self.executable.parent / "sheprd.app/Info.plist").read_bytes())
         self.assertEqual(info["CFBundleIdentifier"], "so.pen.herdr-gpui")
+        self.assertEqual(info["CFBundleName"], "Sheprd")
+        self.assertTrue(info["NSLocalNetworkUsageDescription"].startswith("Sheprd "))
+        host_key_type = next(
+            kind for kind in info["CFBundleURLTypes"]
+            if "herdr-ipad" in kind["CFBundleURLSchemes"]
+        )
+        self.assertEqual(host_key_type["CFBundleURLName"], "Herdr iPad host key")
         self.assertEqual(
             self.calls("cargo")[0]["entitlements"]["application-identifier"],
             "HERDRSIM.so.pen.herdr-gpui",

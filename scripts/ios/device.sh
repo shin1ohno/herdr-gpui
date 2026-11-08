@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sign, install, and launch Herdr UI on a connected iPad, then observe it:
+# Sign, install, and launch Sheprd on a connected iPad, then observe it:
 # whether the process is still running after a wait, and a copy of the app's
 # log file from its data container.
 #
