@@ -85,7 +85,7 @@ impl Scope {
     }
 
     /// The scope as `tab list` reports a tab's host.
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn as_str(&self) -> &str {
         &self.0
     }

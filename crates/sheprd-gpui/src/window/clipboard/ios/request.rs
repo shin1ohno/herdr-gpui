@@ -43,7 +43,7 @@ struct NativeLease(AtomicBool);
 impl NativeLease {
     fn acquire() -> Result<Self> {
         NATIVE_REQUESTS
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
                 (count < super::super::MAX_ACQUISITIONS).then_some(count + 1)
             })
             .map_err(|_| Error::ProviderBusy)?;

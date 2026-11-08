@@ -35,7 +35,7 @@ fn the_count_is_each_users_server_once_without_the_systems() {
 
 /// The count keeps a slower scan alive while the section is closed, and
 /// opening the section asks for a listing at once.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[test]
 fn counting_keeps_a_background_scan_that_opening_hurries() {
     let (mut ports, _updates, commands) = LocalPorts::fake();

@@ -6,21 +6,21 @@
 //! shown (or a `sheprd ports all` asked recently), and signals processes
 //! when the user confirms. The UI thread only starts and drops the worker
 //! and takes its answers on later ticks. Only macOS and Linux are listed:
-//! Windows has neither `lsof` nor `ss`, nor SIGSTOP, and says so.
+//! iPadOS cannot launch these tools; Windows has neither `lsof` nor `ss`, nor SIGSTOP, and says so.
 // i18n: migrated
 
 mod error;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod naming;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod pinned;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod process;
 mod row;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod scan;
 mod section;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod worker;
 
 #[cfg(test)]
@@ -47,16 +47,17 @@ use std::{
 };
 
 /// Whether this platform can list and signal its ports at all.
-pub(crate) const SUPPORTED: bool = cfg!(unix);
+pub(crate) const SUPPORTED: bool = cfg!(all(unix, not(target_os = "ios")));
 /// How long a command line request keeps the ports scanned with the section
 /// closed, so a script asking again finds a fresh listing.
+#[cfg(not(target_os = "ios"))]
 pub(crate) const DEMAND: Duration = Duration::from_secs(60);
 /// Rows kept, lowest port first.
 const ROW_LIMIT: usize = 512;
 
 /// One port a process of this user listens on.
 // Only the Unix worker makes these; Windows lists none.
-#[cfg_attr(not(unix), allow(dead_code))]
+#[cfg_attr(any(not(unix), target_os = "ios"), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Listener {
     pub identity: Identity,
@@ -156,7 +157,7 @@ pub(crate) fn home_relative(path: &Path, home: Option<&Path>) -> String {
 }
 
 /// What became of one process the user asked to signal.
-#[cfg_attr(not(unix), allow(dead_code))]
+#[cfg_attr(any(not(unix), target_os = "ios"), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Outcome {
     /// Signalled; a stopped one exited within its grace period.
@@ -230,7 +231,7 @@ pub(crate) enum Command {
     Signal(PortAction, Vec<Identity>),
 }
 
-#[cfg_attr(not(unix), allow(dead_code))]
+#[cfg_attr(any(not(unix), target_os = "ios"), allow(dead_code))]
 pub(crate) enum Update {
     /// A scan's result, and when that scan began.
     Listing(Instant, Result<Vec<Listener>>),
@@ -254,12 +255,12 @@ impl Drop for Worker {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn start() -> Result<Worker> {
     worker::start()
 }
 
-#[cfg(not(unix))]
+#[cfg(any(not(unix), target_os = "ios"))]
 fn start() -> Result<Worker> {
     Err(Error::Unsupported.into())
 }
@@ -431,12 +432,14 @@ impl LocalPorts {
     }
 
     /// Why the latest scan failed, in English, for the command line.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn english_error(&self) -> Option<&str> {
         self.error.as_ref().map(|failure| failure.english.as_str())
     }
 
     /// Whether a scan that began at or after `at` has answered, so what is
     /// shown is no older than a request made then.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn scanned_since(&self, at: Instant) -> bool {
         self.scanned.is_some_and(|scanned| scanned >= at)
     }
@@ -445,6 +448,7 @@ impl LocalPorts {
     /// until a scan begun since then has answered, so rows cached while the
     /// section was closed are never taken for current; then the listing, or
     /// why there is none, in English. A scan that cannot run says so at once.
+    #[cfg(any(test, not(target_os = "ios")))]
     pub(crate) fn fresh_listing(&self, requested: Instant) -> Option<Result<&[Listener], String>> {
         if !self.scanned_since(requested) {
             let halted = self.start_failed && self.worker.is_none();
@@ -476,6 +480,7 @@ impl LocalPorts {
     }
 
     /// Keeps the ports scanned until `until`, for a command line request.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn demand(&mut self, until: Instant) {
         self.demand = Some(self.demand.map_or(until, |known| known.max(until)));
     }
@@ -529,7 +534,7 @@ impl LocalPorts {
 
     /// Shows `error` as if the latest scan had failed with it; Windows
     /// shows no scan's failure.
-    #[cfg(all(test, unix))]
+    #[cfg(all(test, unix, not(target_os = "ios")))]
     pub(crate) fn seed_error(&mut self, error: crate::Error) {
         self.apply(Update::Listing(Instant::now(), Err(error)));
     }

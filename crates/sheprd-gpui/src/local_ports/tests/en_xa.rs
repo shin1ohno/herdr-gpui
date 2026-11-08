@@ -62,7 +62,7 @@ fn the_ports_section_and_its_question_show_only_messages_under_en_xa() {
 
         // A failed scan says why in the app's language, not in English.
         // Windows shows only that the section is unsupported.
-        #[cfg(unix)]
+        #[cfg(all(unix, not(target_os = "ios")))]
         {
             recorder.take();
             cx.update(|window, cx| {

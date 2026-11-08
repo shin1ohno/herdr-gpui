@@ -2,8 +2,11 @@
 //! script listens on a Unix socket, and the same `ssh` child forwards a
 //! loopback port here to it. Ending the child closes both the forward and
 //! the script's standard input, which is how such a script learns to stop.
+#[cfg(not(target_os = "ios"))]
 use super::{HostKeys, noninteractive, quote};
+#[cfg(not(target_os = "ios"))]
 use crate::{Result, catalog::validate_target};
+#[cfg(not(target_os = "ios"))]
 use std::process::Command;
 
 /// Where a socket named `name` lies on the host: alone in a folder of that
@@ -26,6 +29,7 @@ pub fn remote_socket(name: &str) -> String {
 /// means this child holds the port. `ControlPath=none` keeps the forward in
 /// this child, so killing it closes the forward. The caller owns the child:
 /// its streams, readiness, and reaping.
+#[cfg(not(target_os = "ios"))]
 pub fn serve_command(target: &str, local: u16, name: &str, script: &str) -> Result<Command> {
     validate_target(target)?;
     let valid = |byte: u8| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-';

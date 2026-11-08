@@ -12,7 +12,9 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use sheprd_client::protocol::{AgentStatus, SemanticNotificationKind as Kind};
+#[cfg(not(target_os = "ios"))]
 use sheprd_control_protocol::protocol::app::AlertInfo;
+#[cfg(not(target_os = "ios"))]
 use std::time::UNIX_EPOCH;
 
 const ROW_HEIGHT: f32 = 36.;
@@ -44,6 +46,7 @@ impl SheprdWindow {
     }
 
     /// The alerts as `sheprd window alerts` reports them.
+    #[cfg(not(target_os = "ios"))]
     pub(crate) fn alert_infos(&self) -> Vec<AlertInfo> {
         self.overview_alerts()
             .into_iter()

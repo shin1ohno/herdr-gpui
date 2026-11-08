@@ -50,6 +50,7 @@ mod cloud_setup;
 mod code_search;
 mod code_server;
 mod code_view;
+#[cfg(not(target_os = "ios"))]
 mod composition;
 mod config;
 mod config_diagnostic;

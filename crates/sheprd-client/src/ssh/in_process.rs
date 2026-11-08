@@ -74,6 +74,12 @@ pub fn forward_command(
     Err(super::Error::Unsupported.into())
 }
 
+/// iPadOS cannot start the `ssh` child that serves and forwards a host socket.
+pub fn serve_command(target: &str, _local: u16, _name: &str, _script: &str) -> Result<Command> {
+    validate_target(target)?;
+    Err(Error::ProcessUnsupported.into())
+}
+
 /// iPadOS cannot start the `ssh` child a host script runs in.
 pub fn script_command(target: &str, _script: &str) -> Result<Command> {
     validate_target(target)?;

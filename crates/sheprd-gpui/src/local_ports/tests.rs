@@ -3,20 +3,20 @@
 use super::*;
 
 mod badge;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod batch;
 mod en_xa;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod naming;
 #[cfg(target_os = "linux")]
 mod pinned;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod process;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod retry;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod scan;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod scan_failures;
 mod section;
 mod sort;

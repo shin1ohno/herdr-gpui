@@ -24,7 +24,7 @@ use crate::{
     usage::{Host, Shell},
 };
 pub(crate) use render::{chips, close_button};
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "ios")))]
 pub(crate) use scan::Owner;
 // The Ports section's Unix scan reads its addresses the same way.
 #[cfg(all(unix, not(target_os = "ios")))]

@@ -214,17 +214,17 @@ fn a_narrow_window_keeps_a_paused_process_named(cx: &mut gpui::TestAppContext) {
     assert_eq!(narrow, whole);
 }
 
-/// Windows lists nothing and says why, with nothing to refresh.
-#[cfg(not(unix))]
+/// Platforms without a scanner say why, with nothing to refresh.
+#[cfg(any(not(unix), target_os = "ios"))]
 #[gpui::test]
-fn windows_says_the_section_is_unsupported(cx: &mut gpui::TestAppContext) {
+fn unsupported_platform_says_the_section_is_unsupported(cx: &mut gpui::TestAppContext) {
     let (_, cx, _channels) = fixture(cx, Vec::new());
     assert!(cx.debug_bounds("local-ports-unsupported").is_some());
     assert!(cx.debug_bounds("local-ports-refresh").is_none());
     assert!(cx.debug_bounds("local-ports-error").is_none());
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 #[gpui::test]
 fn macos_and_linux_never_say_unsupported(cx: &mut gpui::TestAppContext) {
     let (_, cx, _channels) = fixture(cx, Vec::new());

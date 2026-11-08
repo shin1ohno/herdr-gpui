@@ -6,7 +6,7 @@
 
 use std::{ffi::OsString, process::Command};
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 mod locale;
 
 /// Called only by worker threads, such as the daemon connection's and the
