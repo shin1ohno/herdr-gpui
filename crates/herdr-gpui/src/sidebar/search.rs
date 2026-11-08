@@ -20,6 +20,7 @@ use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
 mod heading;
+mod popup;
 mod results;
 
 pub(super) use heading::Heading;
@@ -31,6 +32,7 @@ const RESULT_LIMIT: usize = 200;
 pub(crate) struct SidebarSearch {
     pub(super) input: Entity<SearchInput>,
     query: String,
+    return_focus: Option<gpui::FocusHandle>,
     /// The highlighted result, which Enter opens.
     selected: usize,
     scroll: ScrollHandle,
@@ -50,11 +52,15 @@ impl SidebarSearch {
             search.selected = 0;
             // The first child is the section heading; the second is the first hit.
             search.scroll.scroll_to_item(1);
+            if this.menu.page == Some(crate::menu::Page::SidebarSearch) {
+                this.menu.error = None;
+            }
             cx.notify();
         });
         Self {
             input,
             query: String::new(),
+            return_focus: None,
             selected: 0,
             scroll: ScrollHandle::new(),
             _changed: changed,
@@ -294,18 +300,40 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match target {
-            Target::Device { endpoint } => {
-                self.select_endpoint(endpoint, cx);
+        let popup = self.menu.page == Some(crate::menu::Page::SidebarSearch);
+        let anchor = self.menu.anchor;
+        let return_focus = self.sidebar_search.return_focus.clone();
+        if popup {
+            if !self.sidebar_search_target_available(target) {
+                self.menu.error = Some(fl!("sidebar-search-unavailable"));
+                cx.notify();
+                return;
             }
+            self.dismiss_menu(window, cx);
+        }
+        let opened = match target {
+            Target::Device { endpoint } => self.select_endpoint(endpoint, cx),
             Target::Workspace {
                 endpoint,
                 workspace,
-            } => {
-                self.navigate_endpoint(endpoint, NavigationTarget::Workspace(workspace), cx);
+            } => self.navigate_endpoint(endpoint, NavigationTarget::Workspace(workspace), cx),
+        };
+        if popup && !opened {
+            if self.open_menu(window, cx) {
+                self.menu.page = Some(crate::menu::Page::SidebarSearch);
+                self.menu.anchor = anchor;
+                self.menu.error = Some(fl!("sidebar-search-unavailable"));
+                self.sidebar_search.return_focus = return_focus;
+                window.focus(&self.sidebar_search.focus(cx), cx);
+                cx.notify();
             }
+            return;
         }
-        self.clear_heading_search(Heading::Spaces, window, cx);
+        if popup {
+            window.focus(&self.focus, cx);
+        } else {
+            self.clear_heading_search(Heading::Spaces, window, cx);
+        }
     }
 
     /// The keys the field leaves alone: arrows move through the results,
@@ -321,7 +349,11 @@ impl HerdrWindow {
         }
         let key = event.keystroke.key.as_str();
         if key == "escape" {
-            self.clear_heading_search(Heading::Spaces, window, cx);
+            if self.menu.page == Some(crate::menu::Page::SidebarSearch) {
+                self.dismiss_menu(window, cx);
+            } else {
+                self.clear_heading_search(Heading::Spaces, window, cx);
+            }
             cx.stop_propagation();
             return;
         }

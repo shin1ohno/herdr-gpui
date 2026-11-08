@@ -66,7 +66,8 @@ impl HerdrWindow {
             .menu
             .application
             .as_ref()
-            .and_then(|menu| menu.return_focus.clone());
+            .and_then(|menu| menu.return_focus.clone())
+            .or_else(|| self.take_sidebar_search_return_focus());
         let prefix = self.take_settings_prefix(cx);
         // A page that animates out keeps what it reads from the reset.
         if let Some(page) = self.menu.page.filter(|page| super::appear::leaves(*page)) {
@@ -414,6 +415,7 @@ impl HerdrWindow {
                         | Page::Host
                         | Page::RemoveDevice
                         | Page::RemoveWsl
+                        | Page::SidebarSearch
                 ),
                 |panel| {
                     let room = (viewport.width - px(24.)).max(px(0.));
@@ -477,6 +479,7 @@ impl HerdrWindow {
                         | Page::DeviceTheme
                         | Page::Palette
                         | Page::CodeSearch
+                        | Page::SidebarSearch
                         | Page::AppUpdate
                         | Page::GitHub
                         | Page::GitLab
@@ -508,6 +511,7 @@ impl HerdrWindow {
                         | Page::DeviceTheme
                         | Page::Palette
                         | Page::CodeSearch
+                        | Page::SidebarSearch
                 ),
                 |panel| {
                     panel
@@ -721,6 +725,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_theme_picker(cx));
         } else if page == Page::Palette {
             panel = panel.child(self.render_palette(viewport, cx));
+        } else if page == Page::SidebarSearch {
+            panel = panel.child(self.render_sidebar_search_popup(cx));
         } else if page == Page::CodeSearch {
             panel = panel.child(self.render_code_search(cx));
         } else if page == Page::ConfirmClose {

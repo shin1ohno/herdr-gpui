@@ -97,6 +97,7 @@ pub(crate) enum Page {
     /// Confirming a paired remote control device should be revoked.
     RevokeDevice,
     Settings,
+    SidebarSearch,
     Tab,
     /// Moving a linked worktree to another host.
     Teleport,
@@ -187,6 +188,7 @@ impl Page {
                 | Self::PrReview
                 | Self::PrComment
                 | Self::PrMerge
+                | Self::SidebarSearch
                 | Self::RowMenu(_)
         )
     }
