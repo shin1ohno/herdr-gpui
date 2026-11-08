@@ -82,7 +82,7 @@ class LintTests(unittest.TestCase):
             self.assertEqual(platform[platform.index("--target-dir") + 1], str(self.root / "target"))
             self.assertIn("--locked", platform)
             self.assertIn("--all-targets", platform)
-            application = next(call for call in calls if "herdr-gpui" in call and target in call)
+            application = next(call for call in calls if "sheprd-gpui" in call and target in call)
             self.assertIn("--no-default-features", application)
 
     def test_respects_shared_target_directory(self):

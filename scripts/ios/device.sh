@@ -148,7 +148,7 @@ if [[ -z $app ]]; then
     echo "error: no provisioning profile signs $team.$bundle_id for $name" >&2
     exit 1
   }
-  app=$(bash "$root/scripts/ios/bundle.sh" --package herdr-gpui --bin herdr-gpui \
+  app=$(bash "$root/scripts/ios/bundle.sh" --package sheprd-gpui --bin sheprd \
     --no-default-features --target aarch64-apple-ios ${profile_args[@]+"${profile_args[@]}"} \
     --bundle-id "$bundle_id" --team "$team" --profile "$profile" | tail -n 1) || {
     echo "error: could not build and sign the bundle for $name" >&2

@@ -53,7 +53,7 @@ class BundleTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         tools = self.root / "tools"
         tools.mkdir()
-        self.executable = self.root / "build with spaces" / "herdr-gpui"
+        self.executable = self.root / "build with spaces" / "sheprd"
         self.executable.parent.mkdir()
         self.executable.write_bytes(b"isolated test executable")
         self.log = self.root / "calls.jsonl"
@@ -94,7 +94,7 @@ class BundleTests(unittest.TestCase):
                 "reason": "compiler-artifact",
                 "executable": os.environ["HERDR_BUNDLE_TEST_BINARY"],
                 "target": {"name": name, "kind": [kind]},
-                "package_id": "path+file:///isolated#herdr-gpui@0.1.0",
+                "package_id": "path+file:///isolated#sheprd-gpui@0.1.0",
             }))
             ''',
         )
@@ -206,7 +206,7 @@ class BundleTests(unittest.TestCase):
     def assert_signed_for(self, result, bundle_id, profile):
         self.assertEqual(result.returncode, 0, result.stderr)
         app = Path(result.stdout.splitlines()[-1])
-        self.assertEqual(app, self.executable.parent / "herdr-gpui.app")
+        self.assertEqual(app, self.executable.parent / "sheprd.app")
         self.assertEqual((app / "embedded.mobileprovision").read_bytes(), profile.read_bytes())
         signing = [call for call in self.calls("codesign") if "--sign" in call["args"]]
         self.assertEqual(len(signing), 1)
@@ -238,9 +238,9 @@ class BundleTests(unittest.TestCase):
         self.assertFalse((app / "Fonts").exists())
 
     def test_bundle_registers_sauce_code_pro_without_system_font_privileges(self):
-        result = self.run_bundle("--package", "herdr-gpui", "--bin", "herdr-gpui")
+        result = self.run_bundle("--package", "sheprd-gpui", "--bin", "sheprd")
         self.assertEqual(result.returncode, 0, result.stderr)
-        app = self.executable.parent / "herdr-gpui.app"
+        app = self.executable.parent / "sheprd.app"
         info = plistlib.loads((app / "Info.plist").read_bytes())
         expected = {f"Fonts/SauceCodeProNerdFontMono-{face}.ttf"
                     for face in ["Regular", "Bold", "Italic", "BoldItalic"]}
@@ -257,7 +257,7 @@ class BundleTests(unittest.TestCase):
 
     def test_simulator_links_private_keychain_entitlements_only_into_the_executable(self):
         result = self.run_bundle(
-            "--package", "herdr-gpui", "--bin", "herdr-gpui",
+            "--package", "sheprd-gpui", "--bin", "sheprd",
             "--bundle-id", "dev.herdr.bundle-test", "--no-default-features",
             "--features", "test-feature",
         )
@@ -273,7 +273,7 @@ class BundleTests(unittest.TestCase):
             "keychain-access-groups": ["HERDRSIM.dev.herdr.bundle-test"],
         })
         self.assertFalse(Path(call["entitlements_path"]).exists())
-        self.assertTrue((self.executable.parent / "herdr-gpui.app/Info.plist").is_file())
+        self.assertTrue((self.executable.parent / "sheprd.app/Info.plist").is_file())
         signatures = [call for call in self.calls() if call["tool"] == "codesign"]
         self.assertTrue(signatures)
         self.assertTrue(all("--entitlements" not in call["args"] for call in signatures))
@@ -307,7 +307,7 @@ class BundleTests(unittest.TestCase):
                 self.assertFalse(self.calls())
 
     def test_device_without_a_team_stays_unsigned_and_names_the_options(self):
-        result = self.run_bundle("--bin", "herdr-gpui", "--target", "aarch64-apple-ios")
+        result = self.run_bundle("--bin", "sheprd", "--target", "aarch64-apple-ios")
         self.assertEqual(result.returncode, 3, result.stderr)
         calls = self.calls()
         self.assertEqual(len(calls), 1)
@@ -316,12 +316,12 @@ class BundleTests(unittest.TestCase):
         self.assertIn("unsigned device bundle", result.stderr)
         self.assertIn("--team", result.stderr)
         self.assertIn("--profile", result.stderr)
-        self.assertFalse((self.executable.parent / "herdr-gpui.app/embedded.mobileprovision").exists())
+        self.assertFalse((self.executable.parent / "sheprd.app/embedded.mobileprovision").exists())
 
     def test_device_with_a_profile_signs_with_the_identity_the_profile_lists(self):
         profile = self.write_profile(self.root / "given profile.mobileprovision")
         result = self.run_bundle(
-            "--package", "herdr-gpui", "--bin", "herdr-gpui", "--target", "aarch64-apple-ios",
+            "--package", "sheprd-gpui", "--bin", "sheprd", "--target", "aarch64-apple-ios",
             "--bundle-id", "dev.herdr.signed", "--team", TEAM, "--profile", str(profile),
         )
         self.assert_signed_for(result, "dev.herdr.signed", profile)
@@ -333,7 +333,7 @@ class BundleTests(unittest.TestCase):
         )
         self.env["HERDR_IOS_TEAM"] = TEAM
         self.env["HERDR_IOS_BUNDLE_ID"] = "dev.herdr.env"
-        result = self.run_bundle("--bin", "herdr-gpui", "--target", "aarch64-apple-ios")
+        result = self.run_bundle("--bin", "sheprd", "--target", "aarch64-apple-ios")
         self.assert_signed_for(result, "dev.herdr.env", profile)
         self.assertFalse(self.calls("xcodebuild"))
 
@@ -344,7 +344,7 @@ class BundleTests(unittest.TestCase):
         scratch.mkdir()
         self.env["TMPDIR"] = str(scratch)
         result = self.run_bundle(
-            "--bin", "herdr-gpui", "--target", "aarch64-apple-ios", "--release",
+            "--bin", "sheprd", "--target", "aarch64-apple-ios", "--release",
             "--bundle-id", "dev.herdr.created", "--team", TEAM,
         )
         self.assert_signed_for(result, "dev.herdr.created", created)
@@ -369,7 +369,7 @@ class BundleTests(unittest.TestCase):
 
     def test_unprovisionable_team_fails_before_compiling(self):
         result = self.run_bundle(
-            "--bin", "herdr-gpui", "--target", "aarch64-apple-ios", "--team", TEAM,
+            "--bin", "sheprd", "--target", "aarch64-apple-ios", "--team", TEAM,
             "--bundle-id", "dev.herdr.unprovisioned",
         )
         self.assertNotEqual(result.returncode, 0)
@@ -381,7 +381,7 @@ class BundleTests(unittest.TestCase):
         profile = self.write_profile(self.root / "given.mobileprovision")
         self.env["HERDR_BUNDLE_TEST_IDENTITIES"] = OTHER_SHA
         result = self.run_bundle(
-            "--bin", "herdr-gpui", "--target", "aarch64-apple-ios", "--profile", str(profile),
+            "--bin", "sheprd", "--target", "aarch64-apple-ios", "--profile", str(profile),
             "--bundle-id", "dev.herdr.given",
         )
         self.assertNotEqual(result.returncode, 0)
@@ -391,7 +391,7 @@ class BundleTests(unittest.TestCase):
     def test_expired_profile_given_explicitly_fails_before_compiling(self):
         profile = self.write_profile(self.root / "expired.mobileprovision", days=-1)
         result = self.run_bundle(
-            "--bin", "herdr-gpui", "--target", "aarch64-apple-ios", "--profile", str(profile),
+            "--bin", "sheprd", "--target", "aarch64-apple-ios", "--profile", str(profile),
             "--bundle-id", "dev.herdr.given",
         )
         self.assertEqual(result.returncode, 1)
@@ -401,7 +401,7 @@ class BundleTests(unittest.TestCase):
 
     def test_signing_never_falls_back_to_the_projects_bundle_id(self):
         for args in (("--team", TEAM), ("--profile", str(self.write_profile(self.root / "p")))):
-            result = self.run_bundle("--bin", "herdr-gpui", "--target", "aarch64-apple-ios", *args)
+            result = self.run_bundle("--bin", "sheprd", "--target", "aarch64-apple-ios", *args)
             self.assertEqual(result.returncode, 2, result.stderr)
             self.assertIn("HERDR_IOS_BUNDLE_ID", result.stderr)
         self.env["HERDR_IOS_TEAM"] = TEAM
@@ -411,9 +411,9 @@ class BundleTests(unittest.TestCase):
 
     def test_simulator_keeps_the_projects_bundle_id_whatever_the_environment(self):
         self.env["HERDR_IOS_BUNDLE_ID"] = "dev.herdr.device-only"
-        result = self.run_bundle("--bin", "herdr-gpui")
+        result = self.run_bundle("--bin", "sheprd")
         self.assertEqual(result.returncode, 0, result.stderr)
-        info = plistlib.loads((self.executable.parent / "herdr-gpui.app/Info.plist").read_bytes())
+        info = plistlib.loads((self.executable.parent / "sheprd.app/Info.plist").read_bytes())
         self.assertEqual(info["CFBundleIdentifier"], "so.pen.herdr-gpui")
         self.assertEqual(
             self.calls("cargo")[0]["entitlements"]["application-identifier"],
@@ -462,32 +462,32 @@ class BundleTests(unittest.TestCase):
         self.assertEqual(len(self.calls("xcodebuild")), 1)
 
     def test_signing_options_are_refused_for_the_simulator(self):
-        result = self.run_bundle("--bin", "herdr-gpui", "--team", TEAM)
+        result = self.run_bundle("--bin", "sheprd", "--team", TEAM)
         self.assertEqual(result.returncode, 2)
         self.assertFalse(self.log.exists())
 
     def test_team_in_the_environment_leaves_the_simulator_ad_hoc(self):
         self.env["HERDR_IOS_TEAM"] = TEAM
-        result = self.run_bundle("--bin", "herdr-gpui")
+        result = self.run_bundle("--bin", "sheprd")
         self.assertEqual(result.returncode, 0, result.stderr)
         signing = [call for call in self.calls("codesign") if "--sign" in call["args"]]
         self.assertEqual(signing[0]["args"][signing[0]["args"].index("--sign") + 1], "-")
         self.assertFalse(self.calls("security"))
 
     def test_bundle_declares_local_network_access_and_only_ssh_discovery(self):
-        result = self.run_bundle("--package", "herdr-gpui", "--bin", "herdr-gpui")
+        result = self.run_bundle("--package", "sheprd-gpui", "--bin", "sheprd")
         self.assertEqual(result.returncode, 0, result.stderr)
         info = plistlib.loads(
-            (self.executable.parent / "herdr-gpui.app/Info.plist").read_bytes()
+            (self.executable.parent / "sheprd.app/Info.plist").read_bytes()
         )
         self.assertTrue(info["NSLocalNetworkUsageDescription"].strip())
         self.assertEqual(info["NSBonjourServices"], ["_ssh._tcp"])
 
     def test_bundle_declares_host_key_url_scheme(self):
-        result = self.run_bundle("--package", "herdr-gpui", "--bin", "herdr-gpui")
+        result = self.run_bundle("--package", "sheprd-gpui", "--bin", "sheprd")
         self.assertEqual(result.returncode, 0, result.stderr)
         info = plistlib.loads(
-            (self.executable.parent / "herdr-gpui.app/Info.plist").read_bytes()
+            (self.executable.parent / "sheprd.app/Info.plist").read_bytes()
         )
         self.assertEqual(
             [scheme for kind in info["CFBundleURLTypes"]
@@ -496,7 +496,7 @@ class BundleTests(unittest.TestCase):
         )
 
     def test_invalid_target_exits_before_invoking_any_build_tool(self):
-        result = self.run_bundle("--bin", "herdr-gpui", "--target", "invalid")
+        result = self.run_bundle("--bin", "sheprd", "--target", "invalid")
         self.assertEqual(result.returncode, 2)
         self.assertFalse(self.log.exists())
 

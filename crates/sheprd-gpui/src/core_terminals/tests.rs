@@ -1,0 +1,14 @@
+mod accessibility;
+mod chats;
+mod focus;
+mod focus_frame;
+mod keys;
+mod pager;
+mod paste;
+mod reconnect;
+mod remote_workspace;
+mod saved_tabs;
+mod screen;
+mod selection;
+mod target_boundary;
+mod worker;

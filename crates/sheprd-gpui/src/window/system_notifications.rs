@@ -1,0 +1,393 @@
+//! OS notification center delivery for Herdr's shared `system` toast setting.
+//!
+//! GPUI owns the platform work: `UNUserNotificationCenter` on macOS (only from
+//! an app bundle; it asks for permission on the first post) and WinRT toasts
+//! on Windows. Linux posts freedesktop notifications over one shared D-Bus
+//! connection of its own, because GPUI's opens one per notification (see
+//! `freedesktop`). Posting never blocks this thread. Notifications are
+//! silent: sounds stay with the sound service and its per-agent policy.
+//!
+//! GPUI accepts one app-wide response handler, so this registry routes a click
+//! back to the window, host, and connection generation that posted it. The
+//! window then resolves the target through the toast path, which rejects a
+//! reconnected inbox or a restarted daemon instead of guessing.
+// i18n: migrated
+
+#[cfg(target_os = "linux")]
+mod freedesktop;
+#[cfg(windows)]
+mod toast;
+
+use super::SheprdWindow;
+use crate::notifications::SystemPost;
+#[cfg(any(test, not(target_os = "ios")))]
+use crate::state::LiveState;
+#[cfg(any(test, not(target_os = "ios")))]
+use gpui::App;
+use gpui::{Context, Global, SharedString, SystemNotification, Window, WindowHandle};
+#[cfg(any(test, not(target_os = "ios")))]
+use std::sync::{Mutex, Weak};
+use std::{
+    collections::VecDeque,
+    time::{Duration, Instant},
+};
+
+/// Clicks are routed for this many recent posts; older ones only focus nothing.
+const REGISTRY_LIMIT: usize = 64;
+/// Two windows attached to the same host receive the same event. The second
+/// window's copy within this interval is a duplicate, not a new event.
+const DUPLICATE_WINDOW: Duration = Duration::from_secs(2);
+/// Long enough to switch to another app before the QA preview arrives.
+const PREVIEW_DELAY: Duration = Duration::from_secs(3);
+
+struct Posted {
+    tag: SharedString,
+    window: WindowHandle<SheprdWindow>,
+    #[cfg(any(test, not(target_os = "ios")))]
+    endpoint: String,
+    #[cfg(any(test, not(target_os = "ios")))]
+    generation: u64,
+    #[cfg(any(test, not(target_os = "ios")))]
+    inbox: Weak<Mutex<LiveState>>,
+    #[cfg(any(test, not(target_os = "ios")))]
+    id: u64,
+    at: Instant,
+    /// The notification daemon's id, once its reply arrives.
+    #[cfg(target_os = "linux")]
+    bus_id: Option<u32>,
+}
+
+#[derive(Default)]
+pub(crate) struct Registry {
+    posted: VecDeque<Posted>,
+    identity: bool,
+    #[cfg(target_os = "linux")]
+    bus: freedesktop::Bus,
+    #[cfg(target_os = "linux")]
+    outbox: freedesktop::Outbox,
+    /// What the shell offers, once known; until then GPUI posts.
+    #[cfg(windows)]
+    shell: Option<toast::Shell>,
+    #[cfg(windows)]
+    toasts: toast::Toasts,
+}
+
+impl Global for Registry {}
+
+impl Registry {
+    /// Whether another window already posted this tag just now.
+    fn duplicate(&self, tag: &str, window: WindowHandle<SheprdWindow>, now: Instant) -> bool {
+        self.posted.iter().any(|posted| {
+            posted.tag == tag
+                && posted.window != window
+                && now.saturating_duration_since(posted.at) < DUPLICATE_WINDOW
+        })
+    }
+
+    fn record(&mut self, posted: Posted) {
+        #[cfg(target_os = "linux")]
+        let posted = Posted {
+            // A replacement remains clickable while its Notify reply is pending.
+            bus_id: self.find(&posted.tag).and_then(|old| old.bus_id),
+            ..posted
+        };
+        self.posted.retain(|old| old.tag != posted.tag);
+        if self.posted.len() == REGISTRY_LIMIT {
+            self.posted.pop_front();
+        }
+        self.posted.push_back(posted);
+    }
+
+    #[cfg(any(test, not(target_os = "ios")))]
+    fn find(&self, tag: &str) -> Option<&Posted> {
+        self.posted.iter().rev().find(|posted| posted.tag == tag)
+    }
+
+    /// The Linux outbox sends only one request at a time, so a reply cannot
+    /// overwrite the id of a newer request.
+    #[cfg(target_os = "linux")]
+    fn set_bus_id(&mut self, tag: &str, bus_id: u32) {
+        if let Some(posted) = self.posted.iter_mut().rev().find(|p| p.tag == tag) {
+            posted.bus_id = Some(bus_id);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn find_bus_id(&self, bus_id: u32) -> Option<&Posted> {
+        self.posted
+            .iter()
+            .rev()
+            .find(|posted| posted.bus_id == Some(bus_id))
+    }
+}
+
+/// Only the user's own app posts. Fixtures and tests leave this uninstalled,
+/// so they never reach the notification center or prompt for permission.
+#[cfg(not(target_os = "ios"))]
+pub(crate) fn install(cx: &mut App) {
+    install_registry(cx);
+    #[cfg(target_os = "linux")]
+    freedesktop::connect(cx);
+}
+
+/// Everything but the Linux session bus, which tests must not reach.
+#[cfg(any(test, not(target_os = "ios")))]
+pub(crate) fn install_registry(cx: &mut App) {
+    cx.set_global(Registry::default());
+    #[cfg(windows)]
+    if !cfg!(test) {
+        let prepare = cx.background_executor().spawn(async { toast::prepare() });
+        cx.spawn(async move |cx| {
+            let shell = prepare.await;
+            cx.update(|cx| cx.global_mut::<Registry>().shell = Some(shell));
+        })
+        .detach();
+    }
+    cx.on_system_notification_response(|response, cx| {
+        // No actions are offered: any activation opens the target.
+        open(&response.tag, cx);
+    });
+}
+
+/// Brings forward the window that posted `tag` and opens its target, as a
+/// click on the notification does; whether this app posted it recently.
+#[cfg(any(test, not(target_os = "ios")))]
+pub(crate) fn open(tag: &str, cx: &mut App) -> bool {
+    let Some((window, endpoint, generation, inbox, id)) =
+        cx.try_global::<Registry>().and_then(|registry| {
+            let posted = registry.find(tag)?;
+            Some((
+                posted.window,
+                posted.endpoint.clone(),
+                posted.generation,
+                posted.inbox.clone(),
+                posted.id,
+            ))
+        })
+    else {
+        return false;
+    };
+    cx.activate(true);
+    window
+        .update(cx, |view, window, cx| {
+            view.open_system_notification(&endpoint, generation, &inbox, id, window, cx);
+        })
+        .is_ok()
+}
+
+/// The host leads the body's last line, which names the agent's place, so
+/// the task above it stays visible in a two-line banner.
+fn body(label: Option<&str>, body: Option<&str>) -> SharedString {
+    match (label, body) {
+        (Some(label), Some(body)) => match body.rsplit_once('\n') {
+            Some((task, place)) => format!("{task}\n{label} · {place}").into(),
+            None => format!("{label} · {body}").into(),
+        },
+        (Some(text), None) | (None, Some(text)) => SharedString::from(text.to_owned()),
+        (None, None) => SharedString::default(),
+    }
+}
+
+impl SheprdWindow {
+    /// Posts what the last tick made ready. Runs from the poll loop only.
+    pub(crate) fn post_system_notifications(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let posts =
+            crate::notifications::take_system(&mut self.endpoints, self.config.notifications);
+        if posts.is_empty() {
+            return;
+        }
+        let Some(handle) = window.window_handle().downcast::<SheprdWindow>() else {
+            return;
+        };
+        let now = Instant::now();
+        for post in posts {
+            if cx
+                .try_global::<Registry>()
+                .is_some_and(|registry| registry.duplicate(&post.tag, handle, now))
+            {
+                continue;
+            }
+            self.show_system_notification(handle, post, now, cx);
+        }
+    }
+
+    /// Hands one notice to the OS and records where its click goes. A no-op
+    /// without the registry, which only normal launches install.
+    fn show_system_notification(
+        &self,
+        handle: WindowHandle<SheprdWindow>,
+        post: SystemPost,
+        now: Instant,
+        cx: &mut Context<Self>,
+    ) {
+        #[cfg(any(test, not(target_os = "ios")))]
+        let id = post.id;
+        let SystemPost {
+            endpoint,
+            tag,
+            title,
+            body: text,
+            ..
+        } = post;
+        let Some(source) = self.endpoints.get(endpoint) else {
+            return;
+        };
+        let Some(registry) = cx.try_global::<Registry>() else {
+            return;
+        };
+        // Windows needs an AppUserModelID to show toasts, and setting one
+        // changes taskbar grouping, so only users of system delivery get it.
+        if !registry.identity {
+            cx.set_app_identity(crate::constants::APP_ID, crate::constants::WINDOW_TITLE);
+            cx.global_mut::<Registry>().identity = true;
+        }
+        let label =
+            (self.endpoints.len() > 1).then(|| crate::notifications::safe_text(&source.label, 80));
+        let tag = SharedString::from(tag);
+        let notification = SystemNotification {
+            tag: tag.clone(),
+            title: title.into(),
+            body: body(label.as_deref(), text.as_deref()),
+            actions: Vec::new(),
+        };
+        cx.global_mut::<Registry>().record(Posted {
+            tag,
+            window: handle,
+            #[cfg(any(test, not(target_os = "ios")))]
+            endpoint: source.id.clone(),
+            #[cfg(any(test, not(target_os = "ios")))]
+            generation: source.generation,
+            #[cfg(any(test, not(target_os = "ios")))]
+            inbox: std::sync::Arc::downgrade(&source.connection.inbox),
+            #[cfg(any(test, not(target_os = "ios")))]
+            id,
+            at: now,
+            #[cfg(target_os = "linux")]
+            bus_id: None,
+        });
+        #[cfg(target_os = "linux")]
+        match &cx.global::<Registry>().bus {
+            freedesktop::Bus::Gpui => {}
+            freedesktop::Bus::Unavailable => {
+                tracing::debug!("Skipping a system notification: no session bus");
+                return;
+            }
+            freedesktop::Bus::Connected(session) => {
+                let session = session.clone();
+                freedesktop::post(session, notification, cx);
+                return;
+            }
+        }
+        #[cfg(windows)]
+        {
+            let registry = cx.global_mut::<Registry>();
+            if registry.shell.is_some_and(|shell| shell.links) {
+                match registry.toasts.show(&notification) {
+                    Ok(()) => return,
+                    Err(error) => tracing::warn!(error = ?error, "Falling back to GPUI's toast"),
+                }
+            }
+        }
+        cx.show_system_notification(notification);
+    }
+
+    /// QA: after a delay long enough to switch away, posts a NeedsAttention
+    /// preview for the selected host's focused pane, whatever the delivery
+    /// setting, so the banner and its click can be checked by hand.
+    pub(crate) fn show_system_notification_preview(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(handle) = window.window_handle().downcast::<SheprdWindow>() else {
+            return;
+        };
+        let timer = cx.background_executor().timer(PREVIEW_DELAY);
+        cx.spawn(async move |this, cx| {
+            timer.await;
+            let _ = this.update(cx, |view, cx| {
+                view.post_system_notification_preview(handle, cx)
+            });
+        })
+        .detach();
+    }
+
+    fn post_system_notification_preview(
+        &mut self,
+        handle: WindowHandle<SheprdWindow>,
+        cx: &mut Context<Self>,
+    ) {
+        let index = self.selected_endpoint;
+        let snapshot = self.endpoints[index].live.snapshot.clone();
+        let title = crate::i18n::fl!("notifications-preview-attention");
+        let body = crate::i18n::fl!("notifications-preview-attention-body");
+        let mut notice = crate::notifications::Notice::new(
+            sheprd_client::protocol::SemanticNotification {
+                kind: sheprd_client::protocol::SemanticNotificationKind::NeedsAttention,
+                title: title.clone(),
+                body: Some(body.clone()),
+                sound: None,
+                agent: None,
+                workspace_id: snapshot
+                    .as_ref()
+                    .and_then(|s| s.focused_workspace_id.clone()),
+                tab_id: snapshot.as_ref().and_then(|s| s.focused_tab_id.clone()),
+                pane_id: snapshot.as_ref().and_then(|s| s.focused_pane_id.clone()),
+                position: None,
+            },
+            Instant::now(),
+        )
+        // Previews keep their own text rather than the pane's context.
+        .preview()
+        .with_message(title, body)
+        .with_snapshot(snapshot.as_deref());
+        // Retained like a real post, so a click resolves through the same path.
+        notice.posted = true;
+        let post = SystemPost {
+            endpoint: index,
+            id: 0,
+            tag: format!("herdr-preview:{}", self.endpoints[index].id),
+            title: notice.title.clone(),
+            body: notice.body.clone(),
+        };
+        let toasts = &mut self.endpoints[index].toasts;
+        toasts.receive([notice]);
+        let Some((id, _)) = toasts.entries.back() else {
+            return;
+        };
+        let post = SystemPost { id: *id, ..post };
+        self.show_system_notification(handle, post, Instant::now(), cx);
+    }
+
+    /// A click brings this window forward, then navigates like a toast click
+    /// when the posting connection is still the current one.
+    #[cfg(any(test, not(target_os = "ios")))]
+    pub(crate) fn open_system_notification(
+        &mut self,
+        endpoint_id: &str,
+        generation: u64,
+        inbox: &Weak<Mutex<LiveState>>,
+        id: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        window.activate_window();
+        if self.menu.page.is_some() {
+            return;
+        }
+        let Some(inbox) = inbox.upgrade() else {
+            return;
+        };
+        let Some(index) = self.endpoints.iter().position(|e| {
+            e.id == endpoint_id
+                && e.generation == generation
+                && std::sync::Arc::ptr_eq(&e.connection.inbox, &inbox)
+        }) else {
+            return;
+        };
+        self.open_notice(index, id, cx);
+    }
+}
+
+#[cfg(test)]
+mod tests;
