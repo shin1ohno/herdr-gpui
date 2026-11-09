@@ -10,9 +10,9 @@ use crate::{
     CheckForUpdates, PlaySound, Quit, RunCommand, ShowHerdrNotDetected, ShowLogs,
     ShowUpdatePreview,
     actions::{
-        Copy, CopyAsOneLine, Cut, Paste, RingBellPreview, SelectAll, SetChatLayout, SetLayout, SetTabLayout,
-        ShowToastPreview, ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview, TogglePseudoLocale,
-        ToggleSlowAnimations,
+        Copy, CopyAsOneLine, Cut, Paste, RingBellPreview, SelectAll, SetChatLayout, SetLayout,
+        SetTabLayout, ShowToastPreview, ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview,
+        TogglePseudoLocale, ToggleSlowAnimations,
     },
     config::{ChatLayoutMode, Config, LayoutMode, TabLayoutMode},
     controls::Command,
