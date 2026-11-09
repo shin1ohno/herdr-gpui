@@ -722,6 +722,9 @@ impl SheprdWindow {
             COMMANDS
                 .iter()
                 .filter(|info| !matches!(info.command, Command::Palette | Command::ResumePalette))
+                .filter(|info| {
+                    crate::ipad_ui::commands::available(info.command, crate::ipad_ui::layout())
+                })
                 .filter(|info| match info.command {
                     Command::ClearPane => self.live.supports_pane_clear,
                     Command::EditScrollback => self.live.supports_edit_scrollback,

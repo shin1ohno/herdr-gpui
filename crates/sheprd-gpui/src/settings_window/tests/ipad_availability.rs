@@ -52,8 +52,8 @@ fn ipad_hides_unusable_controls_and_search_without_changing_config(cx: &mut Test
         ),
         (
             Section::Code,
-            &["settings-code-start"][..],
-            &["settings-code-address"][..],
+            &["code-mode", "settings-code-start", "settings-code-address"][..],
+            &[][..],
         ),
         (
             Section::Configuration,

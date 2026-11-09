@@ -5,9 +5,13 @@ configuration remain intact; changing a device's platform does not erase values.
 The shared presentation policy is in
 [`settings_window/availability.rs`](../crates/herdr-gpui/src/settings_window/availability.rs#L30).
 It applies to rows, navigation, search results, and direct page selection.
+Rows use an explicit iPad allow list: an unclassified new row is hidden until
+reviewed. Desktop rows bypass this list.
 
 | Hidden controls | Reason and implementation evidence |
 | --- | --- |
+| Automations row | The automation daemon is unavailable on iPad: [`automations/section.rs`](../crates/sheprd-gpui/src/automations/section.rs). |
+| VS Code server mode row | The iPad cannot embed Code tabs: [`browser/code_view.rs`](../crates/sheprd-gpui/src/browser/code_view.rs), `code_offered`. The saved address and connection probe remain available. |
 | Plugins page | Its switches edit the local daemon's shared `[ui.sidebar]` file, rather than the connected host: [`controls/plugins.rs`](../crates/herdr-gpui/src/settings_window/controls/plugins.rs), `value_switch`, and [`pages.rs`](../crates/herdr-gpui/src/settings_window/pages.rs#L48), `shared_gate`. |
 | Remote Control page | This configures a local service; its supervisor is not installed by the iPad launcher: [`remote/supervisor.rs`](../crates/herdr-gpui/src/remote/supervisor.rs#L180), `Supervisor::install`, and [`app/ios.rs`](../crates/herdr-gpui/src/app/ios.rs#L75), `run`. Connecting to a saved SSH host is separate and remains available. |
 | Cloud Devices page, if compiled in | Cloud jobs require desktop processes. The iPad app normally builds without these features: [`cloud.rs`](../crates/herdr-gpui/src/cloud.rs#L19) and [`app/ios.rs`](../crates/herdr-gpui/src/app/ios.rs#L75). |

@@ -351,7 +351,9 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .gap(px(4.))
-            .child(self.render_code_mode(mode, cx))
+            .when(super::super::availability::row("code-mode"), |page| {
+                page.child(self.render_code_mode(mode, cx))
+            })
             .map(|page| match mode {
                 Some(CodeMode::Start) => page.child(self.render_code_start(cx)),
                 Some(CodeMode::Address) => page.child(self.render_code_address(cx)),

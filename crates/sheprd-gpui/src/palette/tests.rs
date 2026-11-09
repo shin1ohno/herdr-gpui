@@ -10,6 +10,7 @@ mod background_ranking;
 mod en_xa;
 mod frecency_ranking;
 mod go_to_search;
+mod ipad_availability;
 mod ipad_hints;
 mod notes;
 mod plugin_selection;

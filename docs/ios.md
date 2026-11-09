@@ -74,7 +74,11 @@ examples do not carry the client's fonts. Licenses and binary hashes are in
 
 Settings hides unavailable controls and pages, including search results, without
 removing their saved values. See the [Settings availability audit](ios-settings.md).
-Other unavailable operations never appear to succeed while doing nothing.
+The command palette and app menu use one reviewed iPad allow list; new catalog
+commands stay hidden until classified. Full screen, Code, px0, code search,
+browser tabs, Orchestrator, the Git menu, page annotation, browser-skill install,
+and remote pairing are excluded. The group menu also hides New Browser Tab.
+Desktop command availability is unchanged.
 
 ## Clipboard images
 
@@ -444,7 +448,12 @@ container).
 `just ios-device` builds the real client in release mode without desktop
 cloud provider features, signs it for your development team, installs it on a
 connected iPad, launches it, checks that it is still running after five
-seconds, and copies its log back. It needs:
+seconds, and copies its log back. Both release and `--dev` device builds default
+`CARGO_INCREMENTAL` to `1`; an explicitly set caller value is preserved (use
+`CARGO_INCREMENTAL=0 just ios-device` to disable it). Incremental artifacts use
+more disk space. TestFlight (`ios/tools/testflight.sh`) keeps its Xcode archive
+path; Rust distribution packaging (`scripts/ios/distribution.py`) and direct
+`bundle.sh` builds keep their existing Cargo settings. It needs:
 
 - Xcode signed in to an account in the team (Xcode > Settings > Accounts).
 - The iPad paired with this Mac (Xcode's Devices and Simulators window, with

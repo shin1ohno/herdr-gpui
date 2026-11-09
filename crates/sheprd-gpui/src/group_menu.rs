@@ -147,7 +147,13 @@ impl SheprdWindow {
     /// come from the last scan, so they follow the status bar's. Closing
     /// belongs to a split: a lone group has nowhere else to keep its tabs.
     fn group_actions(&self, group: GroupId, cx: &App) -> Vec<Action> {
-        let mut actions = vec![Action::NewBrowserTab];
+        let mut actions = Vec::new();
+        if crate::ipad_ui::commands::available(
+            Command::NewBrowserTab,
+            crate::ipad_ui::layout(),
+        ) {
+            actions.push(Action::NewBrowserTab);
+        }
         if self.git.tracked().is_some() {
             actions.push(Action::Review);
         }

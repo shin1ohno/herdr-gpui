@@ -454,21 +454,10 @@ fn retain_available_items(items: &mut Vec<MenuItem>, ipad: bool) {
                 {
                     return false;
                 }
-                !action
+                action
                     .as_any()
                     .downcast_ref::<RunCommand>()
-                    .is_some_and(|action| {
-                        matches!(
-                            action.command,
-                            Command::ToggleFullScreen
-                                | Command::OpenCode
-                                | Command::OpenPx0
-                                // Code search indexes local checkouts only;
-                                // iPad endpoints are all remote.
-                                | Command::GoToSymbol
-                                | Command::GoToFile
-                        )
-                    })
+                    .is_none_or(|action| crate::ipad_ui::commands::available(action.command, ipad))
             }
             MenuItem::Submenu(menu) => {
                 retain_available_items(&mut menu.items, ipad);

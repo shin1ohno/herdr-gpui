@@ -13,6 +13,7 @@
 //!   blocked: `palette[1]`. Dot shapes retain the existing status meanings.
 
 mod accent;
+pub(crate) mod commands;
 pub(crate) mod harness;
 mod kbd;
 pub(crate) mod metrics;

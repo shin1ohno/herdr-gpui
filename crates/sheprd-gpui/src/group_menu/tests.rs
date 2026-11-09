@@ -1,5 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
+
+mod ipad_availability;
 use crate::{
     browser::Store,
     controls::Command,
