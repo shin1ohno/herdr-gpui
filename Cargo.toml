@@ -106,7 +106,7 @@ sheprd-remote-control         = { default-features = false, path = "crates/shepr
 herdr-ssh            = { path = "crates/herdr-ssh" }
 sheprd-session        = { path = "crates/sheprd-session" }
 sheprd-terminal       = { path = "crates/sheprd-terminal" }
-herdr-uikit          = { git = "https://github.com/shin1ohno/herdr-uikit", rev = "2bb91eb810cb344ee2a63a241062eb4bf7ca443e" }
+herdr-uikit          = { git = "https://github.com/shin1ohno/herdr-uikit", rev = "81a8112023de4366928d7818da0e9a671a3fd034" }
 sheprd-updater        = { path = "crates/sheprd-updater" }
 sheprd-usage          = { path = "crates/sheprd-usage" }
 sheprd-vcs            = { path = "crates/sheprd-vcs" }
