@@ -1,0 +1,13 @@
+#!/bin/bash
+# Inert by default. Explicit opt-in accepts signing and Apple upload side effects.
+set -euo pipefail
+if [[ "${IOS_DISTRIBUTION_EXECUTE:-false}" != true ]]; then
+  python3 scripts/ios/distribution.py plan
+  exit 0
+fi
+: "${IOS_APP:?set the unsigned device .app path}"
+: "${IOS_IPA:?set a fresh output IPA path}"
+: "${IOS_BUILD_NUMBER:?set a new numeric build number}"
+python3 scripts/ios/distribution.py package --app "$IOS_APP" --output "$IOS_IPA" --build-number "$IOS_BUILD_NUMBER" --method testflight
+python3 scripts/ios/distribution.py upload --ipa "$IOS_IPA"
+# User must observe ASC processing, internal group delivery and iPad update separately.

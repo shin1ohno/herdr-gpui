@@ -1,0 +1,14 @@
+# Inert B. A reserved macOS fleet/project must be separately approved.
+version: 0.2
+phases:
+  install:
+    commands:
+      - xcodebuild -version
+      - xcrun --sdk iphoneos --show-sdk-version
+      - pin=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+      - rustup toolchain install "$pin" --profile minimal --target aarch64-apple-ios
+  build:
+    commands:
+      - export CARGO_TARGET_DIR="$CODEBUILD_SRC_DIR/.ios-ci-target"
+      - python3 scripts/ios/distribution.py build
+# No webhook, fleet creation, secrets retrieval, S3 cache, or upload is enabled.

@@ -33,3 +33,5 @@ __pycache__/
 
 # Uncommitted Cargo overrides for developing the external UIKit platform.
 /.cargo/config.toml
+# sheprd.org/docs, built at deploy time by website/tools/docs.py.
+/website/site/docs/

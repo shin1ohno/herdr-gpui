@@ -1,7 +1,7 @@
 //! An SSH client that runs inside the process, for platforms that cannot start
 //! `ssh` (iPadOS). It does one thing Herdr needs: run a command on a host over
 //! an exec channel and expose that channel's standard streams as one end of a
-//! `UnixStream::pair()`, so `herdr-client` can read the remote bridge exactly
+//! `UnixStream::pair()`, so `sheprd-client` can read the remote bridge exactly
 //! as it reads an `ssh` child's (docs/ios.md, "SSH transport").
 //!
 //! russh does the protocol on one process-wide current-thread tokio runtime

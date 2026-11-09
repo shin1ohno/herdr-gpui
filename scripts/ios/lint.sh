@@ -22,8 +22,8 @@ for target in aarch64-apple-ios aarch64-apple-ios-sim; do
   cargo clippy --locked --manifest-path "$uikit_manifest" --all-targets \
     --target-dir "${CARGO_TARGET_DIR:-$root/target}" --target "$target" -- -D warnings
   cargo clippy --locked --all-targets --target "$target" \
-    -p herdr-client -p herdr-credentials -p herdr-ssh \
-    -p herdr-backend -p herdr-core-client -- -D warnings
-  cargo clippy --locked -p herdr-gpui --no-default-features \
+    -p sheprd-client -p sheprd-credentials -p herdr-ssh \
+    -p sheprd-backend -p sheprd-core-client -- -D warnings
+  cargo clippy --locked -p sheprd-gpui --no-default-features \
     --all-targets --target "$target" -- -D warnings
 done

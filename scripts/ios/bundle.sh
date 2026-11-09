@@ -288,7 +288,7 @@ plutil -replace CFBundleVersion -string "$version" "$plist"
 plutil -replace CFBundleSupportedPlatforms -json "[\"$platform\"]" "$plist"
 # App-local fonts do not require access to fonts installed by other apps.
 # UIAppFonts registers them before UIKit creates the first scene.
-if [[ $package == herdr-gpui && $kind == bin && $name == herdr-gpui ]]; then
+if [[ $package == sheprd-gpui && $kind == bin && $name == sheprd ]]; then
   font_source=assets/fonts/SauceCodePro
   mkdir -p "$app/Fonts"
   for face in Regular Bold Italic BoldItalic; do

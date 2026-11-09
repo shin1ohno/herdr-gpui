@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 /// Why an SSH connection failed, classified from russh's typed results and
-/// never from text the server sent. `herdr-client` maps each class onto its
+/// never from text the server sent. `sheprd-client` maps each class onto its
 /// own `SshFailure`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum Failure {

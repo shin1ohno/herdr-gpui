@@ -1,6 +1,6 @@
-# Herdr UI on iPadOS
+# Sheprd on iPadOS
 
-Herdr UI runs on iPadOS as the same GPUI app, with a UIKit platform in place
+Sheprd's GPUI app runs on iPadOS with a UIKit platform in place
 of GPUI's desktop ones and a network transport in place of the local daemon
 socket. This document is the design and the contract the parts are built
 against.
@@ -26,7 +26,7 @@ examples do not carry the client's fonts. Licenses and binary hashes are in
   touch, pointer, hardware keyboard, and `UITextInput` input. Its Metal renderer
   and Core Text text system are ported from GPUI's macOS crates
   ([`NOTICE.md`](https://github.com/shin1ohno/herdr-uikit/blob/00a8dba10b49f55332f6bc875f20ad8071f2d424/NOTICE.md)).
-  Herdr UI builds an `IosPlatform` and hands it to `gpui::Application::with_platform` on `target_os = "ios"`, keeping it to
+  Sheprd builds an `IosPlatform` and hands it to `gpui::Application::with_platform` on `target_os = "ios"`, keeping it to
   register for lifecycle phases, where desktop targets call
   `gpui_platform::application()`.
 - **Touch.** GPUI's core already recognizes gestures from raw `TouchEvent`s
@@ -42,18 +42,20 @@ examples do not carry the client's fonts. Licenses and binary hashes are in
   The tunnel is SSH to the computer, run inside the app ("SSH transport"
   below). An SSH key reaches the user's whole account, so the grant is the
   standard, explicit one: the user adds the iPad's key to `authorized_keys`.
-  `herdr-remote-control` is not used. Its API serves the Herdr Remote apps:
+  `sheprd-remote-control` (legacy `herdr-remote-control`) is not used for
+  this client's terminal transport. Its API serves the Swift remote apps:
   chats, and terminal screens sent as styled text runs, with keys and pastes
   sent back (`docs/ios-app-plan.md`). This client draws Herdr's binary
   surface protocol and herdr-core's terminal streams, which that API does not
   carry, and SSH needs nothing on the computer beyond Remote Login and Herdr.
-- **Herdr Remote.** Upstream's SwiftUI app in `ios/` is the companion for
+- **Swift remote app.** Upstream's SwiftUI app in `ios/` is also named
+  Sheprd and is the companion for
   iPhone and iPad: it pairs with `herdr-remote-control` on each computer for
   chats, questions and approvals, terminal tabs, push notifications, and Live
-  Activities, also over Tailscale. This client is the full Herdr UI on an iPad
+  Activities, also over Tailscale. This client is the full Sheprd app on an iPad
   instead: the desktop's sidebar, panes, splits, and terminal rendering, over
-  SSH to a computer the iPad can reach. The two install side by side and
-  share no state.
+  SSH to a computer the iPad can reach. With distinct bundle IDs, the two
+  install side by side and keep their app-local state separate.
 
 ## Capabilities on iPad
 
@@ -176,7 +178,7 @@ later end it without `applicationWillTerminate:`, so GPUI's quit callbacks
 cannot be relied on to save anything. When the app as a whole reaches the
 background, the platform begins a UIKit background task in
 `sceneDidEnterBackground:` and holds it until GPUI's lifecycle callback for
-that phase has run (`herdr_uikit::BackgroundTask`). Herdr UI's callback takes
+that phase has run (`herdr_uikit::BackgroundTask`). Sheprd's callback takes
 its own task and holds it, for up to two seconds in all, while two things are
 written. First the open Settings window's unsaved drafts, as "Save now" writes
 them (theme, then layout, then sidebar), also when a load or save was already
@@ -243,7 +245,7 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
 - **Client key.** One P-256 key per installation, created in the Secure
   Enclave on first use, so the private key never leaves it and is never in
   the app's memory; the app signs through Security.framework, as the
-  HerdrRemote app's `DeviceKey.swift` does, and authenticates as
+  Swift app's `ios/SheprdRemote/DeviceKey.swift` does, and authenticates as
   `ecdsa-sha2-nistp256`, which macOS's `sshd` accepts. Its Keychain item is
   `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, not synchronizable, and in
   no shared access group. Lookup, creation, and replacement are serialized
@@ -417,7 +419,7 @@ The scripts behind the recipes are in `scripts/ios/`:
   down a simulator; `--terminate` stops the app it launched after the
   screenshot. A running process proves nothing was drawn, so
   `--expect-color RRGGBB` (with `--min`, default 0.4) fails the run with
-  status 5 unless that share of the screenshot is near the color: Herdr UI's
+  status 5 unless that share of the screenshot is near the color: Sheprd's
   default dark theme fills about 99% of it with `101419`.
 - `sim-runner.sh` is Cargo's runner for `aarch64-apple-ios-sim`: it starts a
   test binary with `xcrun simctl spawn`, which returns the binary's exit
@@ -652,7 +654,7 @@ text rendering remains available.
 
 There is no app lock yet. The app opens without Face ID or the passcode, and
 the device key signs without asking for user presence, so anyone holding the
-unlocked iPad can use every computer that granted its key. Herdr Remote offers
+unlocked iPad can use every computer that granted its key. The Swift app offers
 an optional Face ID lock; an equivalent here is planned. Until then the iPad's
 passcode and Auto-Lock are the only guard, and removing the iPad's line from a
 computer's `authorized_keys` revokes it there.

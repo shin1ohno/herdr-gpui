@@ -1,0 +1,44 @@
+# Inert example. Adopt A OR B after review; do not install both.
+name: Rust iPad candidate (manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rust-ipad-candidate
+  cancel-in-progress: false
+jobs:
+  unsigned:
+    if: github.repository == 'shin1ohno/herdr-gpui'
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.ios-ci-target
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Record image and install repository Rust pin
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          pin=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          rustup toolchain install "$pin" --profile minimal --target aarch64-apple-ios
+      - name: Derive SDK-fenced dependency cache key
+        id: cache-key
+        run: |
+          sdk=$(xcrun --sdk iphoneos --show-sdk-version)
+          xcode=$(xcodebuild -version | tr "\n" " ")
+          key=$(python3 scripts/ios/distribution.py cache-key --sdk "$sdk" --xcode "$xcode")
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ steps.cache-key.outputs.key }}
+      - name: Build unsigned candidate (not a distribution success)
+        run: python3 scripts/ios/distribution.py build
+# Deliberately no signing secrets, automatic upload, artifact, or target cache.
+# Dependency downloads only; measure target size before caching compiled artifacts.
