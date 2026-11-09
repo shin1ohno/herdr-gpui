@@ -10,6 +10,7 @@ reviewed. Desktop rows bypass this list.
 
 | Hidden controls | Reason and implementation evidence |
 | --- | --- |
+| Activity bar panels: Automations, Usage, Pull Requests, Issues, Tasks | Their services are unavailable on iPad. The single activity bar switch remains, as do Overview, Workspaces, Security and Ports: [`sidebar/activity.rs`](../crates/sheprd-gpui/src/sidebar/activity.rs), `activity_panel_listed`. |
 | Automations row | The automation daemon is unavailable on iPad: [`automations/section.rs`](../crates/sheprd-gpui/src/automations/section.rs). |
 | VS Code server mode row | The iPad cannot embed Code tabs: [`browser/code_view.rs`](../crates/sheprd-gpui/src/browser/code_view.rs), `code_offered`. The saved address and connection probe remain available. |
 | Plugins page | Its switches edit the local daemon's shared `[ui.sidebar]` file, rather than the connected host: [`controls/plugins.rs`](../crates/herdr-gpui/src/settings_window/controls/plugins.rs), `value_switch`, and [`pages.rs`](../crates/herdr-gpui/src/settings_window/pages.rs#L48), `shared_gate`. |

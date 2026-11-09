@@ -215,6 +215,19 @@ impl SheprdWindow {
     /// is not listed, and a window left on it shows Workspaces. Tasks is
     /// listed while a project uses Beads.
     pub(crate) fn activity_panel_listed(&self, panel: ActivityPanel) -> bool {
+        if crate::ipad_ui::layout()
+            && ![
+                // keep-sorted start
+                ActivityPanel::Overview,
+                ActivityPanel::Ports,
+                ActivityPanel::Security,
+                ActivityPanel::Workspaces,
+                // keep-sorted end
+            ]
+            .contains(&panel)
+        {
+            return false;
+        }
         match panel {
             ActivityPanel::Automations => self.config.sidebar_style.automations,
             ActivityPanel::Tasks => self.activity.tasks_listed,
