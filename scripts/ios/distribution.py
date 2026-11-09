@@ -14,6 +14,8 @@ import sys
 import tempfile
 import time
 import tomllib
+import uuid
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = "com.shin1ohno.herdr-gpui"
@@ -74,11 +76,16 @@ def package(args):
         raise ValueError("build number must satisfy Apple's numeric version format")
     app = args.app.resolve()
     info = plistlib.loads((app / "Info.plist").read_bytes())
-    if info.get("CFBundleIdentifier") != BUNDLE or info.get("CFBundleSupportedPlatforms") != ["iPhoneOS"]:
+    if not isinstance(info, dict) or info.get("CFBundleIdentifier") != BUNDLE or info.get("CFBundleSupportedPlatforms") != ["iPhoneOS"]:
         raise ValueError("expected the existing Rust GPUI iPhoneOS bundle identity")
-    if any(app.rglob("*.framework")) or any(app.rglob("*.dylib")):
+    if any(path.is_symlink() for path in app.rglob("*")):
+        raise ValueError("bundle symlinks need an explicit packaging policy")
+    if any(path.suffix in {".framework", ".dylib", ".appex", ".app", ".xpc"} for path in app.rglob("*")):
         raise ValueError("nested code needs an explicit signing policy; refusing this bundle")
-    if not (app / info["CFBundleExecutable"]).is_file():
+    executable = info.get("CFBundleExecutable")
+    if not isinstance(executable, str) or not executable or Path(executable).name != executable or executable in {".", ".."}:
+        raise ValueError("bundle executable must be a local filename")
+    if not (app / executable).is_file():
         raise ValueError("bundle executable is missing")
     helper = profile_helper()
     try:
@@ -88,10 +95,13 @@ def package(args):
         raise ValueError("profile validation failed") from error
     if entitlements["application-identifier"] != f"{TEAM}.{BUNDLE}":
         raise ValueError("App ID prefix differs from the verified existing app")
-    if args.output.exists():
+    output = args.output.absolute()
+    if output.resolve().is_relative_to(app):
+        raise ValueError("IPA output must be outside the input bundle")
+    if args.output.exists() or args.output.is_symlink():
         raise ValueError("output already exists; choose a fresh IPA path")
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="herdr-ci-sign-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="herdr-ci-sign-", dir=output.parent) as temporary:
         work = Path(temporary)
         work.chmod(0o700)
         keychain = work / "signing.keychain-db"
@@ -108,8 +118,9 @@ def package(args):
                                       capture_output=True, text=True).stdout)
         created = False
         try:
-            run(["security", "create-keychain", "-p", key_password, str(keychain)], capture_output=True)
+            # Creation may change the search list before reporting an error.
             created = True
+            run(["security", "create-keychain", "-p", key_password, str(keychain)], capture_output=True)
             run(["security", "unlock-keychain", "-p", key_password, str(keychain)], capture_output=True)
             run(["security", "import", str(certificate), "-k", str(keychain), "-P", password,
                  "-T", "/usr/bin/codesign"], capture_output=True)
@@ -124,7 +135,9 @@ def package(args):
             run(["codesign", "--force", "--keychain", str(keychain), "--sign", identity,
                  "--entitlements", str(ent), "--timestamp=none", str(staged)], capture_output=True)
             run(["codesign", "--verify", "--strict", str(staged)], capture_output=True)
-            run(["ditto", "-c", "-k", "--keepParent", str(staged.parent), str(args.output.resolve())])
+            archive = work / "signed.ipa"
+            run(["ditto", "-c", "-k", "--keepParent", str(staged.parent), str(archive)])
+            archive.chmod(0o600)
         finally:
             if created:
                 try:
@@ -132,7 +145,60 @@ def package(args):
                 finally:
                     run(["security", "list-keychains", "-d", "user", "-s", *search_list],
                         capture_output=True)
+        # Publish only after cleanup succeeds. Same-filesystem link never overwrites.
+        os.link(archive, output)
     print("IPA packaged; App Store acceptance and device update remain unverified")
+
+
+def ipa_metadata(ipa):
+    """Read bounded metadata without extracting files or claiming ASC acceptance."""
+    with zipfile.ZipFile(ipa) as archive:
+        candidates = [item for item in archive.infolist()
+                      if re.fullmatch(r"Payload/[^/]+\.app/Info\.plist", item.filename)]
+        if len(candidates) != 1 or candidates[0].file_size > 1_048_576:
+            raise ValueError("IPA must have exactly one bounded top-level app Info.plist")
+        with archive.open(candidates[0]) as stream:
+            info = plistlib.loads(stream.read(1_048_577))
+    if not isinstance(info, dict) or info.get("CFBundleIdentifier") != BUNDLE:
+        raise ValueError("IPA bundle identity differs from the existing app")
+    if info.get("CFBundleSupportedPlatforms") != ["iPhoneOS"]:
+        raise ValueError("IPA must contain an iPhoneOS app")
+    for field in ("CFBundleVersion", "CFBundleShortVersionString"):
+        if not isinstance(info.get(field), str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", info[field]):
+            raise ValueError(f"IPA is missing valid {field}")
+    return info
+
+
+def upload_command(ipa, metadata, key_file, key_id, issuer, apple_id, provider=None):
+    if not re.fullmatch(r"[A-Z0-9]+", key_id):
+        raise ValueError("ASC_KEY_ID is required")
+    try:
+        uuid.UUID(issuer)
+        if provider:
+            uuid.UUID(provider)
+    except (ValueError, AttributeError) as error:
+        raise ValueError("ASC issuer/provider must be UUIDs") from error
+    if not apple_id or not re.fullmatch(r"[1-9][0-9]*", apple_id):
+        raise ValueError("ASC_APP_ID must be the app record's numeric Apple ID")
+    command = ["xcrun", "altool", "--upload-package", str(ipa.resolve()),
+               "--api-key", key_id, "--api-issuer", issuer,
+               "--p8-file-path", str(key_file), "--output-format", "json"]
+    if provider:
+        command += ["--provider-public-id", provider]
+    return command
+
+
+def upload_ipa(ipa):
+    if not ipa.is_file():
+        raise ValueError("IPA is missing")
+    metadata = ipa_metadata(ipa)
+    key_file = required_file("ASC_KEY_FILE")
+    command = upload_command(ipa, metadata, key_file, os.environ.get("ASC_KEY_ID", ""),
+        os.environ.get("ASC_ISSUER_ID", ""), os.environ.get("ASC_APP_ID", ""),
+        os.environ.get("ASC_PROVIDER_PUBLIC_ID"))
+    # An explicit file path avoids searching shared directories or copying keys.
+    run(command, capture_output=True)
+    print("Upload accepted by tool; processing, group delivery and device update are pending")
 
 
 def main():
@@ -156,7 +222,7 @@ def main():
         if args.stage == "plan":
             print(json.dumps({"execution": False, "toolchain": toolchain(), "target": TARGET,
                               "bundle": BUNDLE, "team": TEAM, "profile": "release",
-                              "features": "--no-default-features", "adoption": "choose A or B"}))
+                              "features": "--no-default-features", "adoption": "compare hosted, reserved Mac, or self-hosted examples"}))
         elif args.stage == "cache-key":
             print(cache_key(args.sdk, args.xcode))
         elif args.stage == "build":
@@ -177,26 +243,10 @@ def main():
         elif args.stage == "package":
             package(args)
         else:
-            if not args.ipa.is_file():
-                raise ValueError("IPA is missing")
-            key_file = required_file("ASC_KEY_FILE")
-            key_id = os.environ.get("ASC_KEY_ID", "")
-            issuer = os.environ.get("ASC_ISSUER_ID", "")
-            if not re.fullmatch(r"[A-Z0-9]+", key_id) or not issuer:
-                raise ValueError("ASC_KEY_ID and ASC_ISSUER_ID are required")
-            with tempfile.TemporaryDirectory(prefix="herdr-ci-upload-") as temporary:
-                directory = Path(temporary)
-                directory.chmod(0o700)
-                destination = directory / f"AuthKey_{key_id}.p8"
-                shutil.copyfile(key_file, destination)
-                destination.chmod(0o600)
-                env = dict(os.environ, API_PRIVATE_KEYS_DIR=str(directory))
-                run(["xcrun", "altool", "--upload-app", "--type", "ios", "--file", str(args.ipa),
-                     "--apiKey", key_id, "--apiIssuer", issuer], env=env, capture_output=True)
-            print("Upload accepted by tool; processing, group delivery and device update are pending")
-    except (ValueError, OSError, subprocess.CalledProcessError, plistlib.InvalidFileException) as error:
+            upload_ipa(args.ipa)
+    except (ValueError, OSError, subprocess.CalledProcessError, plistlib.InvalidFileException, zipfile.BadZipFile) as error:
         # Subprocess arguments may contain passwords. Never format the exception.
-        detail = "external command failed; inspect redacted CI diagnostics" if isinstance(error, subprocess.CalledProcessError) else str(error)
+        detail = "external command failed; output withheld to protect injected secrets" if isinstance(error, subprocess.CalledProcessError) else str(error)
         print(f"error: {detail}", file=sys.stderr)
         return 1
     finally:

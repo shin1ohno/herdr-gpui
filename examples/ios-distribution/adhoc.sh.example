@@ -1,0 +1,15 @@
+#!/bin/bash
+# Offline by default: accepts a fixture IPA, generates a non-installing local page.
+set -euo pipefail
+: "${IOS_IPA:?set fixture IPA for preview or fresh signed IPA output for execution}"
+: "${OTA_OUTPUT:?set a fresh local directory}"
+if [[ "${IOS_DISTRIBUTION_EXECUTE:-false}" == true ]]; then
+  : "${IOS_APP:?set unsigned device .app path}"
+  : "${IOS_BUILD_NUMBER:?set numeric build number}"
+  : "${OTA_BASE_URL:?set real HTTPS publishing base URL}"
+  python3 scripts/ios/distribution.py package --app "$IOS_APP" --output "$IOS_IPA" --build-number "$IOS_BUILD_NUMBER" --method adhoc
+  python3 scripts/ios/ota.py --ipa "$IOS_IPA" --output "$OTA_OUTPUT" --base-url "$OTA_BASE_URL" --enable-install-link
+else
+  python3 scripts/ios/ota.py --ipa "$IOS_IPA" --output "$OTA_OUTPUT"
+fi
+# Never publishes; user deploys all three files to an access-controlled HTTPS host.
