@@ -320,6 +320,7 @@ impl Render for CoreTerminalView {
         let painter = self.painter.clone();
         let look = self.look.clone();
         let frame = self.frame_to_paint();
+        let marked = self.marked.clone();
         let highlights = self.highlights();
         let pane = self.pane;
         let background = self.look.background;
@@ -358,6 +359,20 @@ impl Render for CoreTerminalView {
                                 window,
                                 cx,
                             );
+                            if let Some(cursor) = &frame.cursor {
+                                // Preedit stays local; the core receives only committed text.
+                                painter.borrow().paint_composition(
+                                    &marked,
+                                    bounds.origin
+                                        + point(
+                                            px(f32::from(cursor.x) * look.cell_width),
+                                            px(f32::from(cursor.y) * look.cell_height),
+                                        ),
+                                    bounds,
+                                    &look.font,
+                                    window,
+                                );
+                            }
                         });
                     },
                 )
