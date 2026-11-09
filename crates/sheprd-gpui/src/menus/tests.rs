@@ -173,7 +173,7 @@ fn edit_menu_carries_standard_items_and_shortcut_labels(cx: &mut gpui::TestAppCo
         .filter_map(|item| match item {
             MenuItem::Action {
                 name, os_action, ..
-            } => Some((name.as_ref(), *os_action)),
+            } if os_action.is_some() => Some((name.as_ref(), *os_action)),
             _ => None,
         })
         .collect();
@@ -433,3 +433,5 @@ mod en_xa;
 mod ipad;
 mod pseudo_locales;
 mod slow_animations;
+
+mod copy_as_one_line;

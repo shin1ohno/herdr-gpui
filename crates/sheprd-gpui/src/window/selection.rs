@@ -228,6 +228,18 @@ impl SheprdWindow {
         true
     }
 
+    pub(crate) fn copy_as_one_line(&mut self, cx: &mut Context<Self>) -> bool {
+        if !self.selection_retained() {
+            return false;
+        }
+        let copied = self.copy_selection_with_join(true, cx);
+        if copied && !self.config.keep_selection_after_copy {
+            self.selection = None;
+        }
+        cx.notify();
+        copied
+    }
+
     /// Cmd-A and Edit > Select All: selects the focused pane's history and
     /// screen, or the open popup, as a released selection that Cmd-C copies.
     /// Nothing reaches the clipboard yet, and nothing reaches the daemon until
@@ -502,11 +514,24 @@ impl SheprdWindow {
     /// Writes the current selection to the clipboard, reporting whether the
     /// text got there.
     fn copy_selection(&mut self, cx: &mut Context<Self>) -> bool {
+        self.copy_selection_with_join(false, cx)
+    }
+
+    fn copy_selection_with_join(&mut self, join_wrapped: bool, cx: &mut Context<Self>) -> bool {
         let text = {
             let (Some(selection), Some(surface)) = (&self.selection, &self.live.surface) else {
                 return false;
             };
-            selection.text(surface, self.cell_width, self.config.terminal.line_height())
+            if join_wrapped {
+                selection.text_with_join(
+                    surface,
+                    self.cell_width,
+                    self.config.terminal.line_height(),
+                    true,
+                )
+            } else {
+                selection.text(surface, self.cell_width, self.config.terminal.line_height())
+            }
         };
         match text {
             Ok(text) => {

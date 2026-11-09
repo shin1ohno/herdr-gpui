@@ -31,13 +31,21 @@ fn arrows_skip_separators_and_disabled_actions(cx: &mut TestAppContext) {
         })
     });
     draw(cx);
-    view.read_with(cx, |view, _| {
-        let menu = view.menu.application.as_ref().unwrap();
-        // Paste and Select All act on an unselected terminal; a separator
-        // sits between them.
-        assert_eq!(menu.selectable(), vec![2, 4]);
-        assert_eq!(menu.selected, Some(2));
-    });
+    let paste =
+        view.read_with(cx, |view, _| {
+            let menu = view.menu.application.as_ref().unwrap();
+            let position =
+                |label| {
+                    menu.current().unwrap().items.iter().position(|item|
+            matches!(item, OwnedMenuItem::Action { name, .. } if name == label)).unwrap()
+                };
+            let paste = position("Paste");
+            // Copy actions stay disabled without a selection; arrows skip them
+            // and the separator between Paste and Select All.
+            assert_eq!(menu.selectable(), vec![paste, position("Select All")]);
+            assert_eq!(menu.selected, Some(paste));
+            paste
+        });
     cx.simulate_keystrokes("down up");
     assert_eq!(
         view.read_with(cx, |view, _| view
@@ -46,7 +54,7 @@ fn arrows_skip_separators_and_disabled_actions(cx: &mut TestAppContext) {
             .as_ref()
             .unwrap()
             .selected),
-        Some(2)
+        Some(paste)
     );
     cx.simulate_keystrokes("escape");
     cx.update(|window, cx| {

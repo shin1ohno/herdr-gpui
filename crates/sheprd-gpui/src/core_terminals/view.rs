@@ -213,6 +213,12 @@ impl CoreTerminalView {
 
     fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let modifiers = event.keystroke.modifiers;
+        if crate::actions::copies_as_one_line(&event.keystroke) {
+            self.copy_selection_with_join(true, cx);
+            cx.stop_propagation();
+            window.prevent_default();
+            return;
+        }
         // Cmd-C copies a selection, as the window's copy does a Herdr pane's.
         if modifiers.platform
             && !modifiers.control
@@ -410,6 +416,20 @@ impl Render for CoreTerminalView {
             .on_action(cx.listener(|this, _: &crate::actions::Paste, _, cx| {
                 this.paste_clipboard(cx);
             }))
+            .when(
+                self.selection
+                    .is_some_and(|selection| !selection.is_empty()),
+                |root| {
+                    root.on_action(cx.listener(|this, _: &crate::actions::Copy, _, cx| {
+                        this.copy_selection(cx);
+                    }))
+                    .on_action(cx.listener(
+                        |this, _: &crate::actions::CopyAsOneLine, _, cx| {
+                            this.copy_selection_with_join(true, cx);
+                        },
+                    ))
+                },
+            )
             .on_mouse_down(MouseButton::Left, cx.listener(Self::mouse_down))
             .on_mouse_down(MouseButton::Right, cx.listener(Self::mouse_down))
             .on_mouse_down(MouseButton::Middle, cx.listener(Self::mouse_down))

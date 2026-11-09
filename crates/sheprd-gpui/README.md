@@ -1963,6 +1963,17 @@ inside a popup takes the popup's own cells, never the panes it covers. Because
 each end anchors on the half of a cell the pointer sat in, a single character is
 selectable, while a press that never crosses a midpoint selects nothing.
 
+For a visible terminal selection in either Herdr backend, **Edit > Copy as one
+line** (Cmd-Option-C on macOS and an iPad hardware keyboard; Ctrl-Alt-C on
+Linux and Windows) removes a row break only when the selected text fills that
+pane's right edge with a nonblank cell. Wide glyphs count their continuation
+cell. A following blank row contributes no text, but its own newline remains
+before the next row. Trailing padding is trimmed as with normal Copy. This
+client-side heuristic can also join a genuine full-width line to its next row;
+use normal Copy when the original row breaks matter. Selections reaching
+outside the visible Herdr 1 surface report an error for this action because
+the protocol does not provide the cells needed to infer those wraps.
+
 Copied rows are separated by newlines. Wide graphemes copy once, without spaces
 from their continuation cells; actual selected spaces are preserved. A partial
 wide grapheme copies only when its leading cell is selected.

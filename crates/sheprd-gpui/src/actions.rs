@@ -30,7 +30,19 @@ actions!(
 
 // Edit menu items. Each element registers only the ones it can perform, so
 // GPUI disables the rest while that element has focus.
-actions!(edit, [Cut, Copy, Paste, SelectAll]);
+actions!(edit, [Cut, Copy, CopyAsOneLine, Paste, SelectAll]);
+
+pub(crate) const COPY_AS_ONE_LINE_KEY: &str = if CTRL_SHORTCUTS {
+    "ctrl-alt-c"
+} else {
+    "cmd-alt-c"
+};
+
+pub(crate) fn copies_as_one_line(key: &Keystroke) -> bool {
+    Keystroke::parse(COPY_AS_ONE_LINE_KEY).is_ok_and(|binding| {
+        binding.modifiers == key.modifiers && binding.key.eq_ignore_ascii_case(&key.key)
+    })
+}
 
 /// No element sets this context, so these bindings never match a keystroke.
 /// They exist only so the Edit menu shows its standard shortcuts. The focused
@@ -145,6 +157,7 @@ pub(crate) fn bind_keys(cx: &mut App) {
         })
         .collect();
     cx.bind_keys(bindings);
+    cx.bind_keys([KeyBinding::new(COPY_AS_ONE_LINE_KEY, CopyAsOneLine, None)]);
     cx.bind_keys(crate::log_window::key_bindings());
     cx.bind_keys(crate::settings_window::key_bindings());
     let [cut, copy, paste, select_all] = EDIT_KEYS;
@@ -247,7 +260,10 @@ pub(crate) fn reserved_keystrokes() -> impl Iterator<Item = &'static str> {
     } else {
         &[]
     };
-    EDIT_KEYS.into_iter().chain(system.iter().copied())
+    EDIT_KEYS
+        .into_iter()
+        .chain([COPY_AS_ONE_LINE_KEY])
+        .chain(system.iter().copied())
 }
 
 /// Replaces every binding after a config reload. The menu bar reads its

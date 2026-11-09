@@ -351,6 +351,11 @@ impl SheprdWindow {
             .config
             .option_as_alt
             .sends_alt(cx.keyboard_layout().id(), option_keys);
+        if crate::actions::copies_as_one_line(&event.keystroke) && self.copy_as_one_line(cx) {
+            cx.stop_propagation();
+            window.prevent_default();
+            return;
+        }
         // Cmd-C copies a selection that is still highlighted. Ctrl-C does too
         // only while Herdr's `copy_on_select` is off, as in Herdr, where the
         // highlight is waiting for that copy; a selection the release already

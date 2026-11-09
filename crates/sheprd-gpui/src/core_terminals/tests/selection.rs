@@ -87,3 +87,5 @@ fn a_one_letter_word_or_line_is_still_selected() {
     let narrow = frame(1, &["z"]);
     assert_eq!(Selection::line(&narrow, at(0, 0)).text(&narrow), "z");
 }
+
+mod copy_as_one_line;
