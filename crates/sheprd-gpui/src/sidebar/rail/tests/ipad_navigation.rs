@@ -55,6 +55,27 @@ fn folded_ipad_hosts_reveal_their_spaces_and_agents_when_selected(cx: &mut TestA
         size(px(10.), px(10.))
     );
     let workspace = cx.debug_bounds("rail-workspace-ssh:host2-w0").unwrap();
+    let spaces = cx.debug_bounds("rail-spaces").unwrap();
+    eprintln!("workspace before scroll: {workspace:?}; viewport: {spaces:?}");
+    // The shorter iPad activity bar no longer stretches the fixture's column.
+    // Reveal the workspace in its scroll viewport before tapping it; debug
+    // bounds also describe clipped rows, whose centers can hit the agent list.
+    cx.simulate_event(ScrollEvent {
+        position: spaces.center(),
+        delta: ScrollDelta::Pixels(point(
+            px(0.),
+            (spaces.bottom() - workspace.bottom()).min(px(0.)),
+        )),
+        modifiers: Modifiers::default(),
+        touch_phase: TouchPhase::Moved,
+        source: ScrollSource::Pointer,
+    });
+    draw(cx);
+    let workspace = cx.debug_bounds("rail-workspace-ssh:host2-w0").unwrap();
+    let spaces = cx.debug_bounds("rail-spaces").unwrap();
+    eprintln!("workspace after scroll: {workspace:?}; viewport: {spaces:?}");
+    assert!(workspace.top() >= spaces.top());
+    assert!(workspace.bottom() <= spaces.bottom());
     cx.simulate_click(workspace.center(), Modifiers::default());
     view.read_with(cx, |view, _| {
         assert_eq!(
