@@ -1,7 +1,7 @@
 use super::super::CoreTerminalView;
 use crate::{core_terminals::worker, sidebar::layout_tests::fixture_window};
 use gpui::{AppContext, EntityInputHandler, IntoElement, Point, TestAppContext, px, size};
-use herdr_backend::{ClientPaneInputEvent, FrameData, TerminalId};
+use sheprd_backend::{ClientPaneInputEvent, FrameData, TerminalId};
 use std::sync::Arc;
 use std::sync::mpsc;
 
@@ -27,7 +27,7 @@ fn composition_paints_until_commit_or_cancel(cx: &mut TestAppContext) {
                 width: 80,
                 height: 24,
                 cells: vec![],
-                cursor: Some(herdr_client::protocol::CursorState {
+                cursor: Some(sheprd_client::protocol::CursorState {
                     x: 2,
                     y: 1,
                     visible: true,
