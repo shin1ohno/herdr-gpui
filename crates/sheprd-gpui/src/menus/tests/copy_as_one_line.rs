@@ -21,8 +21,9 @@ fn copy_as_one_line_follows_copy_and_has_a_noncolliding_binding(cx: &mut gpui::T
         && action.partial_eq(&CopyAsOneLine))
     );
     let key = gpui::Keystroke::parse(crate::actions::COPY_AS_ONE_LINE_KEY).unwrap();
-    for (_, binding) in crate::keymap::Keymap::default().bindings() {
-        let bound = gpui::Keystroke::parse(binding).unwrap();
+    let keymap = crate::keymap::Keymap::default();
+    for (_, binding) in keymap.bindings() {
+        let bound = crate::keymap::parse_keystroke(binding).unwrap();
         assert_ne!((&key.modifiers, &key.key), (&bound.modifiers, &bound.key));
     }
     cx.update(|cx| {
