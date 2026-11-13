@@ -34,7 +34,7 @@ impl Sandbox {
             ("HOME", at("home")),
             ("PATH", std::env::var_os("PATH").unwrap_or_default()),
             ("XDG_CONFIG_HOME", at("config")),
-            ("XDG_STATE_HOME", at("state")),
+            ("XDG_STATE_HOME", at("state with space")),
         ];
         let child = Self::command(&binary, &vars)
             .arg("serve")
@@ -268,4 +268,88 @@ fn a_real_core_through_the_backend_traits() {
         }
     }
     backend.kill(&info.id).unwrap();
+}
+
+#[test]
+#[ignore = "needs HERDR_CORE_TEST_BINARY"]
+fn a_real_core_puts_exact_bytes_without_overwriting() {
+    let binary = std::env::var_os("HERDR_CORE_TEST_BINARY").expect("HERDR_CORE_TEST_BINARY");
+    let sandbox = Sandbox::start(binary);
+    let core = sandbox.connect();
+    let argv = ["sh".into(), "-c".into(), "sleep 30".into()];
+    let terminal = core
+        .run(&Run {
+            argv: &argv,
+            ..Run::default()
+        })
+        .unwrap();
+    for (name, bytes) in [
+        ("paste.png", b"first".as_slice()),
+        ("paste-2.png", b"second".as_slice()),
+    ] {
+        let put = core.put(&terminal.address, "paste.png", bytes).unwrap();
+        assert_eq!(put.bytes, bytes.len());
+        assert!(put.path.contains("state with space"));
+        assert_eq!(Path::new(&put.path).file_name().unwrap(), name);
+        assert_eq!(std::fs::read(&put.path).unwrap(), bytes);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "needs HERDR_CORE_TEST_BINARY"]
+fn a_real_core_does_not_deliver_an_interrupted_frame() {
+    use super::gate_transport::{Guarded, until};
+    use crate::Delivery;
+    use std::sync::atomic::Ordering;
+
+    let binary = std::env::var_os("HERDR_CORE_TEST_BINARY").expect("HERDR_CORE_TEST_BINARY");
+    let sandbox = Sandbox::start(binary);
+    let core = sandbox.connect();
+    let argv = ["cat".into()];
+    let terminal = core
+        .run(&Run {
+            argv: &argv,
+            ..Run::default()
+        })
+        .unwrap();
+    let socket = super::Socket::connect(Path::new(&sandbox.var("HC_SOCKET").unwrap())).unwrap();
+    socket
+        .set_read_timeout(Some(crate::connection::POLL))
+        .unwrap();
+    let (transport, control) = Guarded::new(socket);
+    let interrupted = Core::over(transport).unwrap();
+    let attachment = interrupted
+        .attach(&Attach {
+            terminal: &terminal.address,
+            ..Attach::default()
+        })
+        .unwrap();
+    control.write.store(1, Ordering::Release);
+    let gate = attachment.write_gated(b"must-not-reach-cat\n").unwrap();
+    control.wait();
+    assert_eq!(gate.cancel(), Delivery::Writing);
+    control.release();
+    until(|| interrupted.is_lost() && gate.is_finished());
+    assert_eq!(gate.state(), Delivery::Interrupted);
+    let observer = core
+        .attach(&Attach {
+            terminal: &terminal.address,
+            ..Attach::default()
+        })
+        .unwrap();
+    observer.write(b"complete-after-interruption\n").unwrap();
+    let mut seen = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "no completed input after interruption"
+        );
+        seen.extend(observer.read(Duration::from_millis(50)).unwrap().bytes);
+        assert!(!String::from_utf8_lossy(&seen).contains("must-not-reach-cat"));
+        if String::from_utf8_lossy(&seen).contains("complete-after-interruption") {
+            break;
+        }
+    }
 }

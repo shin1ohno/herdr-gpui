@@ -6,10 +6,13 @@ mod diagnostics;
 mod endpoint;
 mod event;
 mod frame;
+mod gate_transport;
 mod hello;
 mod labels;
 mod live;
+mod put;
 mod transport;
+mod write_gate;
 
 use crate::frame::{Decoder, Frame, Kind, encode};
 use serde_json::{Value, json};

@@ -13,6 +13,7 @@ workspace = true
 integration-test = []
 
 [dependencies]
+base64.workspace            = true
 crossbeam-channel.workspace = true
 sheprd-backend.workspace     = true
 sheprd-client.workspace      = true

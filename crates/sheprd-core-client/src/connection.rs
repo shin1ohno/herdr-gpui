@@ -7,9 +7,12 @@ use crate::{
     Endpoint, Error, Method, Result, Violation,
     frame::{Decoder, Frame, Kind},
     hello::{GENERATION, Hello},
-    stream::{self, Attachment, End, Link, Route, Stream, Subscription},
-    wire::{self, Doc, DocSet, List, Subscribed, Terminal},
+    stream::{
+        self, Attachment, Delivery, End, Link, Outbound, Route, Stream, Subscription, WriteGate,
+    },
+    wire::{self, Doc, DocSet, List, Put, Subscribed, Terminal},
 };
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
@@ -85,8 +88,8 @@ struct RefusalData {
 }
 
 #[derive(Default)]
-struct Shared {
-    lost: AtomicBool,
+pub(crate) struct Shared {
+    pub(crate) lost: AtomicBool,
     pending: Mutex<HashMap<u64, Sender<Reply>>>,
     routes: Mutex<HashMap<u32, Arc<Route>>>,
 }
@@ -176,7 +179,10 @@ impl Core {
             .spawn(move || worker.run())?;
         Ok(Self {
             hello,
-            link: Link { outbound },
+            link: Link {
+                outbound,
+                shared: Arc::clone(&shared),
+            },
             next_id: AtomicU64::new(1),
             shared,
             stop,
@@ -197,6 +203,17 @@ impl Core {
     /// and every terminal on it continue running.
     pub fn disconnect(&self) {
         self.stop.store(true, Ordering::Release);
+    }
+
+    /// Stores bytes using the existing connection. Blocking: worker threads only.
+    /// Callers enforce their acquisition and encoded-size limits before calling.
+    pub fn put(&self, terminal: &str, name: &str, bytes: &[u8]) -> Result<Put> {
+        self.typed(
+            Method::TerminalPut,
+            &json!({
+                "terminal": terminal, "name": name, "data": STANDARD.encode(bytes)
+            }),
+        )
     }
 
     pub fn list(&self, all: bool) -> Result<List> {
@@ -357,7 +374,7 @@ fn waiting(error: &io::Error) -> bool {
 
 struct Worker<S> {
     decoder: Decoder,
-    queue: Receiver<Vec<u8>>,
+    queue: Receiver<Outbound>,
     shared: Arc<Shared>,
     stop: Arc<AtomicBool>,
     stream: S,
@@ -399,7 +416,20 @@ impl<S: Read + Write> Worker<S> {
             }
             match self.queue.try_recv() {
                 Ok(frame) => {
-                    self.stream.write_all(&frame)?;
+                    if let Some(gate) = &frame.gate {
+                        if !gate.begin() {
+                            continue;
+                        }
+                        if let Err(error) =
+                            write_gated(&mut self.stream, &frame.bytes, gate, &self.stop)
+                        {
+                            gate.finish(Delivery::Interrupted);
+                            return Err(error);
+                        }
+                        gate.finish(Delivery::Written);
+                    } else {
+                        self.stream.write_all(&frame.bytes)?;
+                    }
                     wrote = true;
                 }
                 Err(TryRecvError::Empty) => break,
@@ -492,3 +522,26 @@ fn connect_stream(path: &std::path::Path) -> io::Result<sheprd_client::Stream> {
 #[cfg(test)]
 #[path = "connection/tests.rs"]
 mod tests;
+
+/// A cancellation after a partial write cannot leave a truncated frame on a
+/// live connection. A completed final write wins the race with cancellation.
+fn write_gated(
+    stream: &mut impl Write,
+    bytes: &[u8],
+    gate: &WriteGate,
+    stop: &AtomicBool,
+) -> Result<()> {
+    let mut offset = 0;
+    while offset < bytes.len() {
+        match stream.write(&bytes[offset..]) {
+            Ok(0) => return Err(io::Error::from(io::ErrorKind::WriteZero).into()),
+            Ok(n) => offset += n,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(error) => return Err(error.into()),
+        }
+        if offset < bytes.len() && (gate.cancelled() || stop.load(Ordering::Acquire)) {
+            return Err(Error::Lost);
+        }
+    }
+    Ok(())
+}
