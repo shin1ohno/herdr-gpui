@@ -1,0 +1,30 @@
+name: Fork core client
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-client:
+    if: github.repository == 'shin1ohno/herdr-gpui'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: rustup show active-toolchain
+      - run: cargo fmt --all --check
+      - run: python3 scripts/check-sorted.py
+      - run: bash scripts/check-file-size.sh
+      - name: Commit subjects
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/release/check-commit-messages.py range "$BASE..HEAD"
+      - run: cargo test --locked -p sheprd-core-client
+      - run: cargo clippy --locked -p sheprd-core-client --all-targets -- -D warnings
+      - run: python3 scripts/release/fetch-herdr-core.py linux-x86_64 target/core
+      - name: Real core receipts and interrupted frames
+        run: HERDR_CORE_TEST_BINARY="$PWD/target/core/herdr-core" cargo test --locked -p sheprd-core-client live -- --ignored --nocapture

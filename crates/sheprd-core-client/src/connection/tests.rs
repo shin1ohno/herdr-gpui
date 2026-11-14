@@ -31,8 +31,16 @@ impl Write for InterruptedWrite {
 fn cancellation_does_not_drain_or_flush_the_rest_of_a_write_batch() {
     let stop = Arc::new(AtomicBool::new(false));
     let (send, queue) = crossbeam_channel::bounded(3);
-    send.send(b"first".to_vec()).unwrap();
-    send.send(b"queued".to_vec()).unwrap();
+    send.send(Outbound {
+        bytes: b"first".to_vec(),
+        gate: None,
+    })
+    .unwrap();
+    send.send(Outbound {
+        bytes: b"queued".to_vec(),
+        gate: None,
+    })
+    .unwrap();
     let mut worker = Worker {
         decoder: Decoder::default(),
         queue,
@@ -47,5 +55,5 @@ fn cancellation_does_not_drain_or_flush_the_rest_of_a_write_batch() {
     assert!(!worker.write_queued().unwrap());
     assert_eq!(worker.stream.written, [b"first".to_vec()]);
     assert_eq!(worker.stream.flushes, 0);
-    assert_eq!(worker.queue.try_recv().unwrap(), b"queued");
+    assert_eq!(worker.queue.try_recv().unwrap().bytes, b"queued");
 }

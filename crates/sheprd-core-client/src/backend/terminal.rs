@@ -1,4 +1,4 @@
-use crate::{Attachment, Core, End, Error, Result, wire::Attach};
+use crate::{Attachment, Core, End, Error, Result, WriteGate, wire::Attach};
 use sheprd_backend::{
     ClientMouseKind, ClientPaneInputEvent, Exit, KeyReporting, Role, Size, SurfaceUpdate,
     TerminalId,
@@ -68,6 +68,39 @@ impl CoreTerminal {
         })
     }
 
+    /// Encodes semantic input with the same mode and scroll behavior as input().
+    pub fn input_gated(&mut self, input: &ClientPaneInputEvent) -> Result<Option<WriteGate>> {
+        let bytes = self.input_bytes(input);
+        if bytes.is_empty() {
+            return Ok(None);
+        }
+        self.attachment.write_gated(&bytes).map(Some)
+    }
+
+    fn input_bytes(&mut self, input: &ClientPaneInputEvent) -> Vec<u8> {
+        let bytes = self.emulator.encode(input);
+        if bytes.is_empty() {
+            if let ClientPaneInputEvent::Mouse { kind, lines, .. } = input {
+                let lines = i32::from((*lines).max(1));
+                match kind {
+                    ClientMouseKind::ScrollUp => self.emulator.scroll(Scroll::Lines(lines)),
+                    ClientMouseKind::ScrollDown => self.emulator.scroll(Scroll::Lines(-lines)),
+                    _ => {}
+                }
+            }
+            return Vec::new();
+        }
+        if !self.drives() {
+            return Vec::new();
+        }
+        if !matches!(input, ClientPaneInputEvent::Mouse { .. })
+            && self.emulator.scroll_metrics().offset > 0
+        {
+            self.emulator.scroll(Scroll::Bottom);
+        }
+        bytes
+    }
+
     /// Keeps an observer's screen at the size the active viewer set, read
     /// from the core now and then. A failed read leaves the size as it is;
     /// a lost connection ends the attachment too, which reports it.
@@ -121,26 +154,7 @@ impl sheprd_backend::Terminal for CoreTerminal {
     /// A wheel turn the program does not read scrolls this view's history,
     /// an observer's too. Typing returns the view to the live screen.
     fn input(&mut self, input: &ClientPaneInputEvent) -> Result<()> {
-        let bytes = self.emulator.encode(input);
-        if bytes.is_empty() {
-            if let ClientPaneInputEvent::Mouse { kind, lines, .. } = input {
-                let lines = i32::from((*lines).max(1));
-                match kind {
-                    ClientMouseKind::ScrollUp => self.emulator.scroll(Scroll::Lines(lines)),
-                    ClientMouseKind::ScrollDown => self.emulator.scroll(Scroll::Lines(-lines)),
-                    _ => {}
-                }
-            }
-            return Ok(());
-        }
-        if !self.drives() {
-            return Ok(());
-        }
-        if !matches!(input, ClientPaneInputEvent::Mouse { .. })
-            && self.emulator.scroll_metrics().offset > 0
-        {
-            self.emulator.scroll(Scroll::Bottom);
-        }
+        let bytes = self.input_bytes(input);
         self.attachment.write(&bytes)
     }
 

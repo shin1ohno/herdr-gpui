@@ -5,6 +5,7 @@
 
 use crate::{
     Error, Result, Violation,
+    connection::Shared,
     event::{self, Lines, Notice},
     frame::{self, Kind, MAX_PAYLOAD},
     wire::{Display, Terminal},
@@ -12,7 +13,10 @@ use crate::{
 use crossbeam_channel::{Receiver, Sender, TrySendError};
 use serde::Deserialize;
 use std::{
-    sync::{Mutex, MutexGuard, PoisonError},
+    sync::{
+        Arc, Mutex, MutexGuard, PoisonError,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 
@@ -125,16 +129,101 @@ impl Route {
     }
 }
 
+/// Delivery of one cancellable group of frames.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Delivery {
+    Queued,
+    Writing,
+    Written,
+    Dropped,
+    Interrupted,
+}
+
+/// Cancellation remains effective after enqueue until writing completes.
+/// The state lock is never held across I/O; cancellation never waits for I/O.
+#[derive(Clone)]
+pub struct WriteGate {
+    delivery: Arc<Mutex<Delivery>>,
+    cancelled: Arc<AtomicBool>,
+    shared: Arc<Shared>,
+}
+
+impl WriteGate {
+    fn new(shared: Arc<Shared>) -> Self {
+        Self {
+            delivery: Arc::new(Mutex::new(Delivery::Queued)),
+            cancelled: Arc::new(AtomicBool::new(false)),
+            shared,
+        }
+    }
+
+    pub fn state(&self) -> Delivery {
+        let state = *self.delivery.lock().unwrap_or_else(PoisonError::into_inner);
+        if state == Delivery::Queued && self.shared.lost.load(Ordering::Acquire) {
+            Delivery::Dropped
+        } else {
+            state
+        }
+    }
+
+    pub fn is_finished(&self) -> bool {
+        matches!(
+            self.state(),
+            Delivery::Written | Delivery::Dropped | Delivery::Interrupted
+        )
+    }
+
+    pub fn cancel(&self) -> Delivery {
+        let mut state = self.delivery.lock().unwrap_or_else(PoisonError::into_inner);
+        match *state {
+            Delivery::Queued => *state = Delivery::Dropped,
+            Delivery::Writing => self.cancelled.store(true, Ordering::Release),
+            _ => {}
+        }
+        *state
+    }
+
+    pub(crate) fn begin(&self) -> bool {
+        let mut state = self.delivery.lock().unwrap_or_else(PoisonError::into_inner);
+        if *state != Delivery::Queued {
+            return false;
+        }
+        *state = Delivery::Writing;
+        true
+    }
+
+    pub(crate) fn cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn finish(&self, state: Delivery) {
+        *self.delivery.lock().unwrap_or_else(PoisonError::into_inner) = state;
+    }
+}
+
+pub(crate) struct Outbound {
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) gate: Option<WriteGate>,
+}
+
 /// The writing half every stream shares with its connection.
 #[derive(Clone)]
 pub(crate) struct Link {
-    pub(crate) outbound: Sender<Vec<u8>>,
+    pub(crate) outbound: Sender<Outbound>,
+    pub(crate) shared: Arc<Shared>,
 }
 
 impl Link {
     pub(crate) fn send(&self, channel: u32, kind: Kind, payload: &[u8]) -> Result<()> {
         let frame = frame::encode(channel, kind, payload)?;
-        self.outbound.try_send(frame).map_err(|error| match error {
+        self.enqueue(Outbound {
+            bytes: frame,
+            gate: None,
+        })
+    }
+
+    fn enqueue(&self, item: Outbound) -> Result<()> {
+        self.outbound.try_send(item).map_err(|error| match error {
             TrySendError::Full(_) => Error::Busy,
             TrySendError::Disconnected(_) => Error::Lost,
         })
@@ -145,7 +234,7 @@ impl Link {
 pub(crate) struct Stream {
     pub(crate) channel: u32,
     pub(crate) link: Link,
-    pub(crate) route: std::sync::Arc<Route>,
+    pub(crate) route: Arc<Route>,
 }
 
 impl Stream {
@@ -196,6 +285,20 @@ impl Attachment {
                 .link
                 .send(self.stream.channel, Kind::Data, chunk)
         })
+    }
+
+    /// Queues all frames atomically under one cancellation gate.
+    pub fn write_gated(&self, bytes: &[u8]) -> Result<WriteGate> {
+        let mut frames = Vec::new();
+        for chunk in bytes.chunks(MAX_PAYLOAD) {
+            frames.extend(frame::encode(self.stream.channel, Kind::Data, chunk)?);
+        }
+        let gate = WriteGate::new(Arc::clone(&self.stream.link.shared));
+        self.stream.link.enqueue(Outbound {
+            bytes: frames,
+            gate: Some(gate.clone()),
+        })?;
+        Ok(gate)
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<()> {

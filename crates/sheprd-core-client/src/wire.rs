@@ -177,3 +177,10 @@ pub struct Run<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub on: Option<&'a str>,
 }
+
+/// A file stored by the core for one terminal.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct Put {
+    pub path: String,
+    pub bytes: usize,
+}

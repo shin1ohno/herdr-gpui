@@ -24,4 +24,4 @@ pub use endpoint::Endpoint;
 pub use error::{Error, Result, Violation};
 pub use method::Method;
 pub use start::{PROGRAM, start};
-pub use stream::{Attachment, Chunk, Closed, End, MAX_BUFFERED, Subscription};
+pub use stream::{Attachment, Chunk, Closed, Delivery, End, MAX_BUFFERED, Subscription, WriteGate};
