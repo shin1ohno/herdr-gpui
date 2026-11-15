@@ -1,0 +1,28 @@
+name: Fork herdr-ssh
+# ci.yml runs only in the upstream repositories, so this fork runs the
+# in-process SSH client's tests and lints itself, on macOS and Linux.
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  herdr-ssh:
+    if: github.repository == 'shin1ohno/herdr-gpui'
+    name: herdr-ssh (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: rustup show active-toolchain
+      - run: cargo test --locked -p herdr-ssh
+      # rustdoc checks compile_fail error codes only on nightly, so R10's
+      # E0451 is checked with rustc directly.
+      - run: bash crates/herdr-ssh/scripts/check-receipt-forgery.sh
+      - run: cargo clippy --locked -p herdr-ssh --all-targets -- -D warnings

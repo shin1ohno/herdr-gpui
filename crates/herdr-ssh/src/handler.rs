@@ -40,6 +40,10 @@ pub(crate) struct Client {
     /// is sent.
     authenticate: bool,
     offered: OfferedSlot,
+    /// A test's stand-in, dropped with the handler, which tells the test
+    /// whether the session task (and the pins it holds) has gone.
+    #[cfg(test)]
+    held: Option<Arc<()>>,
 }
 
 impl Client {
@@ -48,7 +52,20 @@ impl Client {
             pins,
             authenticate,
             offered,
+            #[cfg(test)]
+            held: None,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn holding(mut self, held: Option<Arc<()>>) -> Self {
+        self.held = held;
+        self
+    }
+
+    #[cfg(not(test))]
+    pub(crate) fn holding(self, _held: Option<Arc<()>>) -> Self {
+        self
     }
 
     fn compare(&self, key: &PublicKey) -> Offered {

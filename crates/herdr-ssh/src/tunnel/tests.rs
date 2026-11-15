@@ -104,3 +104,199 @@ fn dropping_a_tunnel_does_not_block() {
     let mut rest = Vec::new();
     assert_eq!((&stream).read_to_end(&mut rest).unwrap(), 0);
 }
+
+// Teardown receipts (plan rules R1-R13); fixtures shared by the topic files.
+
+/// How long a test waits for a teardown that should settle.
+const SETTLE: Duration = Duration::from_secs(15);
+
+/// Holds a signing closure until opened.
+#[derive(Default)]
+struct SignGate {
+    open: Mutex<bool>,
+    changed: Condvar,
+    entered: AtomicBool,
+}
+
+impl SignGate {
+    fn pass(&self) {
+        self.entered.store(true, Ordering::SeqCst);
+        let open = self.open.lock().unwrap();
+        let _open = self.changed.wait_while(open, |open| !*open).unwrap();
+    }
+
+    fn open(&self) {
+        *self.open.lock().unwrap() = true;
+        self.changed.notify_all();
+    }
+
+    fn wait_entered(&self, limit: Duration) -> bool {
+        let started = Instant::now();
+        while !self.entered.load(Ordering::SeqCst) {
+            if started.elapsed() > limit {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        true
+    }
+}
+
+/// A software key whose signing closure alone holds the returned stand-in,
+/// and which first waits at `gate`, if any.
+fn watched_key(seed: u8, gate: Option<Arc<SignGate>>) -> (ClientKey, std::sync::Weak<()>) {
+    use p256::ecdsa::{Signature, SigningKey, signature::Signer as _};
+    let signing = SigningKey::from_slice(&[seed; 32]).unwrap();
+    let public = signing
+        .verifying_key()
+        .to_sec1_point(false)
+        .as_bytes()
+        .to_vec();
+    let stand_in = Arc::new(());
+    let watched = Arc::downgrade(&stand_in);
+    let key = ClientKey::new(public, move |message| {
+        let _held = &stand_in;
+        if let Some(gate) = &gate {
+            gate.pass();
+        }
+        let signature: Signature = signing.sign(message);
+        Ok(signature.to_bytes().into())
+    })
+    .unwrap();
+    (key, watched)
+}
+
+fn removing(mutant: Option<Mutant>) -> Hooks {
+    Hooks {
+        mutant,
+        ..Hooks::default()
+    }
+}
+
+/// A started tunnel with its probe. The caller's stream stays open until
+/// this is dropped.
+struct Watched {
+    stream: UnixStream,
+    tunnel: Tunnel,
+    probe: Arc<crate::hooks::Probe>,
+}
+
+/// Starts a tunnel to `target` and drops the test's copy of `key`, so only
+/// the tunnel holds the key's stand-in.
+fn start_watched(
+    target: &Target,
+    pins: &Pins,
+    (key, watched): (ClientKey, std::sync::Weak<()>),
+    command: &str,
+    deadlines: Deadlines,
+    mut hooks: Hooks,
+) -> Watched {
+    let probe = Arc::new(crate::hooks::Probe::default());
+    probe.watch_key(watched);
+    hooks.probe = Some(Arc::clone(&probe));
+    let (stream, tunnel) = start(target, &key, pins, command, deadlines, hooks).unwrap();
+    drop(key);
+    stream.set_read_timeout(Some(SETTLE)).unwrap();
+    Watched {
+        stream,
+        tunnel,
+        probe,
+    }
+}
+
+/// Why a rule's check failed. Each mutant test asserts the one variant its
+/// removed rule must produce, so a scenario that breaks for another reason
+/// (`Fixture`, a timeout) cannot pass for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Violation {
+    // keep-sorted start
+    /// Settled `Complete` where only `Unproven` may follow.
+    CompleteInsteadOfUnproven,
+    /// R7: dropping the tunnel waited.
+    DropBlocked,
+    /// R5: the host received an exec request after the stop.
+    ExecAfterStop,
+    /// R6: the receipt came before the exit was recorded.
+    ExitAfterReceipt,
+    /// The scenario itself failed; never a rule's verdict.
+    Fixture(String),
+    /// R13: the stdin forwarder still ran at the receipt.
+    ForwarderHeld,
+    /// R1 and R12: russh's handler, and with it the pins, still lived at the
+    /// receipt.
+    HandlerHeld,
+    /// B1 at authentication: the session's end was not observed where the
+    /// failed authentication returned.
+    JoinNotObservedAtAuth,
+    /// R12: the tunnel still held a copy of the client key at the receipt.
+    KeyHeld,
+    /// R11: a log line carried a private value.
+    PrivateValueLogged,
+    /// R9: a connection reached the host.
+    ReachedHost,
+    /// R2: the teardown settled while a signature ran.
+    SettledWhileSigning,
+    /// Settled `Unproven` where `Complete` was due.
+    UnprovenInsteadOfComplete,
+    /// Did not settle within the wait.
+    Unsettled,
+    // keep-sorted end
+}
+
+fn fixture(error: impl std::fmt::Display) -> Violation {
+    Violation::Fixture(error.to_string())
+}
+
+/// Asserts that a rule's check passed as written.
+fn holds(result: Result<(), Violation>) {
+    if let Err(Violation::Fixture(reason)) = &result {
+        panic!("the scenario itself failed: {reason}");
+    }
+    assert_eq!(result, Ok(()));
+}
+
+/// The receipt, if the teardown settles `Complete` within [`SETTLE`].
+fn receipt(tunnel: &Tunnel) -> Result<crate::TeardownReceipt, Violation> {
+    match tunnel.wait_teardown(SETTLE) {
+        Some(Teardown::Complete(receipt)) => Ok(receipt),
+        Some(Teardown::Unproven) => Err(Violation::UnprovenInsteadOfComplete),
+        None => Err(Violation::Unsettled),
+    }
+}
+
+/// `Ok` if the teardown settles `Unproven` within [`SETTLE`].
+fn unproven(tunnel: &Tunnel) -> Result<(), Violation> {
+    match tunnel.wait_teardown(SETTLE) {
+        Some(Teardown::Unproven) => Ok(()),
+        Some(Teardown::Complete(_)) => Err(Violation::CompleteInsteadOfUnproven),
+        None => Err(Violation::Unsettled),
+    }
+}
+
+/// R1, R12, R13: nothing of the tunnel's survives the receipt.
+fn released_at_receipt(probe: &crate::hooks::Probe) -> Result<(), Violation> {
+    let alive = probe
+        .alive_at_settle()
+        .ok_or_else(|| fixture("no settle observed"))?;
+    if alive.key != 0 {
+        Err(Violation::KeyHeld)
+    } else if alive.forwarder != 0 {
+        Err(Violation::ForwarderHeld)
+    } else if alive.handler != 0 {
+        Err(Violation::HandlerHeld)
+    } else {
+        Ok(())
+    }
+}
+
+/// Where `event` happened among the probe's events.
+fn position(events: &[crate::hooks::Event], event: crate::hooks::Event) -> Option<usize> {
+    events.iter().position(|seen| *seen == event)
+}
+
+mod faults;
+mod host_ended;
+mod logs;
+mod open_stage;
+mod receipt;
+mod signing;
