@@ -17,9 +17,11 @@ use crate::{
     ClientKey, Failure, HostKey, Pins, Result, Target,
     classify::classify,
     config::{self, CONNECT_DEADLINE},
-    exec::{self, Request},
+    exec::{self, Controls, Deadlines, Request},
     handler::{self, Client, Offered, OfferedSlot},
+    hooks::{Hooks, Mutant},
     runtime,
+    teardown::{self, StopSignal, Teardown, TeardownSlot, TunnelId},
 };
 
 /// How often a blocked [`scan`] looks at its stop flag.
@@ -131,11 +133,18 @@ impl ExitSlot {
 }
 
 /// A running exec channel. Dropping it cancels the channel and the session
-/// without blocking.
+/// without blocking and without a teardown receipt; to get one, call
+/// [`Tunnel::stop`] and then [`Tunnel::wait_teardown`] before dropping it.
 #[derive(Debug)]
 pub struct Tunnel {
     exit: Arc<ExitSlot>,
+    id: TunnelId,
+    stop: Arc<StopSignal>,
     task: tokio::task::JoinHandle<()>,
+    teardown: Arc<TeardownSlot>,
+    /// R7's mutant: dropping waits for the teardown.
+    #[cfg(test)]
+    blocking_drop: bool,
 }
 
 impl Tunnel {
@@ -143,12 +152,39 @@ impl Tunnel {
     pub fn wait_exit(&self, timeout: Duration) -> Option<TunnelExit> {
         self.exit.wait(timeout)
     }
+
+    /// This tunnel's identity, unique within the process; its receipt
+    /// carries the same one.
+    pub fn id(&self) -> TunnelId {
+        self.id
+    }
+
+    /// Asks the tunnel to end at its next phase boundary: a stop before the
+    /// exec request is queued means it is never sent. Never blocks; the
+    /// tunnel then ends its local work as it does after any other end.
+    pub fn stop(&self) {
+        self.stop.stop();
+    }
+
+    /// How the tunnel's local SSH work ended, once known; waits at most
+    /// `timeout`. The outcome comes after [`Tunnel::wait_exit`]'s, follows
+    /// every end (a normal exit included, with or without [`Tunnel::stop`]),
+    /// and every call after it returns the same outcome. See
+    /// [`TeardownReceipt`](crate::TeardownReceipt) for what `Complete` shows.
+    pub fn wait_teardown(&self, timeout: Duration) -> Option<Teardown> {
+        self.teardown.wait(self.id, timeout)
+    }
 }
 
 impl Drop for Tunnel {
     /// Aborting only schedules cancellation: the task drops the session and
     /// the stream on the runtime's thread at its next await.
     fn drop(&mut self) {
+        #[cfg(test)]
+        if self.blocking_drop {
+            self.stop();
+            let _ = self.wait_teardown(Duration::from_secs(10));
+        }
         self.task.abort();
     }
 }
@@ -168,10 +204,38 @@ pub fn exec(
     pins: &Pins,
     command: &str,
 ) -> Result<(UnixStream, Tunnel)> {
+    start(
+        target,
+        key,
+        pins,
+        command,
+        Deadlines::default(),
+        Hooks::default(),
+    )
+}
+
+/// [`exec`] with its deadlines and test hooks. Every `Err` it returns comes
+/// before the tunnel's task is spawned, so nothing reached the host.
+pub(crate) fn start(
+    target: &Target,
+    key: &ClientKey,
+    pins: &Pins,
+    command: &str,
+    deadlines: Deadlines,
+    hooks: Hooks,
+) -> Result<(UnixStream, Tunnel)> {
     let pins = match pins {
         Pins::Keys(keys) if !keys.is_empty() => keys.clone(),
-        Pins::Keys(_) | Pins::None => return Err(Failure::HostKeyUnknown.into()),
+        Pins::Keys(_) | Pins::None => {
+            if hooks.removes(Mutant::ConnectBeforePinCheck) {
+                connect_anyway(target);
+            }
+            return Err(Failure::HostKeyUnknown.into());
+        }
     };
+    // Carried as `Error::Io` so the public `Error`, which callers match
+    // exhaustively, keeps its variants; the source is the typed error.
+    let id = teardown::next_tunnel_id().map_err(std::io::Error::other)?;
     let handle = runtime::handle()?;
     let (caller, runtime_end) = UnixStream::pair()?;
     runtime_end.set_nonblocking(true)?;
@@ -187,8 +251,45 @@ pub fn exec(
     };
     let exit = Arc::new(ExitSlot::default());
     let slot = Arc::clone(&exit);
-    let task = handle.spawn(exec::run(request, local, move |ended| slot.set(ended)));
-    Ok((caller, Tunnel { exit, task }))
+    let stop = Arc::new(StopSignal::default());
+    let teardown = Arc::new(TeardownSlot::default());
+    #[cfg(test)]
+    let blocking_drop = hooks.removes(Mutant::BlockingDrop);
+    let controls = Controls {
+        stop: Arc::clone(&stop),
+        teardown: Arc::clone(&teardown),
+        deadlines,
+        hooks,
+    };
+    let task = handle.spawn(exec::run(
+        request,
+        local,
+        move |ended| slot.set(ended),
+        controls,
+    ));
+    Ok((
+        caller,
+        Tunnel {
+            exit,
+            id,
+            stop,
+            task,
+            teardown,
+            #[cfg(test)]
+            blocking_drop,
+        },
+    ))
+}
+
+/// R9's mutant: what `exec` would do if it checked the pins only after
+/// reaching the host.
+fn connect_anyway(target: &Target) {
+    let address = (target.host.clone(), target.port);
+    if let Ok(handle) = runtime::handle() {
+        handle.spawn(async move {
+            let _ = tokio::net::TcpStream::connect(address).await;
+        });
+    }
 }
 
 #[cfg(test)]

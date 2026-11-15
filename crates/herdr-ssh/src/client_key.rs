@@ -9,7 +9,7 @@ use base64::engine::general_purpose::STANDARD;
 use russh::keys::{HashAlg, PublicKey, agent::AgentIdentity};
 use thiserror::Error;
 
-use crate::{Error, host_key::write_string};
+use crate::{Error, host_key::write_string, teardown::SignTracker};
 
 /// The SSH name of the key and of its signatures.
 const ALGORITHM: &str = "ecdsa-sha2-nistp256";
@@ -100,9 +100,11 @@ impl ClientKey {
         })
     }
 
-    pub(crate) fn signer(&self) -> DeviceSigner {
+    /// A signer whose closures `signing` counts while they run.
+    pub(crate) fn signer(&self, signing: SignTracker) -> DeviceSigner {
         DeviceSigner {
             sign: Arc::clone(&self.sign),
+            signing,
         }
     }
 }
@@ -110,6 +112,7 @@ impl ClientKey {
 /// Signs russh's public-key authentication request with the closure.
 pub(crate) struct DeviceSigner {
     sign: Arc<Sign>,
+    signing: SignTracker,
 }
 
 /// Why signing the authentication request failed.
@@ -135,11 +138,19 @@ impl russh::Signer for DeviceSigner {
         to_sign: Vec<u8>,
     ) -> impl Future<Output = Result<Vec<u8>, Self::Error>> + Send {
         let sign = Arc::clone(&self.sign);
+        let tracker = self.signing.clone();
         async move {
+            // Counted from before the job is queued until the closure and its
+            // copy of the key are gone, or the job is dropped unrun: a tunnel
+            // gives no teardown receipt while a signature may be in progress.
+            let signing = tracker.start();
             // The closure may wait on the Secure Enclave, so it runs on the
-            // blocking pool rather than the runtime's only thread.
+            // blocking pool rather than the runtime's only thread. Dropping
+            // this future does not stop it.
             let (mut signed, signature) = tokio::task::spawn_blocking(move || {
                 let signature = sign(&to_sign);
+                drop(sign);
+                drop(signing);
                 (to_sign, signature)
             })
             .await?;

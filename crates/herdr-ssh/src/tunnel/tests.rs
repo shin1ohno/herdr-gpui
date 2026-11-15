@@ -104,3 +104,122 @@ fn dropping_a_tunnel_does_not_block() {
     let mut rest = Vec::new();
     assert_eq!((&stream).read_to_end(&mut rest).unwrap(), 0);
 }
+
+// Teardown receipts (plan rules R1-R13); fixtures shared by the topic files.
+
+/// How long a test waits for a teardown that should settle.
+const SETTLE: Duration = Duration::from_secs(15);
+
+/// Holds a signing closure until opened.
+#[derive(Default)]
+struct SignGate {
+    open: Mutex<bool>,
+    changed: Condvar,
+    entered: AtomicBool,
+}
+
+impl SignGate {
+    fn pass(&self) {
+        self.entered.store(true, Ordering::SeqCst);
+        let open = self.open.lock().unwrap();
+        let _open = self.changed.wait_while(open, |open| !*open).unwrap();
+    }
+
+    fn open(&self) {
+        *self.open.lock().unwrap() = true;
+        self.changed.notify_all();
+    }
+
+    fn wait_entered(&self, limit: Duration) -> bool {
+        let started = Instant::now();
+        while !self.entered.load(Ordering::SeqCst) {
+            if started.elapsed() > limit {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        true
+    }
+}
+
+/// A software key whose signing closure alone holds the returned stand-in,
+/// and which first waits at `gate`, if any.
+fn watched_key(seed: u8, gate: Option<Arc<SignGate>>) -> (ClientKey, std::sync::Weak<()>) {
+    use p256::ecdsa::{Signature, SigningKey, signature::Signer as _};
+    let signing = SigningKey::from_slice(&[seed; 32]).unwrap();
+    let public = signing
+        .verifying_key()
+        .to_sec1_point(false)
+        .as_bytes()
+        .to_vec();
+    let stand_in = Arc::new(());
+    let watched = Arc::downgrade(&stand_in);
+    let key = ClientKey::new(public, move |message| {
+        let _held = &stand_in;
+        if let Some(gate) = &gate {
+            gate.pass();
+        }
+        let signature: Signature = signing.sign(message);
+        Ok(signature.to_bytes().into())
+    })
+    .unwrap();
+    (key, watched)
+}
+
+fn removing(mutant: Option<Mutant>) -> Hooks {
+    Hooks {
+        mutant,
+        ..Hooks::default()
+    }
+}
+
+/// A started tunnel with its probe. The caller's stream stays open until
+/// this is dropped.
+struct Watched {
+    stream: UnixStream,
+    tunnel: Tunnel,
+    probe: Arc<crate::hooks::Probe>,
+}
+
+/// Starts a tunnel to `target` and drops the test's copy of `key`, so only
+/// the tunnel holds the key's stand-in.
+fn start_watched(
+    target: &Target,
+    pins: &Pins,
+    (key, watched): (ClientKey, std::sync::Weak<()>),
+    command: &str,
+    deadlines: Deadlines,
+    mut hooks: Hooks,
+) -> Watched {
+    let probe = Arc::new(crate::hooks::Probe::default());
+    probe.watch_key(watched);
+    hooks.probe = Some(Arc::clone(&probe));
+    let (stream, tunnel) = start(target, &key, pins, command, deadlines, hooks).unwrap();
+    drop(key);
+    stream.set_read_timeout(Some(SETTLE)).unwrap();
+    Watched {
+        stream,
+        tunnel,
+        probe,
+    }
+}
+
+/// The receipt, if the teardown settles `Complete` within [`SETTLE`].
+fn receipt(tunnel: &Tunnel) -> Result<crate::TeardownReceipt, String> {
+    match tunnel.wait_teardown(SETTLE) {
+        Some(Teardown::Complete(receipt)) => Ok(receipt),
+        Some(Teardown::Unproven) => Err("the teardown settled unproven".into()),
+        None => Err("the teardown did not settle".into()),
+    }
+}
+
+/// Where `event` happened among the probe's events.
+fn position(events: &[crate::hooks::Event], event: crate::hooks::Event) -> Option<usize> {
+    events.iter().position(|seen| *seen == event)
+}
+
+mod faults;
+mod logs;
+mod open_stage;
+mod receipt;
+mod signing;

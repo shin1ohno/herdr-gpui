@@ -221,6 +221,16 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   `herdr-ssh` reports a typed exit (`TunnelExit::Ssh(SshFailure)` for the
   SSH layer, `TunnelExit::Remote { exit_status, stderr_tail }` for the remote
   command) and the remote's stderr never decides an SSH failure class.
+- **Teardown receipt.** A caller that must not start a second exec while a
+  first may still run calls `Tunnel::stop` and then `Tunnel::wait_teardown`.
+  `Teardown::Complete` carries a `TeardownReceipt` naming the tunnel's
+  process-unique `TunnelId`, given only after the stdin forwarder has ended,
+  russh's session task has been disconnected and joined (a connect or setup
+  deadline cuts the stream and still joins it), no signing closure runs, and
+  the tunnel's copies of the key and pins are dropped. It shows nothing about
+  the remote command. `Teardown::Unproven` follows a panic or a session task
+  or signature that outlives its 5 s deadline. Dropping a `Tunnel` still only
+  signals cancellation and gives no receipt.
 - **The desktop `ssh` policy, kept in process:** public-key authentication
   only, never a fallback, and `partial_success` counts as failure
   (`BatchMode`); 10 s for TCP connect and key exchange (`ConnectTimeout`);

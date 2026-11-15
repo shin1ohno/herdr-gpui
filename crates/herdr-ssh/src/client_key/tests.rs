@@ -34,7 +34,10 @@ fn sign(key: &ClientKey, message: &[u8]) -> Result<Vec<u8>, SignerError> {
         key: key.public_key().unwrap(),
         comment: String::new(),
     };
-    block_on(key.signer().auth_sign(&identity, None, message.to_vec()))
+    block_on(
+        key.signer(SignTracker::default())
+            .auth_sign(&identity, None, message.to_vec()),
+    )
 }
 
 #[test]

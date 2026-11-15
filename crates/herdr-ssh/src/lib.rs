@@ -11,6 +11,12 @@
 //! `known_hosts` file that this crate reads and writes itself, because a pin
 //! of any key type must make every other key a changed key.
 //!
+//! A caller that must know a tunnel's local work has ended before it starts
+//! another (a reader that must never run twice at once) stops the tunnel and
+//! waits for its [`Teardown`]: a [`TeardownReceipt`] names the tunnel it
+//! ends and is only given once russh's session task has been joined (module
+//! `teardown` lists what it shows and what it does not).
+//!
 //! The crate builds on every Unix target, so its integration tests run on
 //! macOS against a private `sshd` (`just test-ssh`).
 
@@ -23,10 +29,15 @@ mod config;
 mod error;
 mod exec;
 mod handler;
+mod hooks;
 mod host_key;
 mod known_hosts;
 mod runtime;
 mod target;
+pub mod teardown;
+#[cfg(test)]
+mod test_host;
+mod transport;
 mod tunnel;
 // keep-sorted end
 
@@ -35,4 +46,5 @@ pub use error::{Error, Failure, Result};
 pub use host_key::HostKey;
 pub use known_hosts::{KnownHosts, Pins};
 pub use target::Target;
+pub use teardown::{Teardown, TeardownReceipt, TunnelId};
 pub use tunnel::{Scan, Tunnel, TunnelExit, exec, scan};
