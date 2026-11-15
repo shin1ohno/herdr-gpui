@@ -83,9 +83,11 @@ pub(crate) struct Hooks {
     pub(crate) teardown_delay: Option<Duration>,
 }
 
+/// Braced rather than a unit struct, so `Hooks::default()` reads the same in
+/// both builds.
 #[cfg(not(test))]
 #[derive(Debug, Clone, Default)]
-pub(crate) struct Hooks;
+pub(crate) struct Hooks {}
 
 #[cfg(test)]
 impl Hooks {

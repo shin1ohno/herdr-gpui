@@ -78,7 +78,7 @@ fn r3_check(mutant: Option<Mutant>) -> Result<(), String> {
         Some(Teardown::Unproven) => {}
         other => return Err(format!("expected unproven, got {other:?}")),
     }
-    if elapsed < Duration::from_millis(4500) || elapsed > Duration::from_secs(9) {
+    if !(Duration::from_millis(4500)..=Duration::from_secs(9)).contains(&elapsed) {
         return Err(format!("settled {elapsed:?} after the stop"));
     }
     let alive = run.probe.alive_at_settle().ok_or("no settle observed")?;
