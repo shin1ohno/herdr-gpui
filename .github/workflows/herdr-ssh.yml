@@ -22,4 +22,7 @@ jobs:
           persist-credentials: false
       - run: rustup show active-toolchain
       - run: cargo test --locked -p herdr-ssh
+      # rustdoc checks compile_fail error codes only on nightly, so R10's
+      # E0451 is checked with rustc directly.
+      - run: bash crates/herdr-ssh/scripts/check-receipt-forgery.sh
       - run: cargo clippy --locked -p herdr-ssh --all-targets -- -D warnings
