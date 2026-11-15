@@ -8,10 +8,13 @@
 //! join it. Cutting the stream instead fails every read and write the task
 //! makes, so it ends at once and the handshake's future completes after
 //! joining it.
+//!
+//! The task owns the stream until its future finishes, so the stream's drop
+//! also shows that the task has ended when its handle can no longer join it.
 
 use std::{
     io,
-    pin::Pin,
+    pin::{Pin, pin},
     sync::{
         Arc, Mutex, PoisonError,
         atomic::{AtomicBool, Ordering},
@@ -19,7 +22,10 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::{
+    io::{AsyncRead, AsyncWrite, ReadBuf},
+    sync::Notify,
+};
 
 /// Shared between the tunnel's task and the stream inside the session task.
 #[derive(Debug, Default)]
@@ -28,6 +34,7 @@ pub(crate) struct KillSwitch {
     /// Set when the stream is dropped, which happens only when the session
     /// task that owns it has ended (or never started).
     released: AtomicBool,
+    dropped: Notify,
     reader: Mutex<Option<Waker>>,
     writer: Mutex<Option<Waker>>,
 }
@@ -47,6 +54,18 @@ impl KillSwitch {
 
     pub(crate) fn released(&self) -> bool {
         self.released.load(Ordering::SeqCst)
+    }
+
+    /// Resolves once the stream has been dropped.
+    pub(crate) async fn wait_released(&self) {
+        loop {
+            let mut dropped = pin!(self.dropped.notified());
+            let _ = dropped.as_mut().enable();
+            if self.released() {
+                return;
+            }
+            dropped.await;
+        }
     }
 
     /// Registers the caller to be woken by [`KillSwitch::kill`], then reports
@@ -85,6 +104,7 @@ impl<S> Killable<S> {
 impl<S> Drop for Killable<S> {
     fn drop(&mut self) {
         self.switch.released.store(true, Ordering::SeqCst);
+        self.switch.dropped.notify_waiters();
     }
 }
 

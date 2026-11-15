@@ -4,13 +4,14 @@
 //! [`Teardown::Complete`] only when all of these hold for that tunnel:
 //!
 //! 1. Its exec request was never sent, or the session that carried it was
-//!    sent a disconnect and russh's session task has ended and been joined.
-//!    The task owns the TCP stream and shuts down its write side before it
-//!    ends, so the host has been told. A deadline that cuts the connection
-//!    short (the 10 s connect and 20 s setup deadlines included) still joins
-//!    the task: the stream is cut and the handshake driven to its end rather
-//!    than dropped, because only that future can join a task russh spawned
-//!    during the handshake.
+//!    sent a disconnect and russh's session task has ended: joined through
+//!    its handle, or, when the host did not let it end within the 1 s grace,
+//!    cut off (stream cut and handle dropped) and seen to drop the TCP
+//!    stream it owns, which it does only as its future finishes. A deadline
+//!    that cuts the connection short (the 10 s connect and 20 s setup
+//!    deadlines included) still ends the task this way: the stream is cut
+//!    and the handshake driven to its end rather than dropped, because only
+//!    that future can join a task russh spawned during the handshake.
 //! 2. The task that copies the caller's writes to the command's standard
 //!    input was aborted and has ended, so it no longer holds the channel.
 //! 3. No signing closure started for the tunnel is still running.

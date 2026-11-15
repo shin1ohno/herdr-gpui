@@ -110,9 +110,17 @@ async fn end_work(mut started: Started, signers: &SignTracker, controls: &Contro
     Outcome::Complete
 }
 
-/// Disconnects and joins the session task by `by`. A host that stops
-/// reading cannot hold this: the disconnect is queued with a deadline, and
-/// once the grace has passed the transport is cut, which ends the task.
+/// Disconnects the session and waits, by `by`, for russh's session task to
+/// end. A host that stops reading cannot hold this: the disconnect is queued
+/// with a deadline, and after the grace the stream is cut.
+///
+/// Cutting the stream is not always enough. While the task waits for the
+/// signature it asked for (an authentication the stop interrupted), it reads
+/// neither the stream nor its messages, and discards the disconnect; only
+/// losing every sender ends that wait (russh 0.65 `client/encrypted.rs`).
+/// So the handle goes too, and the end is shown by the drop of the stream
+/// the task owns: the runtime has one thread, so when this task sees the
+/// drop, the session task's future has finished.
 async fn join(
     mut session: Handle<Client>,
     transport: Option<&KillSwitch>,
@@ -121,20 +129,30 @@ async fn join(
 ) -> bool {
     let grace = (Instant::now() + controls.deadlines.disconnect).min(by);
     let _ = timeout_at(grace, session.disconnect(Disconnect::ByApplication, "", "")).await;
-    let delay = controls.hooks.join_delay();
-    let ended = async {
-        if let Some(delay) = delay {
-            sleep(delay).await;
+    let late = controls.hooks.join_delay();
+    let joined = timeout_at(grace, async {
+        if let Some(late) = late {
+            sleep(late).await;
         }
         // The task's own result was already reported, or is not ours to report.
         let _ = (&mut session).await;
-    };
-    tokio::pin!(ended);
-    if timeout_at(grace, &mut ended).await.is_ok() {
+    })
+    .await
+    .is_ok();
+    if joined {
         return true;
     }
-    if let Some(transport) = transport {
-        transport.kill();
-    }
-    timeout_at(by, &mut ended).await.is_ok()
+    let Some(transport) = transport else {
+        return false;
+    };
+    transport.kill();
+    drop(session);
+    timeout_at(by, async {
+        if let Some(late) = late {
+            sleep(late).await;
+        }
+        transport.wait_released().await;
+    })
+    .await
+    .is_ok()
 }

@@ -225,8 +225,9 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   first may still run calls `Tunnel::stop` and then `Tunnel::wait_teardown`.
   `Teardown::Complete` carries a `TeardownReceipt` naming the tunnel's
   process-unique `TunnelId`, given only after the stdin forwarder has ended,
-  russh's session task has been disconnected and joined (a connect or setup
-  deadline cuts the stream and still joins it), no signing closure runs, and
+  russh's session task has been disconnected and has ended (joined, or cut
+  off and seen to drop its stream; a connect or setup deadline ends it the
+  same way rather than abandoning it), no signing closure runs, and
   the tunnel's copies of the key and pins are dropped. It shows nothing about
   the remote command. `Teardown::Unproven` follows a panic or a session task
   or signature that outlives its 5 s deadline. Dropping a `Tunnel` still only

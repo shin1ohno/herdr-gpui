@@ -62,3 +62,28 @@ fn an_uncut_stream_passes_bytes_through() {
         assert_eq!(&got, b"pong");
     });
 }
+
+#[test]
+fn wait_released_resolves_when_the_stream_drops() {
+    block_on(async {
+        let (near, _far) = tokio::io::duplex(64);
+        let switch = Arc::new(KillSwitch::default());
+        let stream = Killable::new(near, Arc::clone(&switch));
+        let short = Duration::from_millis(20);
+        assert!(
+            tokio::time::timeout(short, switch.wait_released())
+                .await
+                .is_err()
+        );
+        let dropper = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            drop(stream);
+        });
+        assert!(
+            tokio::time::timeout(Duration::from_secs(5), switch.wait_released())
+                .await
+                .is_ok()
+        );
+        dropper.await.unwrap();
+    });
+}
