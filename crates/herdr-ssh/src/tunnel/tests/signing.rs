@@ -39,7 +39,9 @@ fn r2_check(mutant: Option<Mutant>) -> Result<(), String> {
     let host = TestHost::start(Behavior::Silent);
     let (run, gate) = gated_run(&host, 31, mutant)?;
     run.tunnel.stop();
-    let early = run.tunnel.wait_teardown(Duration::from_secs(1));
+    // Longer than the 1 s disconnect grace, after which only the signature
+    // is left to wait for.
+    let early = run.tunnel.wait_teardown(Duration::from_secs(3));
     gate.open();
     if early.is_some() {
         return Err(format!("settled while signing: {early:?}"));

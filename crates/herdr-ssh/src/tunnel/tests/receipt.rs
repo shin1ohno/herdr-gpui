@@ -2,8 +2,6 @@
 //! check runs once as written (it must pass) and once with the rule's
 //! mutant (it must fail), so CI shows that the test catches the removal.
 
-use std::io::Read as _;
-
 use super::*;
 use crate::{
     hooks::Event,

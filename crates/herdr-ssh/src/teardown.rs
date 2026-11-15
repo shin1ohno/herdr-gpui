@@ -57,7 +57,7 @@ pub(crate) fn next_tunnel_id() -> Result<TunnelId, Error> {
 
 fn allocate(counter: &AtomicU64) -> Result<TunnelId, Error> {
     counter
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
         .map(TunnelId)
         .map_err(|_| Error::IdsExhausted)
 }

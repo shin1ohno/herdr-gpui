@@ -1,8 +1,6 @@
 //! R4, R7, R8: a panicking task, a dropped tunnel, and a session task that
 //! outlives its deadline.
 
-use std::io::Read as _;
-
 use super::*;
 use crate::test_host::{Behavior, StalledPeer, TestHost};
 

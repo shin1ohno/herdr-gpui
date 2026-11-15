@@ -6,7 +6,6 @@
 
 use std::{
     fmt::{self, Write as _},
-    io::Read as _,
     sync::Once,
 };
 
