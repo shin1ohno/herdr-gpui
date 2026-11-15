@@ -34,6 +34,14 @@ pub(crate) enum Behavior {
     Flood,
     /// Accepts the request and then says nothing.
     Silent,
+    /// Ends the SSH session with a disconnect message right after accepting
+    /// the exec request; the channel gets no exit status and no Close.
+    DisconnectAfterExec,
+    /// Drops the connection right after accepting the exec request, as a
+    /// host that crashed or a network that went away.
+    HangUpAfterExec,
+    /// Drops the connection while answering the authentication request.
+    HangUpAtAuth,
 }
 
 /// Counts of what the server saw, shared with the test.
@@ -188,6 +196,10 @@ impl server::Handler for Peer {
         _key: server::VerifiedPublicKey<'_>,
     ) -> Result<server::Auth, Self::Error> {
         self.seen.auths.fetch_add(1, Ordering::SeqCst);
+        if matches!(self.behavior, Behavior::HangUpAtAuth) {
+            // A handler error ends the server's session and its connection.
+            return Err(russh::Error::Disconnect);
+        }
         if let Some(gate) = &self.auth_gate
             && let Ok(permit) = gate.acquire().await
         {
@@ -230,7 +242,11 @@ impl server::Handler for Peer {
                     while handle.data(channel, chunk.clone()).await.is_ok() {}
                 });
             }
-            Behavior::Silent => {}
+            Behavior::Silent | Behavior::HangUpAtAuth => {}
+            Behavior::DisconnectAfterExec => {
+                session.disconnect(russh::Disconnect::ByApplication, "", "")?;
+            }
+            Behavior::HangUpAfterExec => return Err(russh::Error::Disconnect),
         }
         Ok(())
     }

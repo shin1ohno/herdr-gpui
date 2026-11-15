@@ -26,6 +26,9 @@ pub(crate) enum Mutant {
     CompleteOnSignerTimeout,
     /// R9: `exec` reaches the host before refusing a target without pins.
     ConnectBeforePinCheck,
+    /// Open stage: a stop or deadline drops the handshake future instead of
+    /// cutting the stream and driving it to its end.
+    DropConnectingOnCut,
     /// R2: the teardown does not wait for running signing closures.
     IgnoreSigners,
     /// R5: a stop during authentication or channel setup is not observed.
@@ -36,6 +39,10 @@ pub(crate) enum Mutant {
     KeepRequest,
     /// R11: the teardown log names the target.
     LogTarget,
+    /// Re-review B1: the teardown polls the session's join again after the
+    /// failure classification has already completed it, as the first head
+    /// of this change did.
+    PollJoinTwice,
     /// R6: the receipt is settled before the exit is recorded.
     ReceiptBeforeExit,
     /// R1: the receipt is settled without joining the session task.
@@ -81,6 +88,8 @@ pub(crate) struct Hooks {
     pub(crate) join_delay: Option<Duration>,
     /// Waited before the teardown starts.
     pub(crate) teardown_delay: Option<Duration>,
+    /// The transport ignores the kill switch.
+    pub(crate) deaf_transport: bool,
 }
 
 /// Braced rather than a unit struct, so `Hooks::default()` reads the same in
@@ -119,6 +128,10 @@ impl Hooks {
     pub(crate) fn teardown_delay(&self) -> Option<Duration> {
         self.teardown_delay
     }
+
+    pub(crate) fn deaf_transport(&self) -> bool {
+        self.deaf_transport
+    }
 }
 
 #[cfg(not(test))]
@@ -143,6 +156,10 @@ impl Hooks {
 
     pub(crate) fn teardown_delay(&self) -> Option<Duration> {
         None
+    }
+
+    pub(crate) fn deaf_transport(&self) -> bool {
+        false
     }
 }
 

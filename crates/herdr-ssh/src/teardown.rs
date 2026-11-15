@@ -7,11 +7,13 @@
 //!    sent a disconnect and russh's session task has ended: joined through
 //!    its handle, or, when the host did not let it end within the 1 s grace,
 //!    cut off (stream cut and handle dropped) and seen to drop the TCP
-//!    stream it owns, which it does only as its future finishes. A deadline
-//!    that cuts the connection short (the 10 s connect and 20 s setup
-//!    deadlines included) still ends the task this way: the stream is cut
-//!    and the handshake driven to its end rather than dropped, because only
-//!    that future can join a task russh spawned during the handshake.
+//!    stream it owns, which it does only as its future finishes. A host or
+//!    network that ended the session first counts once its end has been
+//!    observed. A stop or the 10 s connect deadline during the handshake
+//!    cuts the stream and drives the handshake to its end rather than
+//!    dropping it, because only that future can join a task russh spawned
+//!    during the handshake; after it (the 20 s setup deadline included) the
+//!    handle joins as above.
 //! 2. The task that copies the caller's writes to the command's standard
 //!    input was aborted and has ended, so it no longer holds the channel.
 //! 3. No signing closure started for the tunnel is still running.
@@ -21,8 +23,10 @@
 //! ended, not which bytes the host received, and not what the host logged.
 //!
 //! [`Teardown::Unproven`] means one of these could not be shown within its
-//! deadline (5 s for the session task, 5 s for the signing closures), or the
-//! tunnel's task ended without reaching the check (a panic). The tunnel's
+//! deadline (5 s, shared by the input forwarder, the handshake, and the
+//! session task; then 5 s for the signing closures), or the tunnel's task
+//! ended without reaching the check (a panic). It is final: a closure that
+//! returns later does not turn it into `Complete`. The tunnel's
 //! copies of the key and pins are dropped on that path too, but a signing
 //! closure that never returns keeps its own copy of the key.
 
@@ -64,6 +68,13 @@ fn allocate(counter: &AtomicU64) -> Result<TunnelId, Error> {
 
 /// Proof that one tunnel's local SSH work has ended, in the sense of the
 /// module documentation. Only this crate builds one, and it is not `Clone`.
+/// [`Tunnel::wait_teardown`](crate::Tunnel::wait_teardown) gives a new one
+/// for the same tunnel on every call, so whatever a receipt releases must
+/// treat a second release of the same [`TunnelId`] as a no-op.
+///
+/// rustdoc checks the error code below only on nightly; CI also compiles the
+/// same snippet with the stable toolchain's rustc and requires E0451
+/// (`crates/herdr-ssh/scripts/check-receipt-forgery.sh`).
 ///
 /// ```compile_fail,E0451
 /// fn forge(tunnel: herdr_ssh::TunnelId) -> herdr_ssh::TeardownReceipt {

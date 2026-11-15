@@ -13,13 +13,15 @@ use std::{
 
 use russh::client;
 
+#[cfg(test)]
+use crate::hooks::Mutant;
 use crate::{
     ClientKey, Failure, HostKey, Pins, Result, Target,
     classify::classify,
     config::{self, CONNECT_DEADLINE},
     exec::{self, Controls, Deadlines, Request},
     handler::{self, Client, Offered, OfferedSlot},
-    hooks::{Hooks, Mutant},
+    hooks::Hooks,
     runtime,
     teardown::{self, StopSignal, Teardown, TeardownSlot, TunnelId},
 };
@@ -227,6 +229,7 @@ pub(crate) fn start(
     let pins = match pins {
         Pins::Keys(keys) if !keys.is_empty() => keys.clone(),
         Pins::Keys(_) | Pins::None => {
+            #[cfg(test)]
             if hooks.removes(Mutant::ConnectBeforePinCheck) {
                 connect_anyway(target);
             }
@@ -283,6 +286,7 @@ pub(crate) fn start(
 
 /// R9's mutant: what `exec` would do if it checked the pins only after
 /// reaching the host.
+#[cfg(test)]
 fn connect_anyway(target: &Target) {
     let address = (target.host.clone(), target.port);
     if let Ok(handle) = runtime::handle() {

@@ -16,7 +16,7 @@ fn gated_run(
     host: &TestHost,
     seed: u8,
     mutant: Option<Mutant>,
-) -> Result<(Watched, Arc<SignGate>), String> {
+) -> Result<(Watched, Arc<SignGate>), Violation> {
     let gate = Arc::new(SignGate::default());
     let run = start_watched(
         &target(host.port),
@@ -28,13 +28,13 @@ fn gated_run(
     );
     if !gate.wait_entered(SETTLE) {
         gate.open();
-        return Err("the signing closure never started".into());
+        return Err(fixture("the signing closure never started"));
     }
     Ok((run, gate))
 }
 
 /// R2: no receipt while a signature runs; one soon after it returns.
-fn r2_check(mutant: Option<Mutant>) -> Result<(), String> {
+fn r2_check(mutant: Option<Mutant>) -> Result<(), Violation> {
     let _turn = ONE_AT_A_TIME.lock().unwrap_or_else(PoisonError::into_inner);
     let host = TestHost::start(Behavior::Silent);
     let (run, gate) = gated_run(&host, 31, mutant)?;
@@ -44,57 +44,64 @@ fn r2_check(mutant: Option<Mutant>) -> Result<(), String> {
     let early = run.tunnel.wait_teardown(Duration::from_secs(3));
     gate.open();
     if early.is_some() {
-        return Err(format!("settled while signing: {early:?}"));
+        return Err(Violation::SettledWhileSigning);
     }
     let _ = receipt(&run.tunnel)?;
     if Seen::get(&host.seen.execs) != 0 {
-        return Err("an exec request was sent after the stop".into());
+        return Err(Violation::ExecAfterStop);
     }
     Ok(())
 }
 
 #[test]
 fn r2_no_receipt_while_a_signature_runs() {
-    r2_check(None).unwrap();
+    holds(r2_check(None));
 }
 
 #[test]
 fn r2_not_waiting_for_signers_is_caught() {
-    assert!(r2_check(Some(Mutant::IgnoreSigners)).is_err());
+    assert_eq!(
+        r2_check(Some(Mutant::IgnoreSigners)),
+        Err(Violation::SettledWhileSigning)
+    );
 }
 
 /// R3: a signature that never returns makes the teardown `Unproven`, about
-/// five seconds after the stop.
-fn r3_check(mutant: Option<Mutant>) -> Result<(), String> {
+/// six seconds after the stop (the 1 s grace, then the 5 s signer deadline).
+fn r3_check(mutant: Option<Mutant>) -> Result<(), Violation> {
     let _turn = ONE_AT_A_TIME.lock().unwrap_or_else(PoisonError::into_inner);
     let host = TestHost::start(Behavior::Silent);
     let (run, gate) = gated_run(&host, 32, mutant)?;
     let stopped = Instant::now();
     run.tunnel.stop();
-    let outcome = run.tunnel.wait_teardown(SETTLE);
+    let outcome = unproven(&run.tunnel);
     let elapsed = stopped.elapsed();
     gate.open();
-    match outcome {
-        Some(Teardown::Unproven) => {}
-        other => return Err(format!("expected unproven, got {other:?}")),
-    }
+    outcome?;
     if !(Duration::from_millis(4500)..=Duration::from_secs(9)).contains(&elapsed) {
-        return Err(format!("settled {elapsed:?} after the stop"));
+        return Err(fixture(format!("settled {elapsed:?} after the stop")));
     }
-    let alive = run.probe.alive_at_settle().ok_or("no settle observed")?;
-    // The stuck closure keeps its own copy of the key; the tunnel kept none.
-    if alive.key != 1 || alive.handler != 0 {
-        return Err(format!("unexpected holders at the settle: {alive:?}"));
+    let alive = run
+        .probe
+        .alive_at_settle()
+        .ok_or_else(|| fixture("no settle observed"))?;
+    // The stuck closure keeps its own copy of the key, so `key` is 1 here;
+    // the tunnel's own copy going on `Unproven` is R8's check.
+    if alive.handler != 0 {
+        return Err(Violation::HandlerHeld);
     }
     Ok(())
 }
 
 #[test]
 fn r3_a_stuck_signature_is_unproven() {
-    r3_check(None).unwrap();
+    holds(r3_check(None));
 }
 
 #[test]
 fn r3_completing_despite_a_stuck_signature_is_caught() {
-    assert!(r3_check(Some(Mutant::CompleteOnSignerTimeout)).is_err());
+    assert_eq!(
+        r3_check(Some(Mutant::CompleteOnSignerTimeout)),
+        Err(Violation::CompleteInsteadOfUnproven)
+    );
 }

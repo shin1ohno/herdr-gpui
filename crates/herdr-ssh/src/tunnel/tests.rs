@@ -204,12 +204,85 @@ fn start_watched(
     }
 }
 
+/// Why a rule's check failed. Each mutant test asserts the one variant its
+/// removed rule must produce, so a scenario that breaks for another reason
+/// (`Fixture`, a timeout) cannot pass for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Violation {
+    // keep-sorted start
+    /// Settled `Complete` where only `Unproven` may follow.
+    CompleteInsteadOfUnproven,
+    /// R7: dropping the tunnel waited.
+    DropBlocked,
+    /// R5: the host received an exec request after the stop.
+    ExecAfterStop,
+    /// R6: the receipt came before the exit was recorded.
+    ExitAfterReceipt,
+    /// The scenario itself failed; never a rule's verdict.
+    Fixture(String),
+    /// R13: the stdin forwarder still ran at the receipt.
+    ForwarderHeld,
+    /// R1 and R12: russh's handler, and with it the pins, still lived at the
+    /// receipt.
+    HandlerHeld,
+    /// R12: the tunnel still held a copy of the client key at the receipt.
+    KeyHeld,
+    /// R11: a log line carried a private value.
+    PrivateValueLogged,
+    /// R9: a connection reached the host.
+    ReachedHost,
+    /// R2: the teardown settled while a signature ran.
+    SettledWhileSigning,
+    /// Settled `Unproven` where `Complete` was due.
+    UnprovenInsteadOfComplete,
+    /// Did not settle within the wait.
+    Unsettled,
+    // keep-sorted end
+}
+
+fn fixture(error: impl std::fmt::Display) -> Violation {
+    Violation::Fixture(error.to_string())
+}
+
+/// Asserts that a rule's check passed as written.
+fn holds(result: Result<(), Violation>) {
+    if let Err(Violation::Fixture(reason)) = &result {
+        panic!("the scenario itself failed: {reason}");
+    }
+    assert_eq!(result, Ok(()));
+}
+
 /// The receipt, if the teardown settles `Complete` within [`SETTLE`].
-fn receipt(tunnel: &Tunnel) -> Result<crate::TeardownReceipt, String> {
+fn receipt(tunnel: &Tunnel) -> Result<crate::TeardownReceipt, Violation> {
     match tunnel.wait_teardown(SETTLE) {
         Some(Teardown::Complete(receipt)) => Ok(receipt),
-        Some(Teardown::Unproven) => Err("the teardown settled unproven".into()),
-        None => Err("the teardown did not settle".into()),
+        Some(Teardown::Unproven) => Err(Violation::UnprovenInsteadOfComplete),
+        None => Err(Violation::Unsettled),
+    }
+}
+
+/// `Ok` if the teardown settles `Unproven` within [`SETTLE`].
+fn unproven(tunnel: &Tunnel) -> Result<(), Violation> {
+    match tunnel.wait_teardown(SETTLE) {
+        Some(Teardown::Unproven) => Ok(()),
+        Some(Teardown::Complete(_)) => Err(Violation::CompleteInsteadOfUnproven),
+        None => Err(Violation::Unsettled),
+    }
+}
+
+/// R1, R12, R13: nothing of the tunnel's survives the receipt.
+fn released_at_receipt(probe: &crate::hooks::Probe) -> Result<(), Violation> {
+    let alive = probe
+        .alive_at_settle()
+        .ok_or_else(|| fixture("no settle observed"))?;
+    if alive.key != 0 {
+        Err(Violation::KeyHeld)
+    } else if alive.forwarder != 0 {
+        Err(Violation::ForwarderHeld)
+    } else if alive.handler != 0 {
+        Err(Violation::HandlerHeld)
+    } else {
+        Ok(())
     }
 }
 
@@ -219,6 +292,7 @@ fn position(events: &[crate::hooks::Event], event: crate::hooks::Event) -> Optio
 }
 
 mod faults;
+mod host_ended;
 mod logs;
 mod open_stage;
 mod receipt;

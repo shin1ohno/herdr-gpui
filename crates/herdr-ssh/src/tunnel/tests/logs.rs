@@ -73,7 +73,7 @@ fn teardown_lines(lines: &[String]) -> usize {
         .count()
 }
 
-fn r11_check(mutant: Option<Mutant>, user: &str) -> Result<(), String> {
+fn r11_check(mutant: Option<Mutant>, user: &str) -> Result<(), Violation> {
     let before = teardown_lines(&captured());
     let host = TestHost::start(Behavior::Exit {
         stdout: b"ok".to_vec(),
@@ -82,13 +82,17 @@ fn r11_check(mutant: Option<Mutant>, user: &str) -> Result<(), String> {
     let command = format!("command-of-{user}");
     let key = watched_key(60, None);
     let key_line = key.0.authorized_keys_line("");
-    let key_text = key_line.split(' ').nth(2).ok_or("no key field")?.to_owned();
+    let key_text = key_line
+        .split(' ')
+        .nth(2)
+        .ok_or_else(|| fixture("no key field"))?
+        .to_owned();
     let Pins::Keys(pins) = &host.pins else {
-        return Err("the host has no pins".into());
+        return Err(fixture("the host has no pins"));
     };
     let pin_texts: Vec<String> = pins.iter().map(HostKey::fingerprint).collect();
     let address = format!("{user}@127.0.0.1:{}", host.port);
-    let target = Target::parse(&address).map_err(|e| e.to_string())?;
+    let target = Target::parse(&address).map_err(fixture)?;
     let mut run = start_watched(
         &target,
         &host.pins,
@@ -97,13 +101,10 @@ fn r11_check(mutant: Option<Mutant>, user: &str) -> Result<(), String> {
         Deadlines::default(),
         removing(mutant),
     );
-    run.stream
-        .read_to_end(&mut Vec::new())
-        .map_err(|e| e.to_string())?;
+    run.stream.read_to_end(&mut Vec::new()).map_err(fixture)?;
     let _ = receipt(&run.tunnel)?;
     // And a failing tunnel with the same user.
-    let failing =
-        Target::parse(&format!("{user}@127.0.0.1:{}", closed_port())).map_err(|e| e.to_string())?;
+    let failing = Target::parse(&format!("{user}@127.0.0.1:{}", closed_port())).map_err(fixture)?;
     let failed = start_watched(
         &failing,
         &host.pins,
@@ -116,7 +117,7 @@ fn r11_check(mutant: Option<Mutant>, user: &str) -> Result<(), String> {
     let lines = captured();
     // Positive control: the capture saw this test's teardowns.
     if teardown_lines(&lines) < before + 2 {
-        return Err("the teardown events were not captured".into());
+        return Err(fixture("the teardown events were not captured"));
     }
     let private = [user, command.as_str(), key_text.as_str(), address.as_str()];
     for line in &lines {
@@ -126,7 +127,7 @@ fn r11_check(mutant: Option<Mutant>, user: &str) -> Result<(), String> {
             .chain(pin_texts.iter().map(String::as_str))
         {
             if line.contains(value) {
-                return Err(format!("a log line carries a private value: {line}"));
+                return Err(Violation::PrivateValueLogged);
             }
         }
     }
@@ -135,10 +136,13 @@ fn r11_check(mutant: Option<Mutant>, user: &str) -> Result<(), String> {
 
 #[test]
 fn r11_logs_carry_no_private_value() {
-    r11_check(None, "r11-sentinel-plain").unwrap();
+    holds(r11_check(None, "r11-sentinel-plain"));
 }
 
 #[test]
 fn r11_logging_the_target_is_caught() {
-    assert!(r11_check(Some(Mutant::LogTarget), "r11-sentinel-mutant").is_err());
+    assert_eq!(
+        r11_check(Some(Mutant::LogTarget), "r11-sentinel-mutant"),
+        Err(Violation::PrivateValueLogged)
+    );
 }

@@ -89,7 +89,7 @@ pub(crate) struct Controls {
 struct Started {
     /// Cuts the stream the session task owns.
     transport: Option<Arc<KillSwitch>>,
-    session: Option<Handle<Client>>,
+    session: Option<Session>,
     /// A session task may run that this tunnel can no longer join.
     unjoined: bool,
     input: Option<AbortOnDrop>,
@@ -185,7 +185,7 @@ async fn open(
     // As russh's own `connect` does with `Config::nodelay`; a failure only
     // costs latency.
     let _ = socket.set_nodelay(true);
-    let transport = Arc::new(KillSwitch::default());
+    let transport = Arc::new(KillSwitch::new(controls.hooks.deaf_transport()));
     started.transport = Some(Arc::clone(&transport));
     let offered = OfferedSlot::default();
     let client = Client::new(request.pins.clone(), true, Arc::clone(&offered))
@@ -202,13 +202,18 @@ async fn open(
     let connected = match connected {
         Ok(connected) => connected,
         Err(cut) => {
+            if controls.hooks.removes(Mutant::DropConnectingOnCut) {
+                // The mutant drops the handshake, leaving any session task
+                // russh spawned to run on with the stream.
+                return Err(cut);
+            }
             // russh may already run the session task, which only this future
             // can join, so it is driven to its end rather than dropped:
             // cutting the stream fails the handshake at once.
             transport.kill();
             match timeout(controls.deadlines.join, &mut connecting).await {
                 // It finished meanwhile; the teardown disconnects and joins.
-                Ok(Ok(session)) => started.session = Some(session),
+                Ok(Ok(handle)) => started.session = Some(Session::new(handle)),
                 Ok(Err(_)) => {}
                 Err(_) => started.unjoined = true,
             }
@@ -216,7 +221,7 @@ async fn open(
         }
     };
     let session = match connected {
-        Ok(session) => started.session.insert(session),
+        Ok(handle) => started.session.insert(Session::new(handle)),
         Err(error) => return Err(classify(&error, handler::take(&offered).as_ref(), true)),
     };
     // From here the session task is joined through the handle, so the
@@ -232,7 +237,7 @@ async fn open(
 }
 
 async fn setup(
-    session: &mut Handle<Client>,
+    session: &mut Session,
     request: &Request,
     controls: &Controls,
     signers: &SignTracker,
@@ -243,6 +248,7 @@ async fn setup(
     // Public key only, never a fallback (`BatchMode`). `partial_success`
     // asks for a second method, so it is a failure too.
     match session
+        .handle
         .authenticate_publickey_with(user, public_key, None, &mut signer)
         .await
     {
@@ -255,7 +261,7 @@ async fn setup(
         }
         Err(SignerError::Sign(_) | SignerError::Join(_)) => return Err(Failure::Auth),
     }
-    let channel = match session.channel_open_session().await {
+    let channel = match session.handle.channel_open_session().await {
         Ok(channel) => channel,
         Err(error) => {
             let failure = session_error(session).await;
@@ -280,12 +286,45 @@ async fn setup(
     Ok(channel)
 }
 
+/// russh's handle, and whether the session task's end has been observed
+/// through it. The handle's join is a oneshot receiver that panics when
+/// polled again after it completed, and both the failure classification and
+/// the teardown wait for the end, so every wait goes through
+/// [`Session::wait_end`], which polls it at most until it completes.
+struct Session {
+    handle: Handle<Client>,
+    ended: bool,
+}
+
+impl Session {
+    fn new(handle: Handle<Client>) -> Self {
+        Self {
+            handle,
+            ended: false,
+        }
+    }
+
+    /// Resolves when the session task has ended: with its result the first
+    /// time, and at once with `Ok` after that (the result was taken).
+    /// Cancelling it before the end leaves the join unpolled to completion.
+    async fn wait_end(&mut self) -> Result<(), russh::Error> {
+        if self.ended {
+            return Ok(());
+        }
+        let result = (&mut self.handle).await;
+        // Set in the same poll that completed the join, so no cancellation
+        // can fall between the two.
+        self.ended = true;
+        result
+    }
+}
+
 /// The failure the session ended with, once it has ended with one.
-async fn session_error(session: &mut Handle<Client>) -> Option<Failure> {
-    if !session.is_closed() {
+async fn session_error(session: &mut Session) -> Option<Failure> {
+    if !session.handle.is_closed() {
         return None;
     }
-    match timeout(SESSION_END_WAIT, &mut *session).await {
+    match timeout(SESSION_END_WAIT, session.wait_end()).await {
         Ok(Err(error)) => Some(classify(&error, None, true)),
         Ok(Ok(())) | Err(_) => None,
     }

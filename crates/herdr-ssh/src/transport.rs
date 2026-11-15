@@ -37,9 +37,27 @@ pub(crate) struct KillSwitch {
     dropped: Notify,
     reader: Mutex<Option<Waker>>,
     writer: Mutex<Option<Waker>>,
+    /// A test fault: the stream ignores the kill, as a task stuck elsewhere
+    /// would.
+    #[cfg(test)]
+    deaf: bool,
 }
 
 impl KillSwitch {
+    /// `deaf` is a test fault and is ignored outside tests.
+    #[cfg(test)]
+    pub(crate) fn new(deaf: bool) -> Self {
+        Self {
+            deaf,
+            ..Self::default()
+        }
+    }
+
+    #[cfg(not(test))]
+    pub(crate) fn new(_deaf: bool) -> Self {
+        Self::default()
+    }
+
     /// Fails every later read, write, flush, and shutdown, and wakes the
     /// task waiting on one.
     pub(crate) fn kill(&self) {
@@ -80,6 +98,10 @@ impl KillSwitch {
             {
                 *waker = Some(cx.waker().clone());
             }
+        }
+        #[cfg(test)]
+        if self.deaf {
+            return Ok(());
         }
         if self.killed.load(Ordering::SeqCst) {
             Err(io::ErrorKind::ConnectionAborted.into())

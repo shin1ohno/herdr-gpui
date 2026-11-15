@@ -2,12 +2,11 @@
 //! a normal exit included, ends here, and only this decides between
 //! `Complete` and `Unproven` (the conditions are in `crate::teardown`).
 
-use russh::{Disconnect, client::Handle};
+use russh::Disconnect;
 use tokio::time::{Instant, sleep, timeout, timeout_at};
 
-use super::{Controls, Request, Started};
+use super::{Controls, Request, Session, Started};
 use crate::{
-    handler::Client,
     hooks::{Event, Mutant},
     teardown::{Outcome, SignTracker},
     transport::KillSwitch,
@@ -93,11 +92,13 @@ async fn end_work(mut started: Started, signers: &SignTracker, controls: &Contro
         }
     }
     // The session task owns the stream, so a stream not yet dropped means a
-    // task that may still run.
-    let proven_released = transport
-        .as_ref()
-        .is_none_or(|transport| transport.released());
-    if !proven_released && !skip_join && !accept_late {
+    // task that may still run. A task that ended a moment ago may still be
+    // dropping it, so this waits within the same deadline.
+    if !skip_join
+        && !accept_late
+        && let Some(transport) = &transport
+        && timeout_at(by, transport.wait_released()).await.is_err()
+    {
         return give_up();
     }
     if !hooks.removes(Mutant::IgnoreSigners)
@@ -112,7 +113,9 @@ async fn end_work(mut started: Started, signers: &SignTracker, controls: &Contro
 
 /// Disconnects the session and waits, by `by`, for russh's session task to
 /// end. A host that stops reading cannot hold this: the disconnect is queued
-/// with a deadline, and after the grace the stream is cut.
+/// with a deadline, and after the grace the stream is cut. A session the host
+/// or the network already ended, whose end the failure classification has
+/// observed, counts as joined without polling the join again.
 ///
 /// Cutting the stream is not always enough. While the task waits for the
 /// signature it asked for (an authentication the stop interrupted), it reads
@@ -122,20 +125,28 @@ async fn end_work(mut started: Started, signers: &SignTracker, controls: &Contro
 /// the task owns: the runtime has one thread, so when this task sees the
 /// drop, the session task's future has finished.
 async fn join(
-    mut session: Handle<Client>,
+    mut session: Session,
     transport: Option<&KillSwitch>,
     controls: &Controls,
     by: Instant,
 ) -> bool {
+    if controls.hooks.removes(Mutant::PollJoinTwice) {
+        // The mutant forgets that the join completed, so it is polled again.
+        session.ended = false;
+    }
     let grace = (Instant::now() + controls.deadlines.disconnect).min(by);
-    let _ = timeout_at(grace, session.disconnect(Disconnect::ByApplication, "", "")).await;
+    let _ = timeout_at(
+        grace,
+        session.handle.disconnect(Disconnect::ByApplication, "", ""),
+    )
+    .await;
     let late = controls.hooks.join_delay();
     let joined = timeout_at(grace, async {
         if let Some(late) = late {
             sleep(late).await;
         }
         // The task's own result was already reported, or is not ours to report.
-        let _ = (&mut session).await;
+        let _ = session.wait_end().await;
     })
     .await
     .is_ok();
