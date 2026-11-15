@@ -47,6 +47,9 @@ pub(crate) enum Mutant {
     ReceiptBeforeExit,
     /// R1: the receipt is settled without joining the session task.
     ReceiptBeforeJoin,
+    /// B1 at authentication: a failed authentication returns without
+    /// observing whether the session ended.
+    SkipAuthSessionError,
     // keep-sorted end
 }
 
@@ -55,12 +58,17 @@ pub(crate) enum Mutant {
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum Event {
     // keep-sorted start
+    /// Authentication ended without success, by a failure reply or because
+    /// the session went away.
+    AuthEnded,
     /// The exec request is about to be queued on the channel.
     ExecSent,
     /// The tunnel's exit was given to `wait_exit`.
     ExitRecorded,
     /// The teardown settled `Complete`.
     Receipt,
+    /// The end of russh's session task was observed through its handle.
+    SessionEnded,
     /// The teardown settled `Unproven`.
     Unproven,
     // keep-sorted end

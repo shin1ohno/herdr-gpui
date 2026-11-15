@@ -213,7 +213,7 @@ async fn open(
             transport.kill();
             match timeout(controls.deadlines.join, &mut connecting).await {
                 // It finished meanwhile; the teardown disconnects and joins.
-                Ok(Ok(handle)) => started.session = Some(Session::new(handle)),
+                Ok(Ok(handle)) => started.session = Some(Session::new(handle, &controls.hooks)),
                 Ok(Err(_)) => {}
                 Err(_) => started.unjoined = true,
             }
@@ -221,7 +221,9 @@ async fn open(
         }
     };
     let session = match connected {
-        Ok(handle) => started.session.insert(Session::new(handle)),
+        Ok(handle) => started
+            .session
+            .insert(Session::new(handle, &controls.hooks)),
         Err(error) => return Err(classify(&error, handler::take(&offered).as_ref(), true)),
     };
     // From here the session task is joined through the handle, so the
@@ -253,10 +255,21 @@ async fn setup(
         .await
     {
         Ok(AuthResult::Success) => {}
+        // The session may have ended (the host or the network cut it while
+        // authenticating): its end is observed here, once, and the teardown
+        // then counts the session as joined.
         Ok(AuthResult::Failure { .. }) => {
+            controls.hooks.record(Event::AuthEnded);
+            if controls.hooks.removes(Mutant::SkipAuthSessionError) {
+                return Err(Failure::Auth);
+            }
             return Err(session_error(session).await.unwrap_or(Failure::Auth));
         }
         Err(SignerError::Send(_)) => {
+            controls.hooks.record(Event::AuthEnded);
+            if controls.hooks.removes(Mutant::SkipAuthSessionError) {
+                return Err(Failure::Unreachable);
+            }
             return Err(session_error(session).await.unwrap_or(Failure::Unreachable));
         }
         Err(SignerError::Sign(_) | SignerError::Join(_)) => return Err(Failure::Auth),
@@ -294,13 +307,15 @@ async fn setup(
 struct Session {
     handle: Handle<Client>,
     ended: bool,
+    hooks: Hooks,
 }
 
 impl Session {
-    fn new(handle: Handle<Client>) -> Self {
+    fn new(handle: Handle<Client>, hooks: &Hooks) -> Self {
         Self {
             handle,
             ended: false,
+            hooks: hooks.clone(),
         }
     }
 
@@ -315,6 +330,7 @@ impl Session {
         // Set in the same poll that completed the join, so no cancellation
         // can fall between the two.
         self.ended = true;
+        self.hooks.record(Event::SessionEnded);
         result
     }
 }

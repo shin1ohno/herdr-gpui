@@ -225,6 +225,9 @@ enum Violation {
     /// R1 and R12: russh's handler, and with it the pins, still lived at the
     /// receipt.
     HandlerHeld,
+    /// B1 at authentication: the session's end was not observed where the
+    /// failed authentication returned.
+    JoinNotObservedAtAuth,
     /// R12: the tunnel still held a copy of the client key at the receipt.
     KeyHeld,
     /// R11: a log line carried a private value.

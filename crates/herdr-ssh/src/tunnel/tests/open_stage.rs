@@ -124,6 +124,8 @@ fn dropping_the_handshake_on_the_deadline_is_caught() {
 
 /// The `unjoined` branch: a handshake that does not end within the join
 /// deadline after the cut (here the stream ignores the kill) is `Unproven`.
+/// The teardown's wait for the stream's release would also give `Unproven`
+/// here, so this shows the outcome, not that the branch alone decides it.
 fn unjoined_check(cut: Cut) -> Result<(), Violation> {
     let peer = StalledPeer::start(true);
     let deadlines = Deadlines {

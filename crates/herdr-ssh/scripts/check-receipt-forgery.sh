@@ -3,7 +3,8 @@
 # error code only on nightly, so on stable `compile_fail,E0451` passes for any
 # compile error. This compiles the forgery snippet with that toolchain's rustc
 # against the built crate and requires error E0451 (private field), after a
-# control snippet with the same paths has compiled.
+# control snippet with the same paths has compiled. It checks the struct
+# literal only; a public constructor, `Default`, or `Clone` is for review.
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
