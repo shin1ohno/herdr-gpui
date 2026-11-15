@@ -26,7 +26,11 @@ if [[ -z $rlib ]]; then
   echo "check-receipt-forgery: no herdr_ssh rlib was built" >&2
   exit 1
 fi
-deps="$(dirname "$rlib")"
+# Cargo reports the primary crate's copy in target/<profile>; the crates it
+# links against stay in its deps directory.
+built="$(dirname "$rlib")"
+deps="$built/deps"
+[[ -d $deps ]] || deps="$built"
 
 compile() {
   rustc --edition 2024 --crate-type lib --crate-name "$1" \
