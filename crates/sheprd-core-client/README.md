@@ -20,6 +20,9 @@ herdr-core). No GPUI or async runtime.
 - `CoreBackend` implements `sheprd_backend::Backend`: it emulates attached
   terminals with `sheprd-terminal`, so the app gets the same cells and sends
   the same semantic input as with Herdr 1.
+- `CoreBackend::statuses` and `CoreChanges::statuses` / `status` return each
+  terminal's status as herdr-core reported it (`CoreStatus`), where
+  `TerminalInfo::agent` folds error into blocked and unreported into unknown.
 
 Every call blocks: use it from a worker thread, never from the UI thread.
 
