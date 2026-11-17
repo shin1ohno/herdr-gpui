@@ -2,6 +2,7 @@
 //! `TerminalInfo`, events become changes, and attached terminals are
 //! emulated here so the app receives cells as it does from Herdr 1.
 
+mod status;
 mod terminal;
 
 use crate::{
@@ -14,6 +15,7 @@ use sheprd_backend::{
 };
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 
+pub use status::CoreStatus;
 pub use terminal::CoreTerminal;
 
 /// One core's terminals, shared by the workers that list, watch, and attach.

@@ -11,6 +11,7 @@ mod hello;
 mod labels;
 mod live;
 mod put;
+mod raw_status;
 mod transport;
 mod write_gate;
 
