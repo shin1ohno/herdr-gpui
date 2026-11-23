@@ -49,8 +49,12 @@ fn a_caller_that_stops_reading_does_not_stall_other_connections() {
     let host = TestHost::start(Behavior::Silent);
     let service = Service::start();
     let forward = Arc::new(forward(&host));
-    // Opened and never read while the host floods it.
+    // Opened and never read while the host floods it. The timeout is set
+    // while the socket is still connected: once the relay drops it, macOS
+    // refuses socket options on it (XNU `sosetopt` returns EINVAL for a
+    // socket that can neither send nor receive), and Linux does not.
     let mut stalled = forward.open(flood()).unwrap();
+    stalled.set_read_timeout(Some(WAIT)).unwrap();
     // Long enough for the flood to pass every buffer on the way, which
     // without the unread limit fills russh's channel queue and stops the
     // session task.
@@ -75,7 +79,6 @@ fn a_caller_that_stops_reading_does_not_stall_other_connections() {
     // The unread connection was dropped once it fell too far behind: it
     // ends after what had already reached its socket (the relay's own
     // unread bytes go with it), rather than flooding on.
-    stalled.set_read_timeout(Some(WAIT)).unwrap();
     let mut buffered = Vec::new();
     if let Err(error) = stalled.read_to_end(&mut buffered) {
         assert_ne!(error.kind(), std::io::ErrorKind::WouldBlock, "{error}");

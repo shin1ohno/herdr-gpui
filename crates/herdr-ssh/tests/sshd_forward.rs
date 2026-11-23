@@ -338,8 +338,11 @@ fn private_sshd_unread_connection_does_not_stall_others() -> Result<()> {
     let server = Sshd::start(&line_with(&key, ""), "ed25519")?;
     let (target, pins) = trusted(&server, server.port())?;
     let forward = Arc::new(Forward::connect(&target, &key, &pins)?);
-    // Opened and never read while the service floods it through sshd.
+    // Opened and never read while the service floods it through sshd. The
+    // timeout is set while the socket is connected (macOS refuses socket
+    // options once the relay has dropped it).
     let mut stalled = forward.open(flood()?)?;
+    stalled.set_read_timeout(Some(DEADLINE))?;
     thread::sleep(Duration::from_secs(2));
     let (sender, receiver) = std::sync::mpsc::channel();
     let carried = Arc::clone(&forward);
@@ -359,7 +362,6 @@ fn private_sshd_unread_connection_does_not_stall_others() -> Result<()> {
         matches!(&exchanged, Ok(Ok(output)) if *output == [GREETING, b"still moving"].concat()),
         "a second connection must round-trip while the first is unread: {exchanged:?}"
     );
-    stalled.set_read_timeout(Some(DEADLINE))?;
     let mut buffered = Vec::new();
     if let Err(error) = stalled.read_to_end(&mut buffered) {
         ensure!(
