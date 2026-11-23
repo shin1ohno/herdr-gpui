@@ -12,8 +12,8 @@
 //!   channel's only backpressure is its bounded queue into the session task,
 //!   and a full queue stops the session task for every channel and for
 //!   keepalives. A caller that stops reading therefore never fills that
-//!   queue: its relay keeps up to [`UNREAD_LIMIT`] bytes and then drops that
-//!   one connection.
+//!   queue: its relay keeps up to [`UNREAD_LIMIT`] bytes and then resets
+//!   that one connection (RST, so the caller sees an abnormal end).
 
 use std::{
     collections::VecDeque,
@@ -29,13 +29,13 @@ use russh::{
     client::{Handle, Msg},
 };
 use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt as _, BufReader, WriteHalf, copy_buf},
-    net::{TcpStream, UnixStream},
+    io::{AsyncWrite, AsyncWriteExt as _, BufReader, copy_buf},
+    net::TcpStream,
     sync::mpsc::Receiver,
     time::timeout,
 };
 
-use super::{Destination, End, EndSlot, Error, Local, MAX_CHANNELS, Open};
+use super::{Destination, End, EndSlot, Error, MAX_CHANNELS, Open};
 use crate::{
     Failure,
     classify::classify,
@@ -142,7 +142,7 @@ type Opening<'a> = Pin<Box<dyn Future<Output = Opened> + Send + 'a>>;
 /// A request whose channel has opened or failed.
 struct Opened {
     destination: Destination,
-    local: Local,
+    local: std::net::TcpStream,
     reply: std::sync::mpsc::SyncSender<super::Result<()>>,
     result: Result<Channel<Msg>, Failed>,
 }
@@ -283,55 +283,77 @@ async fn finish(opened: Opened, relays: &mut Vec<AbortOnDrop>) -> Option<Failure
     }
 }
 
-async fn relay(channel: Channel<Msg>, local: Local, port: u16) {
-    match local {
-        Local::Tcp(stream) => {
-            if let Ok(stream) = TcpStream::from_std(stream) {
-                let _ = stream.set_nodelay(true);
-                carry_both(channel, stream, port).await;
-            }
-        }
-        Local::Unix(stream) => {
-            if let Ok(stream) = UnixStream::from_std(stream) {
-                carry_both(channel, stream, port).await;
-            }
+async fn relay(channel: Channel<Msg>, local: std::net::TcpStream, port: u16) {
+    match TcpStream::from_std(local) {
+        Ok(local) => carry_both(channel, local, port).await,
+        // The channel is open on the host; close it rather than leave it
+        // until the session ends.
+        Err(_) => {
+            let _ = channel.close().await;
         }
     }
 }
 
+/// How a carried connection ended.
+enum Ended {
+    /// Both directions finished.
+    Both,
+    /// The caller left more than [`UNREAD_LIMIT`] bytes unread.
+    Behind,
+    /// The caller's connection can no longer be written.
+    CallerGone,
+}
+
 /// Copies both ways between the caller's connection and the channel until
 /// both have ended. EOF from either side reaches the other as EOF. A caller
-/// that falls [`UNREAD_LIMIT`] behind or goes away ends the connection.
-async fn carry_both(
-    channel: Channel<Msg>,
-    local: impl AsyncRead + AsyncWrite + Send + Unpin,
-    port: u16,
-) {
+/// that falls [`UNREAD_LIMIT`] behind is reset; one that goes away ends the
+/// connection.
+async fn carry_both(channel: Channel<Msg>, local: TcpStream, port: u16) {
+    let _ = local.set_nodelay(true);
     let (mut remote_read, remote_write) = channel.split();
     let mut writer = remote_write.make_writer();
-    let (local_read, mut local_write) = tokio::io::split(local);
-    let upstream = async move {
-        let mut local_read = BufReader::with_capacity(RELAY_BUFFER, local_read);
-        // An error means the channel is gone, which the downstream sees.
-        if copy_buf(&mut local_read, &mut writer).await.is_ok() {
-            let _ = writer.shutdown().await;
+    let (local_read, mut local_write) = local.into_split();
+    let ended = {
+        let upstream = async move {
+            let mut local_read = BufReader::with_capacity(RELAY_BUFFER, local_read);
+            // An error means the channel is gone, which the downstream sees.
+            if copy_buf(&mut local_read, &mut writer).await.is_ok() {
+                let _ = writer.shutdown().await;
+            }
+        };
+        let downstream = downstream(&mut remote_read, &mut local_write);
+        tokio::pin!(upstream, downstream);
+        let (mut up, mut down) = (false, false);
+        loop {
+            if up && down {
+                break Ended::Both;
+            }
+            tokio::select! {
+                () = &mut upstream, if !up => up = true,
+                ended = &mut downstream, if !down => match ended {
+                    Downstream::Ended => down = true,
+                    Downstream::Behind => break Ended::Behind,
+                    Downstream::CallerGone => break Ended::CallerGone,
+                },
+            }
         }
     };
-    let downstream = downstream(&mut remote_read, &mut local_write);
-    tokio::pin!(upstream, downstream);
-    let (mut up, mut down) = (false, false);
-    while !(up && down) {
-        tokio::select! {
-            () = &mut upstream, if !up => up = true,
-            ended = &mut downstream, if !down => match ended {
-                Downstream::Ended => down = true,
-                Downstream::Behind => {
-                    tracing::debug!(category = "ssh", port, "forwarded connection read too slowly");
-                    break;
-                }
-                Downstream::CallerGone => break,
-            },
-        }
+    // Nothing reads the channel from here: russh then drops what arrives
+    // for it instead of waiting on its queue, so the close below cannot
+    // wait behind a session task stuck on this channel.
+    drop(remote_read);
+    if let Ended::Behind = ended {
+        tracing::warn!(
+            category = "ssh",
+            port,
+            limit = UNREAD_LIMIT,
+            "forwarded connection reset: its reader fell behind"
+        );
+        // A reset, not EOF, so the caller cannot take a cut-off response
+        // for a whole one: linger zero, and the write half is forgotten
+        // rather than shut down, so no FIN goes first.
+        let _ = local_write.as_ref().set_zero_linger();
+        local_write.forget();
     }
     // Closes the host's end on every path, as `ChannelStream`'s drop does.
     let _ = remote_write.close().await;
@@ -349,9 +371,9 @@ enum Downstream {
 /// Moves the channel's data to the caller. The channel is read whenever it
 /// has something, whether or not the caller is reading, so the session task
 /// is never left waiting on this channel's queue.
-async fn downstream<W: AsyncWrite>(
+async fn downstream(
     remote: &mut ChannelReadHalf,
-    local: &mut WriteHalf<W>,
+    local: &mut (impl AsyncWrite + Unpin),
 ) -> Downstream {
     let mut unread = VecDeque::new();
     // Bytes of `unread`'s first chunk already written.

@@ -15,7 +15,13 @@
 //! a forward cannot be pointed at another machine through the host. Where
 //! the local end listens is the caller's business; this module only carries
 //! a connection the caller already has ([`Forward::relay`]) or hands back
-//! one end of a socket pair ([`Forward::open`]).
+//! one end of a loopback TCP connection ([`Forward::open`]).
+//!
+//! Unlike `ssh -L`, a forward cannot slow the host down when its caller
+//! stops reading: russh 0.65 grants the host more window as soon as data
+//! arrives. A carried connection whose caller leaves more than
+//! [`UNREAD_LIMIT`] bytes unread is therefore reset (RST, never a plain
+//! EOF), so a cut-off response is never mistaken for a whole one.
 //!
 //! Failures are typed ([`Error`]): the host refusing to forward
 //! ([`Error::Prohibited`]), nothing listening on the port
@@ -23,8 +29,8 @@
 //! ([`Error::Connect`]) or going away later ([`Error::ConnectionLost`]).
 
 use std::{
-    net::TcpStream,
-    os::unix::net::UnixStream,
+    io,
+    net::{Ipv4Addr, TcpListener, TcpStream},
     sync::{
         Arc, Condvar, Mutex, PoisonError,
         mpsc::{self, RecvTimeoutError},
@@ -53,7 +59,12 @@ pub use error::{Error, Result};
 /// opening count too. A browser opens about six per host.
 pub const MAX_CHANNELS: usize = 32;
 /// The most bytes of one carried connection's data that its caller may
-/// leave unread before that connection is dropped; see [`Forward::open`].
+/// leave unread before that connection is reset; see [`Forward::open`].
+///
+/// It bounds what the relay keeps. russh's own queue for the channel holds
+/// up to 100 more packets of at most 32 KiB, so a connection buffers at
+/// most about 5.2 MiB, and a forward at its [`MAX_CHANNELS`] about
+/// 166 MiB, however fast the host sends.
 pub const UNREAD_LIMIT: usize = session::UNREAD_LIMIT;
 
 /// What ended a forward's connection; [`Forward::wait_end`] gives it as an
@@ -98,18 +109,39 @@ impl EndSlot {
     }
 }
 
-/// The caller's end of one forwarded connection, handed to the task.
-enum Local {
-    Tcp(TcpStream),
-    Unix(UnixStream),
-}
-
 /// One request to carry a connection, answered once its channel is open or
 /// has failed.
 struct Open {
     destination: Destination,
-    local: Local,
+    /// The caller's connection, non-blocking, handed to the task.
+    local: TcpStream,
     reply: mpsc::SyncSender<Result<()>>,
+}
+
+/// How many connections to its own listener [`loopback_pair`] accepts while
+/// looking for its own; anything else on the loopback that connects first
+/// is closed.
+const PAIR_ACCEPTS: usize = 8;
+
+/// Two ends of one TCP connection on 127.0.0.1. The listener lives only for
+/// this call, and the accepted end must come from the connecting socket's
+/// own address, so another local process that races to the port is never
+/// paired with the caller.
+fn loopback_pair() -> io::Result<(TcpStream, TcpStream)> {
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+    let caller = TcpStream::connect(listener.local_addr()?)?;
+    let origin = caller.local_addr()?;
+    // The connection is complete once `connect` returns, so it is already
+    // queued; a non-blocking accept cannot wait on anyone else.
+    listener.set_nonblocking(true)?;
+    for _ in 0..PAIR_ACCEPTS {
+        let (accepted, peer) = listener.accept()?;
+        if peer == origin {
+            accepted.set_nonblocking(false)?;
+            return Ok((caller, accepted));
+        }
+    }
+    Err(io::ErrorKind::AddrInUse.into())
 }
 
 /// One SSH connection that carries TCP connections to the host's loopback.
@@ -155,7 +187,7 @@ impl Forward {
             Pins::Keys(keys) if !keys.is_empty() => keys.clone(),
             Pins::Keys(_) | Pins::None => return Err(Error::Connect(Failure::HostKeyUnknown)),
         };
-        let id = teardown::next_tunnel_id().map_err(std::io::Error::other)?;
+        let id = teardown::next_tunnel_id().map_err(io::Error::other)?;
         let handle = runtime::handle()?;
         let (requests, received) = tokio::sync::mpsc::channel(MAX_CHANNELS);
         let end = Arc::new(EndSlot::default());
@@ -188,21 +220,23 @@ impl Forward {
         })
     }
 
-    /// Opens a channel to `destination` and returns this end of a socket
-    /// pair that carries it: what is written to it reaches the host's port,
-    /// what the host's port sends arrives on it, and shutting down its write
-    /// side sends EOF. Blocks until the channel is open or has failed: call
-    /// it off the UI thread. Channels open concurrently, so a slow port
-    /// delays only its own request.
+    /// Opens a channel to `destination` and returns one end of a loopback
+    /// TCP connection that carries it: what is written to it reaches the
+    /// host's port, what the host's port sends arrives on it, and shutting
+    /// down its write side sends EOF. Blocks until the channel is open or
+    /// has failed: call it off the UI thread. Channels open concurrently,
+    /// so a slow port delays only its own request.
     ///
     /// The host's data is always taken off the connection as it arrives, so
     /// a caller that stops reading cannot stall the forward's other
-    /// connections; once it leaves more than [`UNREAD_LIMIT`] bytes unread,
-    /// its connection alone is dropped.
-    pub fn open(&self, destination: Destination) -> Result<UnixStream> {
-        let (caller, task_end) = UnixStream::pair()?;
+    /// connections. Once the caller leaves more than [`UNREAD_LIMIT`] bytes
+    /// unread, its connection alone is reset: reads then fail with
+    /// [`io::ErrorKind::ConnectionReset`] instead of ending in EOF, and the
+    /// unread bytes are gone. A normal end of the host's side is EOF.
+    pub fn open(&self, destination: Destination) -> Result<TcpStream> {
+        let (caller, task_end) = loopback_pair()?;
         task_end.set_nonblocking(true)?;
-        self.request(destination, Local::Unix(task_end))?;
+        self.request(destination, task_end)?;
         Ok(caller)
     }
 
@@ -210,13 +244,15 @@ impl Forward {
     /// example a connection accepted on a local loopback listener; the
     /// stream is closed when either side ends. Blocks until the channel is
     /// open or has failed: call it off the UI thread. On `Err` the stream
-    /// has been dropped.
+    /// has been dropped. A stream whose reader falls more than
+    /// [`UNREAD_LIMIT`] bytes behind is reset, as [`Forward::open`]
+    /// describes.
     pub fn relay(&self, destination: Destination, stream: TcpStream) -> Result<()> {
         stream.set_nonblocking(true)?;
-        self.request(destination, Local::Tcp(stream))
+        self.request(destination, stream)
     }
 
-    fn request(&self, destination: Destination, local: Local) -> Result<()> {
+    fn request(&self, destination: Destination, local: TcpStream) -> Result<()> {
         let (reply, answer) = mpsc::sync_channel(1);
         let open = Open {
             destination,

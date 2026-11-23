@@ -240,14 +240,19 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   `direct-tcpip` channel per carried connection and nothing else. Its
   destination is a `forward::Destination`, which only names the host's own
   loopback (`localhost`, `127.0.0.1`, or `::1`, never resolved) and a port
-  from 1 to 65535. `Forward::open` returns one end of a socket pair carrying
-  the channel; `Forward::relay` carries a `TcpStream` the caller accepted.
+  from 1 to 65535. `Forward::open` returns one end of a loopback TCP connection
+  carrying the channel (its listener accepts only its own connecting
+  socket); `Forward::relay` carries a `TcpStream` the caller accepted.
   At most 32 connections are carried or opening at once, and channels open
   concurrently, so a port slow to answer delays only its own request.
   russh 0.65 grants the host more window as soon as data arrives, so a
   relay always takes its channel's data and keeps at most 2 MiB the caller
-  has not read; past that, only that connection is dropped, and a caller
-  that stops reading cannot stall the other connections or the keepalive.
+  has not read; past that, only that connection is reset (RST, so the
+  caller sees `ConnectionReset`, never an EOF that would make a cut-off
+  response look whole), and a caller that stops reading cannot stall the
+  other connections or the keepalive. With russh's own queue of up to 100
+  packets of 32 KiB, one connection buffers at most about 5.2 MiB, and 32
+  connections about 166 MiB.
   Failures are typed
   (`forward::Error`): `Prohibited` when the host refuses forwarding for the
   key (`restrict` without `port-forwarding`, a `permitopen` that does not

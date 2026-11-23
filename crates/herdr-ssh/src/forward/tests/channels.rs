@@ -40,7 +40,7 @@ impl Service {
                 thread::spawn(move || {
                     let _ = stream.write_all(GREETING);
                     let mut echo = stream.try_clone().unwrap();
-                    let _ = std::io::copy(&mut stream, &mut echo);
+                    let _ = io::copy(&mut stream, &mut echo);
                     let _ = echo.shutdown(Shutdown::Write);
                 });
             }
@@ -59,7 +59,7 @@ pub(super) fn forward(host: &TestHost) -> Forward {
 }
 
 /// Reads the service's greeting.
-pub(super) fn greeting(stream: &mut impl std::io::Read) -> Vec<u8> {
+pub(super) fn greeting(stream: &mut impl io::Read) -> Vec<u8> {
     let mut greeting = vec![0; GREETING.len()];
     stream.read_exact(&mut greeting).unwrap();
     greeting
@@ -67,7 +67,7 @@ pub(super) fn greeting(stream: &mut impl std::io::Read) -> Vec<u8> {
 
 /// Writes `payload` and EOF from another thread while this one reads
 /// everything until EOF, so neither direction waits for the other.
-fn exchange(stream: &UnixStream, payload: Vec<u8>) -> Vec<u8> {
+fn exchange(stream: &TcpStream, payload: Vec<u8>) -> Vec<u8> {
     let mut writer = stream.try_clone().unwrap();
     let writing = thread::spawn(move || {
         writer.write_all(&payload).unwrap();
@@ -277,7 +277,7 @@ fn dropping_the_forward_ends_its_connections() {
     // EOF or a reset within the wait, never a hang.
     let mut rest = Vec::new();
     if let Err(error) = stream.read_to_end(&mut rest) {
-        assert_ne!(error.kind(), std::io::ErrorKind::WouldBlock, "{error}");
+        assert_ne!(error.kind(), io::ErrorKind::WouldBlock, "{error}");
     }
     assert!(rest.is_empty());
     assert!(TestHost::wait_for(&host.seen.ended, 1, WAIT));

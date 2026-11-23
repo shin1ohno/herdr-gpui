@@ -76,14 +76,13 @@ fn a_caller_that_stops_reading_does_not_stall_other_connections() {
         Some((GREETING.to_vec(), b"still moving".to_vec())),
         "a second connection must open and round-trip while the first is unread"
     );
-    // The unread connection was dropped once it fell too far behind: it
-    // ends after what had already reached its socket (the relay's own
-    // unread bytes go with it), rather than flooding on.
-    let mut buffered = Vec::new();
-    if let Err(error) = stalled.read_to_end(&mut buffered) {
-        assert_ne!(error.kind(), std::io::ErrorKind::WouldBlock, "{error}");
-    }
-    assert!(!buffered.is_empty(), "the flood reached the caller first");
+    // The unread connection was reset once it fell too far behind: not
+    // EOF, so a cut-off response cannot look whole.
+    let ended = stalled.read_to_end(&mut Vec::new());
+    assert!(
+        matches!(&ended, Err(error) if error.kind() == io::ErrorKind::ConnectionReset),
+        "the unread connection must be reset: {ended:?}"
+    );
     assert!(
         forward.wait_end(Duration::ZERO).is_none(),
         "the forward itself carries on"
@@ -117,4 +116,44 @@ fn a_slow_open_delays_only_its_own_request() {
     );
     forward.stop();
     assert!(matches!(slow.join().unwrap(), Err(Error::Stopped)));
+}
+
+/// A TCP service that writes `bytes` to each connection and then closes it.
+fn fixed(bytes: Vec<u8>) -> Destination {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let bytes = Arc::new(bytes);
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { return };
+            let bytes = Arc::clone(&bytes);
+            thread::spawn(move || {
+                let _ = stream.write_all(&bytes);
+            });
+        }
+    });
+    Destination::localhost(port).unwrap()
+}
+
+#[test]
+fn a_slow_reader_within_the_limit_gets_every_byte() {
+    let host = TestHost::start(Behavior::Silent);
+    let forward = forward(&host);
+    // Below the limit, so the relay keeps it all while the reader lags and
+    // writes to the caller's socket go through in pieces.
+    let sent: Vec<u8> = (0..1_500_000u32).map(|i| (i % 251) as u8).collect();
+    let mut stream = forward.open(fixed(sent.clone())).unwrap();
+    stream.set_read_timeout(Some(WAIT)).unwrap();
+    let mut received = Vec::new();
+    let mut chunk = [0; 8192];
+    loop {
+        let read = stream.read(&mut chunk).unwrap();
+        if read == 0 {
+            break;
+        }
+        received.extend_from_slice(&chunk[..read]);
+        thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(received.len(), sent.len());
+    assert!(received == sent, "the bytes arrive whole and in order");
 }

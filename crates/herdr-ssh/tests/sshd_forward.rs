@@ -20,7 +20,6 @@ use sshd::Sshd;
 use std::{
     io::{Read as _, Write as _},
     net::{Shutdown, TcpListener, TcpStream},
-    os::unix::net::UnixStream,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -112,7 +111,7 @@ fn trusted(server: &Sshd, port: u16) -> Result<(Target, Pins)> {
 
 /// Writes `payload` and EOF from another thread while this one reads until
 /// EOF.
-fn exchange(stream: &UnixStream, payload: Vec<u8>) -> Result<Vec<u8>> {
+fn exchange(stream: &TcpStream, payload: Vec<u8>) -> Result<Vec<u8>> {
     let mut writer = stream.try_clone()?;
     let writing = thread::spawn(move || -> std::io::Result<()> {
         writer.write_all(&payload)?;
@@ -362,13 +361,12 @@ fn private_sshd_unread_connection_does_not_stall_others() -> Result<()> {
         matches!(&exchanged, Ok(Ok(output)) if *output == [GREETING, b"still moving"].concat()),
         "a second connection must round-trip while the first is unread: {exchanged:?}"
     );
-    let mut buffered = Vec::new();
-    if let Err(error) = stalled.read_to_end(&mut buffered) {
-        ensure!(
-            error.kind() != std::io::ErrorKind::WouldBlock,
-            "the unread connection did not end: {error}"
-        );
-    }
+    // Reset, not EOF: a cut-off response must not look whole.
+    let ended = stalled.read_to_end(&mut Vec::new());
+    ensure!(
+        matches!(&ended, Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset),
+        "the unread connection must be reset: {ended:?}"
+    );
     ensure!(forward.wait_end(Duration::ZERO).is_none());
     Ok(())
 }
