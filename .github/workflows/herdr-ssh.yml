@@ -22,6 +22,17 @@ jobs:
           persist-credentials: false
       - run: rustup show active-toolchain
       - run: cargo test --locked -p herdr-ssh
+      # The opt-in tests against a private OpenSSH sshd (`just test-ssh`):
+      # each starts its own sshd on its own port, host key, and
+      # authorized_keys, and stops only that child.
+      - name: herdr-ssh against a private sshd
+        if: runner.os == 'Linux'
+        env:
+          HERDR_TEST_SSHD: /usr/sbin/sshd
+          HERDR_TEST_SSH_KEYGEN: /usr/bin/ssh-keygen
+        run: >-
+          cargo test --locked -p herdr-ssh --features integration-test
+          --test sshd --test sshd_forward -- --ignored
       # rustdoc checks compile_fail error codes only on nightly, so R10's
       # E0451 is checked with rustc directly.
       - run: bash crates/herdr-ssh/scripts/check-receipt-forgery.sh
