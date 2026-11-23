@@ -34,8 +34,13 @@ impl Error {
             Self::Ssh(
                 herdr_ssh::Error::KnownHosts { source, .. } | herdr_ssh::Error::Io(source),
             ) => source.kind(),
+            Self::Ssh(herdr_ssh::Error::Forward(herdr_ssh::forward::Error::Io(source))) => {
+                source.kind()
+            }
+            Self::Ssh(herdr_ssh::Error::Failure(_) | herdr_ssh::Error::Forward(_)) => {
+                io::ErrorKind::NotConnected
+            }
             Self::Ssh(herdr_ssh::Error::PinnedMeanwhile) => io::ErrorKind::PermissionDenied,
-            Self::Ssh(herdr_ssh::Error::Failure(_)) => io::ErrorKind::NotConnected,
             Self::StateDir => io::ErrorKind::NotFound,
         }
     }

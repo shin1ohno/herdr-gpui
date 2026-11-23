@@ -42,6 +42,17 @@ pub(crate) enum Behavior {
     HangUpAfterExec,
     /// Drops the connection while answering the authentication request.
     HangUpAtAuth,
+    /// Opens a forwarded-tcpip, an X11, an agent, and a session channel
+    /// back to the client after each `direct-tcpip` channel it accepts, and
+    /// counts the ones the client refuses.
+    OpensChannelsBack,
+    /// Refuses every `direct-tcpip` channel as administratively prohibited,
+    /// as OpenSSH does for a `restrict` key.
+    ProhibitForwarding,
+    /// Answers a `direct-tcpip` channel to this port only after a minute, as
+    /// a host whose port does not complete the connection; other ports are
+    /// relayed as usual.
+    StallOpensTo(u16),
 }
 
 /// Counts of what the server saw, shared with the test.
@@ -53,6 +64,14 @@ pub(crate) struct Seen {
     pub(crate) execs: AtomicUsize,
     /// Connections whose SSH session has ended on the server's side.
     pub(crate) ended: AtomicUsize,
+    /// Session channels the client opened.
+    pub(crate) sessions: AtomicUsize,
+    /// `direct-tcpip` channels the client asked for, accepted or not.
+    pub(crate) direct_tcpip: AtomicUsize,
+    /// Remote, Unix-socket, X11, or agent forwarding the client asked for.
+    pub(crate) forwarding_requests: AtomicUsize,
+    /// Channels the server opened that the client refused.
+    pub(crate) refused_by_client: AtomicUsize,
 }
 
 impl Seen {
@@ -214,8 +233,111 @@ impl server::Handler for Peer {
         reply: server::ChannelOpenHandle,
         _session: &mut server::Session,
     ) -> Result<(), Self::Error> {
+        self.seen.sessions.fetch_add(1, Ordering::SeqCst);
         reply.accept().await;
         Ok(())
+    }
+
+    /// Connects to `port_to_connect` on this machine's loopback and relays,
+    /// as sshd does; a closed port is refused as `ConnectFailed`.
+    async fn channel_open_direct_tcpip(
+        &mut self,
+        channel: Channel<server::Msg>,
+        host_to_connect: &str,
+        port_to_connect: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: server::ChannelOpenHandle,
+        session: &mut server::Session,
+    ) -> Result<(), Self::Error> {
+        self.seen.direct_tcpip.fetch_add(1, Ordering::SeqCst);
+        if matches!(self.behavior, Behavior::ProhibitForwarding) || host_to_connect != "localhost" {
+            reply
+                .reject(russh::ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+            return Ok(());
+        }
+        let Ok(port) = u16::try_from(port_to_connect) else {
+            reply.reject(russh::ChannelOpenFailure::ConnectFailed).await;
+            return Ok(());
+        };
+        if matches!(self.behavior, Behavior::StallOpensTo(stalled) if stalled == port) {
+            // The reply is held off the session's own task, as sshd's
+            // pending connect is.
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                reply.reject(russh::ChannelOpenFailure::ConnectFailed).await;
+            });
+            return Ok(());
+        }
+        let Ok(mut socket) = tokio::net::TcpStream::connect(("127.0.0.1", port)).await else {
+            reply.reject(russh::ChannelOpenFailure::ConnectFailed).await;
+            return Ok(());
+        };
+        reply.accept().await;
+        tokio::spawn(async move {
+            let mut channel = channel.into_stream();
+            let _ = tokio::io::copy_bidirectional(&mut socket, &mut channel).await;
+        });
+        if matches!(self.behavior, Behavior::OpensChannelsBack) {
+            let handle = session.handle();
+            let seen = Arc::clone(&self.seen);
+            tokio::spawn(async move {
+                let refused = [
+                    handle
+                        .channel_open_forwarded_tcpip("localhost", 80, "127.0.0.1", 1)
+                        .await
+                        .is_err(),
+                    handle.channel_open_x11("127.0.0.1", 1).await.is_err(),
+                    handle.channel_open_agent().await.is_err(),
+                    handle.channel_open_session().await.is_err(),
+                ];
+                let refused = refused.into_iter().filter(|refused| *refused).count();
+                seen.refused_by_client.fetch_add(refused, Ordering::SeqCst);
+            });
+        }
+        Ok(())
+    }
+
+    async fn tcpip_forward(
+        &mut self,
+        _address: &str,
+        _port: &mut u32,
+        _session: &mut server::Session,
+    ) -> Result<bool, Self::Error> {
+        self.seen.forwarding_requests.fetch_add(1, Ordering::SeqCst);
+        Ok(false)
+    }
+
+    async fn streamlocal_forward(
+        &mut self,
+        _socket_path: &str,
+        _session: &mut server::Session,
+    ) -> Result<bool, Self::Error> {
+        self.seen.forwarding_requests.fetch_add(1, Ordering::SeqCst);
+        Ok(false)
+    }
+
+    async fn x11_request(
+        &mut self,
+        _channel: ChannelId,
+        _single_connection: bool,
+        _x11_auth_protocol: &str,
+        _x11_auth_cookie: &str,
+        _x11_screen_number: u32,
+        _session: &mut server::Session,
+    ) -> Result<(), Self::Error> {
+        self.seen.forwarding_requests.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn agent_request(
+        &mut self,
+        _channel: ChannelId,
+        _session: &mut server::Session,
+    ) -> Result<bool, Self::Error> {
+        self.seen.forwarding_requests.fetch_add(1, Ordering::SeqCst);
+        Ok(false)
     }
 
     async fn exec_request(
@@ -242,7 +364,11 @@ impl server::Handler for Peer {
                     while handle.data(channel, chunk.clone()).await.is_ok() {}
                 });
             }
-            Behavior::Silent | Behavior::HangUpAtAuth => {}
+            Behavior::Silent
+            | Behavior::HangUpAtAuth
+            | Behavior::OpensChannelsBack
+            | Behavior::ProhibitForwarding
+            | Behavior::StallOpensTo(_) => {}
             Behavior::DisconnectAfterExec => {
                 session.disconnect(russh::Disconnect::ByApplication, "", "")?;
             }

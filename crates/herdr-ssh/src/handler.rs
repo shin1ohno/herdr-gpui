@@ -104,9 +104,11 @@ impl client::Handler for Client {
     }
 
     // Every channel the server opens is refused (`ForwardAgent=no`,
-    // `ForwardX11=no`, `ClearAllForwardings=yes`): the bridge requests no
-    // forwarding, so none is expected, and accepting would let the host
-    // open channels without bound.
+    // `ForwardX11=no`, `ClearAllForwardings=yes`): this client requests no
+    // remote, agent, or X11 forwarding, so none is expected, and accepting
+    // would let the host open channels without bound. The only forwarding
+    // channels are the `direct-tcpip` ones the client itself opens
+    // (`forward`).
 
     async fn server_channel_open_forwarded_tcpip(
         &mut self,

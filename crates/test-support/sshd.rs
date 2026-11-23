@@ -55,6 +55,12 @@ fn quoted(path: &Path) -> String {
 
 impl Sshd {
     pub fn start(authorized_key: &str, host_algorithm: &str) -> Result<Self> {
+        Self::start_with(authorized_key, host_algorithm, "")
+    }
+
+    /// [`Sshd::start`] with `extra` appended to the daemon's configuration,
+    /// one option per line.
+    pub fn start_with(authorized_key: &str, host_algorithm: &str, extra: &str) -> Result<Self> {
         let daemon = executable("HERDR_TEST_SSHD")?;
         let keygen = executable("HERDR_TEST_SSH_KEYGEN")?;
         let sandbox = Sandbox::new();
@@ -78,7 +84,7 @@ impl Sshd {
                 "Port {port}\nListenAddress 127.0.0.1\nHostKey {}\nPidFile {}\nAuthorizedKeysFile {}\n\
              PasswordAuthentication no\nKbdInteractiveAuthentication no\nUsePAM no\n\
              AuthenticationMethods publickey\nPubkeyAcceptedAlgorithms ecdsa-sha2-nistp256\n\
-             PermitRootLogin prohibit-password\nStrictModes no\nUseDNS no\nLogLevel VERBOSE\n",
+             PermitRootLogin prohibit-password\nStrictModes no\nUseDNS no\nLogLevel VERBOSE\n{extra}",
                 quoted(&host_key),
                 quoted(&sandbox.dir.join("sshd.pid")),
                 quoted(&authorized)
@@ -119,6 +125,10 @@ impl Sshd {
 
     pub fn directory(&self) -> &Path {
         &self.sandbox.dir
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
     pub fn target(&self) -> Result<String> {

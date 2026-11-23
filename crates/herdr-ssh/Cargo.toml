@@ -1,5 +1,5 @@
 [package]
-description            = "In-process SSH client for platforms that cannot run ssh: exec channels as socket pairs, pinned host keys, and an externally held client key"
+description            = "In-process SSH client for platforms that cannot run ssh: exec channels as socket pairs, loopback port forwarding, pinned host keys, and an externally held client key"
 edition.workspace      = true
 license.workspace      = true
 name                   = "herdr-ssh"
@@ -29,4 +29,8 @@ tempfile.workspace = true
 
 [[test]]
 name              = "sshd"
+required-features = ["integration-test"]
+
+[[test]]
+name              = "sshd_forward"
 required-features = ["integration-test"]

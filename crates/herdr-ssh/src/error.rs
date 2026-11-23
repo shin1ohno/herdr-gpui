@@ -39,6 +39,8 @@ pub enum Error {
     // keep-sorted start
     #[error(transparent)]
     Failure(#[from] Failure),
+    #[error(transparent)]
+    Forward(#[from] crate::forward::Error),
     /// A client public key that is not an uncompressed P-256 point.
     #[error("invalid device key: {reason}")]
     InvalidClientKey { reason: &'static str },

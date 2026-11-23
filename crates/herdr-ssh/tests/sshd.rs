@@ -5,6 +5,7 @@
 #[allow(dead_code)]
 #[path = "../../test-support/sandbox.rs"]
 mod sandbox;
+#[allow(dead_code)]
 #[path = "../../test-support/sshd.rs"]
 mod sshd;
 

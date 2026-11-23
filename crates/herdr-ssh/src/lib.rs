@@ -1,8 +1,10 @@
 //! An SSH client that runs inside the process, for platforms that cannot start
-//! `ssh` (iPadOS). It does one thing Herdr needs: run a command on a host over
+//! `ssh` (iPadOS). It does what Herdr needs: run a command on a host over
 //! an exec channel and expose that channel's standard streams as one end of a
 //! `UnixStream::pair()`, so `sheprd-client` can read the remote bridge exactly
-//! as it reads an `ssh` child's (docs/ios.md, "SSH transport").
+//! as it reads an `ssh` child's (docs/ios.md, "SSH transport"); and carry TCP
+//! connections to a port on the host's loopback over `direct-tcpip` channels
+//! of a dedicated connection with the same policy ([`forward`]).
 //!
 //! russh does the protocol on one process-wide current-thread tokio runtime
 //! that lives on its own thread; nothing async crosses this crate's API. The
@@ -28,6 +30,7 @@ mod client_key;
 mod config;
 mod error;
 mod exec;
+pub mod forward;
 mod handler;
 mod hooks;
 mod host_key;
@@ -43,6 +46,7 @@ mod tunnel;
 
 pub use client_key::{ClientKey, SignError};
 pub use error::{Error, Failure, Result};
+pub use forward::Forward;
 pub use host_key::HostKey;
 pub use known_hosts::{KnownHosts, Pins};
 pub use target::Target;
