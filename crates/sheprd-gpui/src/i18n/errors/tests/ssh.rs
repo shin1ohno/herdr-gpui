@@ -1,7 +1,7 @@
 //! iPad's in-process SSH. `herdr-ssh` is plain Rust, so its messages are
 //! checked on every Unix host, not only where iPadOS builds run tests.
 use super::*;
-use herdr_ssh::{Error, Failure};
+use herdr_ssh::{Error, Failure, forward};
 use std::io;
 
 #[test]
@@ -33,8 +33,26 @@ fn every_ssh_error_has_a_message() {
             source: io::Error::other("disk on fire"),
         },
         Error::PinnedMeanwhile,
+        Error::Forward(forward::Error::Prohibited),
     ]);
     assert_verbatim(&[Error::Io(io::Error::other("disk on fire"))]);
+}
+
+#[test]
+fn every_forward_error_has_a_message() {
+    assert_localized(&[
+        forward::Error::Busy,
+        forward::Error::Connect(Failure::Auth),
+        forward::Error::ConnectionLost(Failure::Timeout),
+        forward::Error::InvalidPort,
+        forward::Error::NotLoopback,
+        forward::Error::PortClosed,
+        forward::Error::Prohibited,
+        forward::Error::Refused,
+        forward::Error::Stopped,
+        forward::Error::Timeout,
+    ]);
+    assert_verbatim(&[forward::Error::Io(io::Error::other("disk on fire"))]);
 }
 
 #[cfg(target_os = "ios")]

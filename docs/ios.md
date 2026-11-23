@@ -233,12 +233,31 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   follows a panic, or an input forwarder, handshake, session task, or
   signature that outlives its 5 s deadline. Dropping a `Tunnel` still only
   signals cancellation and gives no receipt.
+- **Port forwarding.** `herdr_ssh::Forward` is the in-process
+  `ssh -L 127.0.0.1:<local>:localhost:<port>`: one dedicated connection per
+  forward, connected and authenticated exactly as an exec tunnel is (same
+  key, pins, policy, and algorithms), that opens one client-side
+  `direct-tcpip` channel per carried connection and nothing else. Its
+  destination is a `forward::Destination`, which only names the host's own
+  loopback (`localhost`, `127.0.0.1`, or `::1`, never resolved) and a port
+  from 1 to 65535. `Forward::open` returns one end of a socket pair carrying
+  the channel; `Forward::relay` carries a `TcpStream` the caller accepted.
+  At most 32 connections are carried at once. Failures are typed
+  (`forward::Error`): `Prohibited` when the host refuses forwarding for the
+  key (`restrict` without `port-forwarding`, a `permitopen` that does not
+  match, or `AllowTcpForwarding no`), `PortClosed` when nothing accepts on
+  the port, `Connect` when the connection never came up, and
+  `ConnectionLost` when it went away later. A refused channel leaves the
+  connection up; a lost one ends every carried connection. `Forward::stop`
+  and `Forward::wait_teardown` give the same receipt as a tunnel. Where the
+  iPad listens, and when a forward pauses, is the app's business.
 - **The desktop `ssh` policy, kept in process:** public-key authentication
   only, never a fallback, and `partial_success` counts as failure
   (`BatchMode`); 10 s for TCP connect and key exchange (`ConnectTimeout`);
   keepalive every 15 s, 4 misses (`ServerAlive*`); every channel the server
   tries to open (agent, X11, forwarded or direct TCP/streamlocal, session)
-  is rejected (`ForwardAgent`, `ForwardX11`, `ClearAllForwardings`); host key
+  is rejected (`ForwardAgent`, `ForwardX11`, `ClearAllForwardings`), and the
+  client never asks for remote, Unix-socket, agent, or X11 forwarding; host key
   announcements are ignored (`UpdateHostKeys=no`); no compression.
 - **Algorithms** are an explicit allow-list. Key exchange
   `mlkem768x25519-sha256`, `curve25519-sha256`, `curve25519-sha256@libssh.org`
@@ -268,7 +287,9 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   simulator and the macOS tests use a software key behind the same signer.
   The Add Device dialog shows the line to add to `~/.ssh/authorized_keys`:
   `restrict ecdsa-sha2-nistp256 AAAA… herdr-ipad-<device>`, since the bridge
-  needs no PTY and no forwarding. Settings > General > This iPad shows the
+  needs no PTY and no forwarding. `restrict` refuses port forwarding too, so
+  a host the iPad forwards ports from needs the line without `restrict`, or
+  with `port-forwarding` and a `permitopen="localhost:<port>"` added. Settings > General > This iPad shows the
   same line with Copy, and replaces the key after a two-click confirmation.
   Replacement holds the same lock: the new key is stored under a staging tag
   and read back, the old one moves to a recovery tag, the new one is promoted

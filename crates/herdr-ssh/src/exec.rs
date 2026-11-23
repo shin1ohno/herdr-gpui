@@ -1,7 +1,8 @@
 //! One exec tunnel on the runtime: connect, authenticate, open a session
 //! channel, run the command, pump its standard streams, and end the local
 //! SSH work so that a [`TeardownReceipt`](crate::TeardownReceipt) can vouch
-//! for it (`close`).
+//! for it (`close`). Connecting, authenticating, and the teardown are shared
+//! with `forward`, so both kinds of connection keep one policy.
 
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 
@@ -30,7 +31,7 @@ use crate::{
     transport::{KillSwitch, Killable},
 };
 
-mod close;
+pub(crate) mod close;
 
 /// How long to wait for russh's reason once the session has ended.
 const SESSION_END_WAIT: Duration = Duration::from_secs(1);
@@ -45,10 +46,16 @@ pub(crate) const STDERR_TAIL: usize = 4096;
 /// The extended data stream that carries standard error (RFC 4254).
 const STDERR: u32 = 1;
 
-pub(crate) struct Request {
+/// Where a connection goes and how it proves itself: the target, the client
+/// key, and the host's pins. The teardown drops it (condition 4).
+pub(crate) struct Login {
     pub(crate) target: Target,
     pub(crate) key: ClientKey,
     pub(crate) pins: Vec<HostKey>,
+}
+
+pub(crate) struct Request {
+    pub(crate) login: Login,
     pub(crate) command: String,
 }
 
@@ -86,13 +93,15 @@ pub(crate) struct Controls {
 
 /// What the tunnel started and must end before it can give a receipt.
 #[derive(Default)]
-struct Started {
+pub(crate) struct Started {
     /// Cuts the stream the session task owns.
     transport: Option<Arc<KillSwitch>>,
-    session: Option<Session>,
+    pub(crate) session: Option<Session>,
     /// A session task may run that this tunnel can no longer join.
     unjoined: bool,
-    input: Option<AbortOnDrop>,
+    /// Tasks that hold a channel's write half, and so a sender into the
+    /// session task: the exec input forwarder, or a forward's relays.
+    pub(crate) helpers: Vec<AbortOnDrop>,
 }
 
 /// Runs the tunnel to its end. `record` receives the exit before the
@@ -112,9 +121,11 @@ pub(crate) async fn run(
     let fuse = Fuse::new(Arc::clone(&controls.teardown), on_drop);
     let signers = SignTracker::default();
     let mut started = Started::default();
+    let Request { login, command } = request;
     let (local_read, mut local_write) = local.into_split();
     let exit = tunnel(
-        &request,
+        &login,
+        &command,
         &controls,
         &signers,
         &mut started,
@@ -129,7 +140,7 @@ pub(crate) async fn run(
         }
     }
     if controls.hooks.removes(Mutant::ReceiptBeforeExit) {
-        let outcome = close::close(started, request, &signers, &controls).await;
+        let outcome = close::close(started, login, &signers, &controls).await;
         fuse.settle(outcome);
         record(exit);
         controls.hooks.record(Event::ExitRecorded);
@@ -138,19 +149,20 @@ pub(crate) async fn run(
     record(exit);
     controls.hooks.record(Event::ExitRecorded);
     drop(local_write);
-    let outcome = close::close(started, request, &signers, &controls).await;
+    let outcome = close::close(started, login, &signers, &controls).await;
     fuse.settle(outcome);
 }
 
 async fn tunnel(
-    request: &Request,
+    login: &Login,
+    command: &str,
     controls: &Controls,
     signers: &SignTracker,
     started: &mut Started,
     local_read: OwnedReadHalf,
     local_write: &mut OwnedWriteHalf,
 ) -> TunnelExit {
-    let channel = match open(request, controls, signers, started).await {
+    let channel = match open(login, command, controls, signers, started).await {
         Ok(channel) => channel,
         Err(failure) => return TunnelExit::Ssh(failure),
     };
@@ -158,12 +170,39 @@ async fn tunnel(
 }
 
 async fn open(
-    request: &Request,
+    login: &Login,
+    command: &str,
     controls: &Controls,
     signers: &SignTracker,
     started: &mut Started,
 ) -> Result<Channel<Msg>, Failure> {
-    let host_keys = config::pinned_host_keys(&request.pins);
+    let setup_by = connect(login, controls, signers, started).await?;
+    let Some(session) = started.session.as_mut() else {
+        // `connect` keeps the session whenever it succeeds.
+        return Err(Failure::Protocol);
+    };
+    let observe_stop = !controls.hooks.removes(Mutant::IgnoreStopInSetup);
+    tokio::select! {
+        biased;
+        () = controls.stop.stopped(), if observe_stop => Err(Failure::Cancelled),
+        () = sleep_until(setup_by) => Err(Failure::Timeout),
+        channel = exec_channel(session, command, controls) => channel,
+    }
+}
+
+/// Connects to the host, checks its key against the pins, and authenticates
+/// with the client key: TCP and key exchange within the connect deadline,
+/// authentication within the setup deadline that follows. On success the
+/// session is in `started` and the setup deadline is returned, so what the
+/// caller opens next shares it. Every failure leaves in `started` what the
+/// teardown must end.
+pub(crate) async fn connect(
+    login: &Login,
+    controls: &Controls,
+    signers: &SignTracker,
+    started: &mut Started,
+) -> Result<Instant, Failure> {
+    let host_keys = config::pinned_host_keys(&login.pins);
     if host_keys.is_empty() {
         // Every pin has a type this client cannot verify, so no key the host
         // could offer would match one.
@@ -173,7 +212,7 @@ async fn open(
     let connect_by = Instant::now() + controls.deadlines.connect;
     // Until the TCP connection exists nothing of SSH has started, so this
     // future may be dropped.
-    let address = (request.target.host.as_str(), request.target.port);
+    let address = (login.target.host.as_str(), login.target.port);
     let socket = tokio::select! {
         biased;
         () = stop.stopped() => return Err(Failure::Cancelled),
@@ -188,7 +227,7 @@ async fn open(
     let transport = Arc::new(KillSwitch::new(controls.hooks.deaf_transport()));
     started.transport = Some(Arc::clone(&transport));
     let offered = OfferedSlot::default();
-    let client = Client::new(request.pins.clone(), true, Arc::clone(&offered))
+    let client = Client::new(login.pins.clone(), true, Arc::clone(&offered))
         .holding(controls.hooks.holder(Holder::Handler));
     let stream = Killable::new(socket, Arc::clone(&transport));
     let connecting = client::connect_stream(config::config(host_keys), stream, client);
@@ -234,19 +273,20 @@ async fn open(
         biased;
         () = stop.stopped(), if observe_stop => Err(Failure::Cancelled),
         () = sleep_until(setup_by) => Err(Failure::Timeout),
-        channel = setup(session, request, controls, signers) => channel,
-    }
+        authenticated = authenticate(session, login, controls, signers) => authenticated,
+    }?;
+    Ok(setup_by)
 }
 
-async fn setup(
+async fn authenticate(
     session: &mut Session,
-    request: &Request,
+    login: &Login,
     controls: &Controls,
     signers: &SignTracker,
-) -> Result<Channel<Msg>, Failure> {
-    let public_key = request.key.public_key().map_err(|_| Failure::Auth)?;
-    let mut signer = request.key.signer(signers.clone());
-    let user = request.target.user.as_str();
+) -> Result<(), Failure> {
+    let public_key = login.key.public_key().map_err(|_| Failure::Auth)?;
+    let mut signer = login.key.signer(signers.clone());
+    let user = login.target.user.as_str();
     // Public key only, never a fallback (`BatchMode`). `partial_success`
     // asks for a second method, so it is a failure too.
     match session
@@ -274,6 +314,14 @@ async fn setup(
         }
         Err(SignerError::Sign(_) | SignerError::Join(_)) => return Err(Failure::Auth),
     }
+    Ok(())
+}
+
+async fn exec_channel(
+    session: &mut Session,
+    command: &str,
+    controls: &Controls,
+) -> Result<Channel<Msg>, Failure> {
     let channel = match session.handle.channel_open_session().await {
         Ok(channel) => channel,
         Err(error) => {
@@ -289,11 +337,7 @@ async fn setup(
     controls.hooks.record(Event::ExecSent);
     // No PTY and no environment (`ssh -T`). The reply arrives on the
     // channel, where the pump reads it.
-    if channel
-        .exec(true, request.command.as_bytes())
-        .await
-        .is_err()
-    {
+    if channel.exec(true, command.as_bytes()).await.is_err() {
         return Err(session_error(session).await.unwrap_or(Failure::Unreachable));
     }
     Ok(channel)
@@ -304,8 +348,8 @@ async fn setup(
 /// polled again after it completed, and both the failure classification and
 /// the teardown wait for the end, so every wait goes through
 /// [`Session::wait_end`], which polls it at most until it completes.
-struct Session {
-    handle: Handle<Client>,
+pub(crate) struct Session {
+    pub(crate) handle: Handle<Client>,
     ended: bool,
     hooks: Hooks,
 }
@@ -322,7 +366,7 @@ impl Session {
     /// Resolves when the session task has ended: with its result the first
     /// time, and at once with `Ok` after that (the result was taken).
     /// Cancelling it before the end leaves the join unpolled to completion.
-    async fn wait_end(&mut self) -> Result<(), russh::Error> {
+    pub(crate) async fn wait_end(&mut self) -> Result<(), russh::Error> {
         if self.ended {
             return Ok(());
         }
@@ -336,7 +380,7 @@ impl Session {
 }
 
 /// The failure the session ended with, once it has ended with one.
-async fn session_error(session: &mut Session) -> Option<Failure> {
+pub(crate) async fn session_error(session: &mut Session) -> Option<Failure> {
     if !session.handle.is_closed() {
         return None;
     }
@@ -347,11 +391,11 @@ async fn session_error(session: &mut Session) -> Option<Failure> {
 }
 
 /// Aborts a helper task when the tunnel's own task ends or is aborted.
-struct AbortOnDrop(JoinHandle<()>);
+pub(crate) struct AbortOnDrop(pub(crate) JoinHandle<()>);
 
 impl AbortOnDrop {
     /// Aborts the task and waits until it has ended and dropped what it held.
-    async fn end(mut self) {
+    pub(crate) async fn end(mut self) {
         self.0.abort();
         let _ = (&mut self.0).await;
     }
@@ -372,7 +416,7 @@ async fn pump(
 ) -> TunnelExit {
     let (mut remote, remote_write) = channel.split();
     let held = controls.hooks.holder(Holder::Forwarder);
-    started.input = Some(AbortOnDrop(tokio::spawn(async move {
+    started.helpers.push(AbortOnDrop(tokio::spawn(async move {
         let _held = held;
         forward_input(local_read, remote_write).await;
     })));

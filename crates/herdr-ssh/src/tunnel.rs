@@ -19,7 +19,7 @@ use crate::{
     ClientKey, Failure, HostKey, Pins, Result, Target,
     classify::classify,
     config::{self, CONNECT_DEADLINE},
-    exec::{self, Controls, Deadlines, Request},
+    exec::{self, Controls, Deadlines, Login, Request},
     handler::{self, Client, Offered, OfferedSlot},
     hooks::Hooks,
     runtime,
@@ -247,9 +247,11 @@ pub(crate) fn start(
         tokio::net::UnixStream::from_std(runtime_end)?
     };
     let request = Request {
-        target: target.clone(),
-        key: key.clone(),
-        pins,
+        login: Login {
+            target: target.clone(),
+            key: key.clone(),
+            pins,
+        },
         command: command.to_owned(),
     };
     let exit = Arc::new(ExitSlot::default());

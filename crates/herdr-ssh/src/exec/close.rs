@@ -5,16 +5,16 @@
 use russh::Disconnect;
 use tokio::time::{Instant, sleep, timeout, timeout_at};
 
-use super::{Controls, Request, Session, Started};
+use super::{Controls, Login, Session, Started};
 use crate::{
     hooks::{Event, Mutant},
     teardown::{Outcome, SignTracker},
     transport::KillSwitch,
 };
 
-pub(super) async fn close(
+pub(crate) async fn close(
     started: Started,
-    request: Request,
+    login: Login,
     signers: &SignTracker,
     controls: &Controls,
 ) -> Outcome {
@@ -25,17 +25,17 @@ pub(super) async fn close(
     if hooks.removes(Mutant::LogTarget) {
         tracing::debug!(
             category = "ssh",
-            user = request.target.user.as_str(),
-            host = request.target.host.as_str(),
+            user = login.target.user.as_str(),
+            host = login.target.host.as_str(),
             "ssh tunnel teardown started"
         );
     }
     let outcome = end_work(started, signers, controls).await;
-    let mut request = Some(request);
+    let mut login = Some(login);
     if !hooks.removes(Mutant::KeepRequest) {
         // Condition 4, on every outcome: the tunnel's copies of the key and
         // the pins go now, not whenever the task's future is dropped.
-        request = None;
+        login = None;
     }
     hooks.record(match outcome {
         Outcome::Complete => Event::Receipt,
@@ -46,13 +46,13 @@ pub(super) async fn close(
         outcome = outcome.as_str(),
         "ssh tunnel teardown"
     );
-    drop(request);
+    drop(login);
     outcome
 }
 
-/// Ends what the tunnel started, in order: the input forwarder (condition
-/// 2), the session task (condition 1), then running signing closures
-/// (condition 3). On `Unproven` the transport is cut, so a session task that
+/// Ends what the tunnel started, in order: the helpers that hold a channel's
+/// write half, the input forwarder or a forward's relays (condition 2), the
+/// session task (condition 1), then running signing closures (condition 3). On `Unproven` the transport is cut, so a session task that
 /// could not be joined still ends soon.
 async fn end_work(mut started: Started, signers: &SignTracker, controls: &Controls) -> Outcome {
     let hooks = &controls.hooks;
@@ -65,13 +65,14 @@ async fn end_work(mut started: Started, signers: &SignTracker, controls: &Contro
         }
         Outcome::Unproven
     };
-    // The forwarder holds the channel's write half, and so a sender into
-    // the session task.
-    if !hooks.removes(Mutant::KeepInputForwarder)
-        && let Some(input) = started.input.take()
-        && timeout_at(by, input.end()).await.is_err()
-    {
-        return give_up();
+    // Each helper holds a channel's write half, and so a sender into the
+    // session task.
+    if !hooks.removes(Mutant::KeepInputForwarder) {
+        for helper in std::mem::take(&mut started.helpers) {
+            if timeout_at(by, helper.end()).await.is_err() {
+                return give_up();
+            }
+        }
     }
     if started.unjoined {
         return give_up();
