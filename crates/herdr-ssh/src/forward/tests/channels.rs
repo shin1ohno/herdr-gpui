@@ -17,18 +17,18 @@ use crate::{
     test_host::{Behavior, Seen, TestHost},
 };
 
-const WAIT: Duration = Duration::from_secs(10);
-const GREETING: &[u8] = b"hello from the host's port\n";
+pub(super) const WAIT: Duration = Duration::from_secs(10);
+pub(super) const GREETING: &[u8] = b"hello from the host's port\n";
 
 /// A TCP service on this machine's loopback: each connection gets the
 /// greeting, then its own bytes back until it sends EOF.
-struct Service {
+pub(super) struct Service {
     port: u16,
     accepted: Arc<AtomicUsize>,
 }
 
 impl Service {
-    fn start() -> Self {
+    pub(super) fn start() -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let accepted = Arc::new(AtomicUsize::new(0));
@@ -48,18 +48,18 @@ impl Service {
         Self { port, accepted }
     }
 
-    fn destination(&self) -> Destination {
+    pub(super) fn destination(&self) -> Destination {
         Destination::localhost(self.port).unwrap()
     }
 }
 
-fn forward(host: &TestHost) -> Forward {
+pub(super) fn forward(host: &TestHost) -> Forward {
     let target = Target::parse(&format!("user@127.0.0.1:{}", host.port)).unwrap();
     Forward::connect(&target, &software_key(42), &host.pins).unwrap()
 }
 
 /// Reads the service's greeting.
-fn greeting(stream: &mut impl std::io::Read) -> Vec<u8> {
+pub(super) fn greeting(stream: &mut impl std::io::Read) -> Vec<u8> {
     let mut greeting = vec![0; GREETING.len()];
     stream.read_exact(&mut greeting).unwrap();
     greeting
@@ -263,4 +263,22 @@ fn connections_beyond_the_limit_are_busy() {
         Err(Error::Busy)
     ));
     drop(streams);
+}
+
+#[test]
+fn dropping_the_forward_ends_its_connections() {
+    let host = TestHost::start(Behavior::Silent);
+    let service = Service::start();
+    let forward = forward(&host);
+    let mut stream = forward.open(service.destination()).unwrap();
+    stream.set_read_timeout(Some(WAIT)).unwrap();
+    assert_eq!(greeting(&mut stream), GREETING);
+    drop(forward);
+    // EOF or a reset within the wait, never a hang.
+    let mut rest = Vec::new();
+    if let Err(error) = stream.read_to_end(&mut rest) {
+        assert_ne!(error.kind(), std::io::ErrorKind::WouldBlock, "{error}");
+    }
+    assert!(rest.is_empty());
+    assert!(TestHost::wait_for(&host.seen.ended, 1, WAIT));
 }

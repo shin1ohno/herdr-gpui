@@ -49,9 +49,12 @@ mod session;
 pub use destination::{Destination, Loopback};
 pub use error::{Error, Result};
 
-/// The most connections one forward carries at once; requests waiting for
-/// their channel count too. A browser opens about six per host.
+/// The most connections one forward carries at once; channels still
+/// opening count too. A browser opens about six per host.
 pub const MAX_CHANNELS: usize = 32;
+/// The most bytes of one carried connection's data that its caller may
+/// leave unread before that connection is dropped; see [`Forward::open`].
+pub const UNREAD_LIMIT: usize = session::UNREAD_LIMIT;
 
 /// What ended a forward's connection; [`Forward::wait_end`] gives it as an
 /// [`Error`].
@@ -189,7 +192,13 @@ impl Forward {
     /// pair that carries it: what is written to it reaches the host's port,
     /// what the host's port sends arrives on it, and shutting down its write
     /// side sends EOF. Blocks until the channel is open or has failed: call
-    /// it off the UI thread.
+    /// it off the UI thread. Channels open concurrently, so a slow port
+    /// delays only its own request.
+    ///
+    /// The host's data is always taken off the connection as it arrives, so
+    /// a caller that stops reading cannot stall the forward's other
+    /// connections; once it leaves more than [`UNREAD_LIMIT`] bytes unread,
+    /// its connection alone is dropped.
     pub fn open(&self, destination: Destination) -> Result<UnixStream> {
         let (caller, task_end) = UnixStream::pair()?;
         task_end.set_nonblocking(true)?;
@@ -229,7 +238,7 @@ impl Forward {
 
     fn ended(&self) -> Error {
         self.end
-            .wait(session::ANSWER_MARGIN)
+            .wait(session::END_WAIT)
             .map_or(Error::Stopped, Error::from)
     }
 

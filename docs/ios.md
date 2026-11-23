@@ -242,7 +242,13 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   loopback (`localhost`, `127.0.0.1`, or `::1`, never resolved) and a port
   from 1 to 65535. `Forward::open` returns one end of a socket pair carrying
   the channel; `Forward::relay` carries a `TcpStream` the caller accepted.
-  At most 32 connections are carried at once. Failures are typed
+  At most 32 connections are carried or opening at once, and channels open
+  concurrently, so a port slow to answer delays only its own request.
+  russh 0.65 grants the host more window as soon as data arrives, so a
+  relay always takes its channel's data and keeps at most 2 MiB the caller
+  has not read; past that, only that connection is dropped, and a caller
+  that stops reading cannot stall the other connections or the keepalive.
+  Failures are typed
   (`forward::Error`): `Prohibited` when the host refuses forwarding for the
   key (`restrict` without `port-forwarding`, a `permitopen` that does not
   match, or `AllowTcpForwarding no`), `PortClosed` when nothing accepts on

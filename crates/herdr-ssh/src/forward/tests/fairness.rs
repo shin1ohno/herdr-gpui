@@ -1,0 +1,117 @@
+//! One carried connection must not hold up the others on the same forward:
+//! a caller that stops reading, or a port that is slow to answer.
+
+use std::{
+    io::{Read as _, Write as _},
+    net::{Shutdown, TcpListener},
+    sync::mpsc,
+    thread,
+    time::Instant,
+};
+
+use super::{
+    channels::{GREETING, Service, WAIT, forward, greeting},
+    *,
+};
+use crate::test_host::{Behavior, TestHost};
+
+/// A TCP service that writes to each connection until it goes away.
+fn flood() -> Destination {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { return };
+            thread::spawn(move || {
+                let chunk = vec![b'x'; 64 * 1024];
+                while stream.write_all(&chunk).is_ok() {}
+            });
+        }
+    });
+    Destination::localhost(port).unwrap()
+}
+
+/// Runs `open` on another thread and gives its result, or `None` when it
+/// takes longer than `limit`.
+fn within<T: Send + 'static>(
+    limit: Duration,
+    open: impl FnOnce() -> T + Send + 'static,
+) -> Option<T> {
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = sender.send(open());
+    });
+    receiver.recv_timeout(limit).ok()
+}
+
+#[test]
+fn a_caller_that_stops_reading_does_not_stall_other_connections() {
+    let host = TestHost::start(Behavior::Silent);
+    let service = Service::start();
+    let forward = Arc::new(forward(&host));
+    // Opened and never read while the host floods it.
+    let mut stalled = forward.open(flood()).unwrap();
+    // Long enough for the flood to pass every buffer on the way, which
+    // without the unread limit fills russh's channel queue and stops the
+    // session task.
+    thread::sleep(Duration::from_secs(2));
+    let carried = Arc::clone(&forward);
+    let destination = service.destination();
+    let exchanged = within(WAIT, move || {
+        let mut stream = carried.open(destination).unwrap();
+        stream.set_read_timeout(Some(WAIT)).unwrap();
+        let greeted = greeting(&mut stream);
+        stream.write_all(b"still moving").unwrap();
+        stream.shutdown(Shutdown::Write).unwrap();
+        let mut echoed = Vec::new();
+        stream.read_to_end(&mut echoed).unwrap();
+        (greeted, echoed)
+    });
+    assert_eq!(
+        exchanged,
+        Some((GREETING.to_vec(), b"still moving".to_vec())),
+        "a second connection must open and round-trip while the first is unread"
+    );
+    // The unread connection was dropped once it fell too far behind: it
+    // ends after what had already reached its socket (the relay's own
+    // unread bytes go with it), rather than flooding on.
+    stalled.set_read_timeout(Some(WAIT)).unwrap();
+    let mut buffered = Vec::new();
+    if let Err(error) = stalled.read_to_end(&mut buffered) {
+        assert_ne!(error.kind(), std::io::ErrorKind::WouldBlock, "{error}");
+    }
+    assert!(!buffered.is_empty(), "the flood reached the caller first");
+    assert!(
+        forward.wait_end(Duration::ZERO).is_none(),
+        "the forward itself carries on"
+    );
+}
+
+#[test]
+fn a_slow_open_delays_only_its_own_request() {
+    let stalled_port = {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+    let host = TestHost::start(Behavior::StallOpensTo(stalled_port));
+    let service = Service::start();
+    let forward = Arc::new(forward(&host));
+    // Warm up: the connection is up before the slow open is queued.
+    drop(forward.open(service.destination()).unwrap());
+    let slow = {
+        let forward = Arc::clone(&forward);
+        thread::spawn(move || forward.open(Destination::localhost(stalled_port).unwrap()))
+    };
+    thread::sleep(Duration::from_millis(300));
+    let started = Instant::now();
+    let mut stream = forward.open(service.destination()).unwrap();
+    let waited = started.elapsed();
+    stream.set_read_timeout(Some(WAIT)).unwrap();
+    assert_eq!(greeting(&mut stream), GREETING);
+    assert!(
+        waited < Duration::from_secs(5),
+        "an open behind a stalled one took {waited:?}"
+    );
+    forward.stop();
+    assert!(matches!(slow.join().unwrap(), Err(Error::Stopped)));
+}

@@ -49,6 +49,10 @@ pub(crate) enum Behavior {
     /// Refuses every `direct-tcpip` channel as administratively prohibited,
     /// as OpenSSH does for a `restrict` key.
     ProhibitForwarding,
+    /// Answers a `direct-tcpip` channel to this port only after a minute, as
+    /// a host whose port does not complete the connection; other ports are
+    /// relayed as usual.
+    StallOpensTo(u16),
 }
 
 /// Counts of what the server saw, shared with the test.
@@ -257,6 +261,15 @@ impl server::Handler for Peer {
             reply.reject(russh::ChannelOpenFailure::ConnectFailed).await;
             return Ok(());
         };
+        if matches!(self.behavior, Behavior::StallOpensTo(stalled) if stalled == port) {
+            // The reply is held off the session's own task, as sshd's
+            // pending connect is.
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                reply.reject(russh::ChannelOpenFailure::ConnectFailed).await;
+            });
+            return Ok(());
+        }
         let Ok(mut socket) = tokio::net::TcpStream::connect(("127.0.0.1", port)).await else {
             reply.reject(russh::ChannelOpenFailure::ConnectFailed).await;
             return Ok(());
@@ -354,7 +367,8 @@ impl server::Handler for Peer {
             Behavior::Silent
             | Behavior::HangUpAtAuth
             | Behavior::OpensChannelsBack
-            | Behavior::ProhibitForwarding => {}
+            | Behavior::ProhibitForwarding
+            | Behavior::StallOpensTo(_) => {}
             Behavior::DisconnectAfterExec => {
                 session.disconnect(russh::Disconnect::ByApplication, "", "")?;
             }

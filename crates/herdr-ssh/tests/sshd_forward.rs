@@ -313,3 +313,60 @@ fn private_sshd_lost_connection_ends_the_channel() -> Result<()> {
     ensure!(matches!(after, Err(Error::ConnectionLost(_))), "{after:?}");
     Ok(())
 }
+
+/// A TCP service that writes to each connection until it goes away.
+fn flood() -> Result<Destination> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let port = listener.local_addr()?.port();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { return };
+            thread::spawn(move || {
+                let chunk = vec![b'x'; 64 * 1024];
+                while stream.write_all(&chunk).is_ok() {}
+            });
+        }
+    });
+    Ok(Destination::localhost(port)?)
+}
+
+#[test]
+#[ignore = "requires explicit HERDR_TEST_SSHD and HERDR_TEST_SSH_KEYGEN; starts a private sshd"]
+fn private_sshd_unread_connection_does_not_stall_others() -> Result<()> {
+    let key = software_key(27);
+    let service = Service::start()?;
+    let server = Sshd::start(&line_with(&key, ""), "ed25519")?;
+    let (target, pins) = trusted(&server, server.port())?;
+    let forward = Arc::new(Forward::connect(&target, &key, &pins)?);
+    // Opened and never read while the service floods it through sshd.
+    let mut stalled = forward.open(flood()?)?;
+    thread::sleep(Duration::from_secs(2));
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let carried = Arc::clone(&forward);
+    let destination = service.destination();
+    thread::spawn(move || {
+        let exchanged = carried
+            .open(destination)
+            .map_err(anyhow::Error::from)
+            .and_then(|stream| {
+                stream.set_read_timeout(Some(DEADLINE))?;
+                exchange(&stream, b"still moving".to_vec())
+            });
+        let _ = sender.send(exchanged);
+    });
+    let exchanged = receiver.recv_timeout(DEADLINE);
+    ensure!(
+        matches!(&exchanged, Ok(Ok(output)) if *output == [GREETING, b"still moving"].concat()),
+        "a second connection must round-trip while the first is unread: {exchanged:?}"
+    );
+    stalled.set_read_timeout(Some(DEADLINE))?;
+    let mut buffered = Vec::new();
+    if let Err(error) = stalled.read_to_end(&mut buffered) {
+        ensure!(
+            error.kind() != std::io::ErrorKind::WouldBlock,
+            "the unread connection did not end: {error}"
+        );
+    }
+    ensure!(forward.wait_end(Duration::ZERO).is_none());
+    Ok(())
+}

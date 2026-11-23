@@ -95,7 +95,7 @@ pub(crate) struct Controls {
 #[derive(Default)]
 pub(crate) struct Started {
     /// Cuts the stream the session task owns.
-    transport: Option<Arc<KillSwitch>>,
+    pub(crate) transport: Option<Arc<KillSwitch>>,
     pub(crate) session: Option<Session>,
     /// A session task may run that this tunnel can no longer join.
     unjoined: bool,
