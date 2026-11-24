@@ -30,12 +30,12 @@
 
 use std::{
     io,
-    net::{Ipv4Addr, TcpListener, TcpStream},
+    net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream},
     sync::{
         Arc, Condvar, Mutex, PoisonError,
         mpsc::{self, RecvTimeoutError},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use tokio::sync::mpsc::{Sender, error::TrySendError};
@@ -122,6 +122,10 @@ struct Open {
 /// looking for its own; anything else on the loopback that connects first
 /// is closed.
 const PAIR_ACCEPTS: usize = 8;
+/// How long [`loopback_pair`] waits for its own connection to reach the
+/// listener's queue, and how often it looks.
+const PAIR_PATIENCE: Duration = Duration::from_secs(1);
+const PAIR_POLL: Duration = Duration::from_millis(1);
 
 /// Two ends of one TCP connection on 127.0.0.1. The listener lives only for
 /// this call, and the accepted end must come from the connecting socket's
@@ -131,14 +135,38 @@ fn loopback_pair() -> io::Result<(TcpStream, TcpStream)> {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
     let caller = TcpStream::connect(listener.local_addr()?)?;
     let origin = caller.local_addr()?;
-    // The connection is complete once `connect` returns, so it is already
-    // queued; a non-blocking accept cannot wait on anyone else.
+    // The connection is complete once `connect` returns, but Darwin queues it
+    // on the listener only once its loopback input runs, which a loaded
+    // system delays; so the non-blocking accept waits a bounded time for it
+    // rather than failing at once, and never waits on anyone else.
     listener.set_nonblocking(true)?;
-    for _ in 0..PAIR_ACCEPTS {
-        let (accepted, peer) = listener.accept()?;
-        if peer == origin {
-            accepted.set_nonblocking(false)?;
-            return Ok((caller, accepted));
+    let accepted = accept_from(&listener, |peer| peer == origin, PAIR_PATIENCE)?;
+    accepted.set_nonblocking(false)?;
+    Ok((caller, accepted))
+}
+
+/// Accepts the first connection on the non-blocking `listener` whose peer
+/// `own` recognises, closing up to [`PAIR_ACCEPTS`] others. While none is
+/// queued it looks again every [`PAIR_POLL`] for at most `patience`, then
+/// fails with [`io::ErrorKind::WouldBlock`].
+fn accept_from(
+    listener: &TcpListener,
+    own: impl Fn(SocketAddr) -> bool,
+    patience: Duration,
+) -> io::Result<TcpStream> {
+    let deadline = Instant::now() + patience;
+    let mut others = 0;
+    while others < PAIR_ACCEPTS {
+        match listener.accept() {
+            Ok((accepted, peer)) if own(peer) => return Ok(accepted),
+            Ok(_) => others += 1,
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                if Instant::now() >= deadline {
+                    return Err(error);
+                }
+                std::thread::sleep(PAIR_POLL);
+            }
+            Err(error) => return Err(error),
         }
     }
     Err(io::ErrorKind::AddrInUse.into())
