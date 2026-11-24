@@ -1,7 +1,7 @@
 use crate::{Attachment, Core, End, Error, Result, WriteGate, wire::Attach};
 use sheprd_backend::{
-    ClientMouseKind, ClientPaneInputEvent, Exit, KeyReporting, Role, Size, SurfaceUpdate,
-    TerminalId,
+    ClientMouseKind, ClientPaneInputEvent, Exit, KeyReporting, Role, ScrollPosition, Size,
+    SurfaceUpdate, TerminalId,
 };
 use sheprd_terminal::{Damage, Emulator, Event, MouseReporting, Scroll};
 use std::{
@@ -27,6 +27,8 @@ pub struct CoreTerminal {
     /// Whether the program read the mouse when the view was last told.
     reporting: Option<bool>,
     role: Role,
+    /// Where the view was in history when it was last told.
+    scroll: Option<ScrollPosition>,
     /// An observer's core and when it last read the terminal's size there;
     /// an active view sets the size itself.
     sizing: Option<(Arc<Core>, Instant)>,
@@ -63,6 +65,7 @@ impl CoreTerminal {
             keys: None,
             reporting: None,
             role,
+            scroll: None,
             sizing: (role == Role::Observer).then(|| (Arc::clone(core), Instant::now())),
             sync_since: None,
         })
@@ -216,6 +219,16 @@ impl sheprd_backend::Terminal for CoreTerminal {
         if self.reporting != Some(reporting) {
             self.reporting = Some(reporting);
             updates.push(SurfaceUpdate::MouseReporting(reporting));
+        }
+        let metrics = self.emulator.scroll_metrics();
+        let scroll = ScrollPosition {
+            offset: metrics.offset,
+            history: metrics.history,
+            rows: metrics.rows,
+        };
+        if self.scroll != Some(scroll) {
+            self.scroll = Some(scroll);
+            updates.push(SurfaceUpdate::Scroll(scroll));
         }
         match self.emulator.take_damage() {
             Damage::Full(frame) => updates.push(SurfaceUpdate::Frame(frame)),

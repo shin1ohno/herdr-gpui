@@ -1,5 +1,7 @@
 use crate::core_terminals::screen::Screen;
-use sheprd_backend::{CursorState, Exit, FrameData, PaneSurfacePatchRow, SurfaceUpdate};
+use sheprd_backend::{
+    CursorState, Exit, FrameData, PaneSurfacePatchRow, ScrollPosition, SurfaceUpdate,
+};
 use sheprd_client::protocol::CellData;
 
 fn cell(symbol: &str) -> CellData {
@@ -90,4 +92,21 @@ fn titles_bells_and_endings_are_kept() {
     );
     screen.apply(SurfaceUpdate::Title(String::new()));
     assert_eq!(screen.title, None);
+}
+
+#[test]
+fn a_scroll_position_changes_nothing_the_app_draws() {
+    let mut screen = Screen::default();
+    screen.apply(SurfaceUpdate::Frame(frame(2, 1)));
+    let drawn = text(&screen);
+    screen.apply(SurfaceUpdate::Scroll(ScrollPosition {
+        offset: 3,
+        history: 10,
+        rows: 1,
+    }));
+    assert_eq!(text(&screen), drawn);
+    assert_eq!(
+        (screen.title.as_deref(), screen.bells, screen.ended),
+        (None, 0, None)
+    );
 }
