@@ -9,6 +9,7 @@ mod scroll;
 mod size;
 mod style;
 mod text;
+mod wrap;
 
 use super::*;
 use sheprd_protocol::{CellData, FrameData};

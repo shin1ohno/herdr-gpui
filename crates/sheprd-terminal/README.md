@@ -50,7 +50,10 @@ Alacritty's dim colors become the matching normal color with `DIM`.
 
 `CellData::modifier` bits are the crate's `BOLD` (1), `DIM` (1 << 1),
 `ITALIC` (1 << 2), `UNDERLINE` (1 << 3, every underline style), `REVERSED`
-(1 << 6), `HIDDEN` (1 << 7), and `STRIKETHROUGH` (1 << 8).
+(1 << 6), `HIDDEN` (1 << 7), `STRIKETHROUGH` (1 << 8), and `SOFT_WRAP`
+(1 << 9) on the last cell of a row the terminal wrapped into the next
+(alacritty's `WRAPLINE`; on a wide glyph's spacer cell when the glyph ends
+the row).
 
 A wide character's second cell is `skip: true` with an empty symbol;
 combining characters join their base cell's symbol. OSC 8 links are listed
