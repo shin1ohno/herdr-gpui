@@ -50,6 +50,8 @@ impl Screen {
                 }
                 frame.cursor = cursor;
             }
+            // The app draws no scroll position for herdr-core yet.
+            SurfaceUpdate::Scroll(_) => {}
             SurfaceUpdate::Title(title) => {
                 self.title = Some(title).filter(|title| !title.is_empty())
             }

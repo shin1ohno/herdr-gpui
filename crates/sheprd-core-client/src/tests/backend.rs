@@ -318,6 +318,54 @@ fn the_view_is_told_when_the_program_starts_reading_the_mouse() {
     );
 }
 
+/// The `Scroll` updates among `updates`.
+fn scrolls(updates: &[SurfaceUpdate]) -> Vec<sheprd_backend::ScrollPosition> {
+    updates
+        .iter()
+        .filter_map(|update| match update {
+            SurfaceUpdate::Scroll(position) => Some(*position),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_view_is_told_where_it_is_in_history_only_when_that_changes() {
+    let (backend, mut mock) = backend();
+    let mut terminal = attached(&backend, &mut mock, Role::Active);
+    mock.send(5, Kind::Data, b"hi");
+    let first = terminal.next(WAIT).unwrap();
+    let attached_at = scrolls(&first);
+    assert_eq!(attached_at.len(), 1, "told once at attach: {first:?}");
+    assert_eq!(attached_at[0].offset, 0);
+    // Output that keeps the view where it was is not told again.
+    mock.send(5, Kind::Data, b"!");
+    let same = terminal.next(WAIT).unwrap();
+    assert_eq!(scrolls(&same), [], "{same:?}");
+    // History grows under the live view.
+    let lines: String = (0..10).map(|line| format!("line{line}\r\n")).collect();
+    mock.send(5, Kind::Data, lines.as_bytes());
+    let grown = scrolls(&terminal.next(WAIT).unwrap());
+    assert_eq!(grown.len(), 1, "{grown:?}");
+    let live = grown[0];
+    assert_eq!(live.offset, 0);
+    assert!(live.history >= 3, "{live:?}");
+    // A wheel the program ignores moves the view; typing returns it live.
+    terminal
+        .input(&wheel(sheprd_backend::ClientMouseKind::ScrollUp, 3))
+        .unwrap();
+    let scrolled = terminal.next(Duration::from_millis(50)).unwrap();
+    assert_eq!(
+        scrolls(&scrolled),
+        [sheprd_backend::ScrollPosition { offset: 3, ..live }]
+    );
+    terminal
+        .input(&ClientPaneInputEvent::TextCommit("x".into()))
+        .unwrap();
+    let back = terminal.next(Duration::from_millis(50)).unwrap();
+    assert_eq!(scrolls(&back), [live]);
+}
+
 #[test]
 fn a_wheel_the_program_ignores_scrolls_history_and_typing_returns_live() {
     let (backend, mut mock) = backend();

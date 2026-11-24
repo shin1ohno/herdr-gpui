@@ -149,6 +149,15 @@ pub struct Spawn {
     pub name: Option<String>,
 }
 
+/// Where the view is in a terminal's history: `offset` rows up from the
+/// live bottom, out of `history` rows kept above a screen of `rows`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ScrollPosition {
+    pub offset: usize,
+    pub history: usize,
+    pub rows: u16,
+}
+
 /// Key events a program asked for, as the kitty keyboard protocol lets it:
 /// the default asks for neither, and typing arrives as text.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -177,5 +186,8 @@ pub enum SurfaceUpdate {
         cursor: Option<CursorState>,
         rows: Vec<PaneSurfacePatchRow>,
     },
+    /// Where the view is in history: sent when it moves, history grows, or
+    /// the screen resizes.
+    Scroll(ScrollPosition),
     Title(String),
 }
