@@ -262,6 +262,11 @@ remote. The iPad keeps all of that and replaces only the `ssh` process:
   connection up; a lost one ends every carried connection. `Forward::stop`
   and `Forward::wait_teardown` give the same receipt as a tunnel. Where the
   iPad listens, and when a forward pauses, is the app's business.
+  An app gets a forward through `sheprd_client::ssh::forward_connect(target)`:
+  the same device key (`herdr-ssh`) and the app's own known hosts as the
+  bridge; a host with no pinned key fails as `SshFailure::HostKey` before the
+  Keychain is read. It blocks on the Keychain and the known hosts file, so
+  call it from a worker.
 - **The desktop `ssh` policy, kept in process:** public-key authentication
   only, never a fallback, and `partial_success` counts as failure
   (`BatchMode`); 10 s for TCP connect and key exchange (`ConnectTimeout`);

@@ -163,6 +163,26 @@ pub fn run_ssh_command(
     }
 }
 
+/// A port forward to `target` over the in-process client
+/// ([`herdr_ssh::Forward`]), authenticated with this installation's key and
+/// accepting only the host keys pinned in the app's known hosts file, as the
+/// bridge is. A host with no pinned key is refused before the Keychain is
+/// read. The forward connects on the client's runtime; its first `open` or
+/// `relay` reports a connection failure. Blocks on the Keychain and the known
+/// hosts file: call only from a background worker, never the UI thread.
+pub fn forward_connect(target: &str) -> Result<herdr_ssh::Forward> {
+    validate_target(target)?;
+    let target = parse(target)?;
+    let pins = known_hosts()?.pins(&target).map_err(Error::Ssh)?;
+    if pins == Pins::None {
+        tracing::warn!(category = "ssh", "host has no trusted key");
+        return Err(super::Error::Refused(SshFailure::HostKey).into());
+    }
+    let key = client_key()?;
+    herdr_ssh::Forward::connect(&target, &key, &pins)
+        .map_err(|error| Error::Ssh(herdr_ssh::Error::Forward(error)).into())
+}
+
 /// Starts `remote_command` on `target` and returns this end of its standard
 /// streams at once; the connection proceeds on the client's runtime, within
 /// the bridge's ready deadline. Blocks on the Keychain and the known hosts
