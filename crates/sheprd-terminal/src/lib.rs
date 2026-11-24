@@ -23,6 +23,9 @@ pub const DIM: u16 = 1 << 1;
 pub const HIDDEN: u16 = 1 << 7;
 pub const ITALIC: u16 = 1 << 2;
 pub const REVERSED: u16 = 1 << 6;
+/// Set on a row's last cell when the terminal wrapped the row into the next
+/// one (alacritty's `WRAPLINE`).
+pub const SOFT_WRAP: u16 = 1 << 9;
 pub const STRIKETHROUGH: u16 = 1 << 8;
 pub const UNDERLINE: u16 = 1 << 3;
 // keep-sorted end

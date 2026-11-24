@@ -1,8 +1,11 @@
 //! Converting alacritty's grid into Herdr's cell model: colors keep the
 //! program's choice (named, indexed, or RGB) so the app's theme resolves
-//! them, and styles become the painter's modifier bits.
+//! them, and styles become the painter's modifier bits. Alacritty's wrap flag
+//! becomes `SOFT_WRAP` on the last cell of a row the terminal wrapped.
 
-use crate::{BOLD, DIM, HIDDEN, ITALIC, REVERSED, STRIKETHROUGH, UNDERLINE, listener::Listener};
+use crate::{
+    BOLD, DIM, HIDDEN, ITALIC, REVERSED, SOFT_WRAP, STRIKETHROUGH, UNDERLINE, listener::Listener,
+};
 use alacritty_terminal::{
     Term,
     grid::Dimensions,
@@ -125,6 +128,7 @@ fn modifier(flags: Flags) -> u16 {
         (Flags::INVERSE, REVERSED),
         (Flags::HIDDEN, HIDDEN),
         (Flags::STRIKEOUT, STRIKETHROUGH),
+        (Flags::WRAPLINE, SOFT_WRAP),
     ]
     .into_iter()
     .filter(|(flag, _)| flags.intersects(*flag))

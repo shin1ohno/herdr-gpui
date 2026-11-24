@@ -262,6 +262,9 @@ pub struct CellData {
     /// Named color 0..=16; indexed 0x010000XX; RGB 0x02RRGGBB (NOT ARGB).
     pub fg: u32,
     pub bg: u32,
+    /// Style bits (sheprd-terminal's `BOLD` … `STRIKETHROUGH`, bits 0-3 and 6-8).
+    /// Bit 9 (`SOFT_WRAP`) is set on a row's last cell when the terminal wrapped
+    /// that row into the next; Herdr 1 frames never set it.
     pub modifier: u16,
     pub skip: bool,
     pub hyperlink: Option<u32>,
