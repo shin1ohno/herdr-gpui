@@ -243,6 +243,12 @@ impl Core {
         self.typed(Method::TerminalRun, run)
     }
 
+    /// One terminal by address. A terminal herdr-core does not know is a
+    /// refusal of kind `not_found`.
+    pub fn get(&self, terminal: &str) -> Result<Terminal> {
+        self.typed(Method::TerminalGet, &json!({"terminal": terminal}))
+    }
+
     pub fn kill(&self, terminal: &str) -> Result<Terminal> {
         self.typed(Method::TerminalKill, &json!({"terminal": terminal}))
     }

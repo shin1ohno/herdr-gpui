@@ -78,6 +78,49 @@ fn a_refusal_keeps_the_cores_kind() {
     }
 }
 
+#[test]
+fn get_asks_for_one_terminal_and_keeps_not_found() {
+    let (client, mut core) = connected();
+    let client = std::sync::Arc::new(client);
+    let found = thread::spawn({
+        let client = client.clone();
+        move || client.get("t7")
+    });
+    let request = core.request();
+    assert_eq!(
+        (request["method"].as_str(), &request["params"]),
+        (Some("terminal.get"), &json!({"terminal": "t7"}))
+    );
+    core.answer(&request, terminal("t7"));
+    assert_eq!(found.join().unwrap().unwrap().address, "t7");
+
+    let gone = thread::spawn(move || client.get("t9"));
+    let request = core.request();
+    let message = json!({"jsonrpc": "2.0", "id": request["id"],
+        "error": {"code": -32000, "message": "no terminal t9", "data": {"kind": "not_found"}}});
+    core.send(0, Kind::Data, &serde_json::to_vec(&message).unwrap());
+    match gone.join().unwrap() {
+        Err(Error::Refused {
+            method: Method::TerminalGet,
+            kind,
+            ..
+        }) => assert_eq!(kind.as_deref(), Some("not_found")),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_core_without_get_still_connects() {
+    let methods = super::every_method()
+        .into_iter()
+        .filter(|method| *method != "terminal.get")
+        .collect::<Vec<_>>();
+    let (client, server) = pair();
+    let core = thread::spawn(move || MockCore::accept(server, &hello_reply("0.1.13", &methods)));
+    assert!(Core::over(client).is_ok());
+    drop(core.join().unwrap());
+}
+
 /// Attaches `t7` on channel 5; `then` runs right after the core answers.
 fn attached(
     client: Core,
